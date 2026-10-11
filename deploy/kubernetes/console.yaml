@@ -1,0 +1,161 @@
+# Standalone console on Kubernetes. Replace every CHANGE_ME before apply.
+# Scan containers are started through a Docker socket. A normal Kubernetes
+# node does not provide one, so the page and the API run here, and a scan
+# starts only after that socket is mounted.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: security-console
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: console-auth
+  namespace: security-console
+type: Opaque
+stringData:
+  console_jwt_key: CHANGE_ME_JWT_KEY_AT_LEAST_32_CHARS
+  console_admin_password: CHANGE_ME_ADMIN_PASSWORD
+  console_db_password: CHANGE_ME_DB_PASSWORD
+  falco_ingest_token: CHANGE_ME_FALCO_TOKEN
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: console-db
+  namespace: security-console
+spec:
+  selector:
+    app: console-db
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: console-db
+  namespace: security-console
+spec:
+  serviceName: console-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: console-db
+  template:
+    metadata:
+      labels:
+        app: console-db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17
+          env:
+            - name: POSTGRES_USER
+              value: console
+            - name: POSTGRES_DB
+              value: security_console_db
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: console-auth
+                  key: console_db_password
+          ports:
+            - containerPort: 5432
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "console", "-d", "security_console_db"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: console
+  namespace: security-console
+spec:
+  selector:
+    app: console
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: console
+  namespace: security-console
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: console
+  template:
+    metadata:
+      labels:
+        app: console
+    spec:
+      containers:
+        - name: console
+          image: security-console:16
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: CONSOLE_DB_HOST
+              value: console-db
+            - name: CONSOLE_ADMIN_USERNAME
+              value: admin
+            - name: COOKIE_SECURE
+              value: "1"
+            - name: DATA_DIR
+              value: /data
+            - name: CONSOLE_JWT_KEY_FILE
+              value: /run/secrets/console_jwt_key
+            - name: CONSOLE_ADMIN_PASSWORD_FILE
+              value: /run/secrets/console_admin_password
+            - name: CONSOLE_DB_PASSWORD_FILE
+              value: /run/secrets/console_db_password
+            - name: FALCO_INGEST_TOKEN_FILE
+              value: /run/secrets/falco_ingest_token
+          readinessProbe:
+            httpGet:
+              path: /login
+              port: 8080
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: auth
+              mountPath: /run/secrets
+              readOnly: true
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: console-data
+        - name: auth
+          secret:
+            secretName: console-auth
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: console-data
+  namespace: security-console
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi

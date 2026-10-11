@@ -1,0 +1,2165 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Security console</title>
+  <script>
+    try {
+      if (localStorage.getItem("console-theme") === "dark") {
+        document.documentElement.classList.add("dark");
+      }
+    } catch (e) {}
+  </script>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%230f766e' d='M16 2.5 27.5 7v8.2c0 7.2-4.6 12.2-11.5 14.3C9.1 27.4 4.5 22.4 4.5 15.2V7z'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --navy: #152232;
+      --navy-2: #1c2d42;
+      --sidebar: #8ea0b5;
+      --teal: #0f766e;
+      --teal-2: #115e59;
+      --bg: #e7edf3;
+      --card: #fff;
+      --ink: #152232;
+      --muted: #5d6d80;
+      --line: #d5dee8;
+      --critical: #b71c1c;
+      --high: #e65100;
+      --medium: #f9a825;
+      --low: #689f38;
+      --info: #0288d1;
+      --shadow: 0 1px 2px rgba(21, 34, 50, .06), 0 8px 24px rgba(21, 34, 50, .04);
+    }
+    html.dark {
+      --navy: #0c1622;
+      --navy-2: #15283a;
+      --sidebar: #9aafc3;
+      --bg: #101820;
+      --card: #1a2838;
+      --ink: #e7eef6;
+      --muted: #9aafc3;
+      --line: #2c4258;
+      --shadow: none;
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      font-size: 14px;
+    }
+    button, input { font: inherit; color: inherit; }
+    button { cursor: pointer; }
+    .app { display: grid; grid-template-columns: 280px minmax(0, 1fr); height: 100%; }
+
+    aside {
+      background: var(--navy);
+      color: #d5e0ec;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .brand {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      padding: 18px 16px 14px;
+      border-bottom: 1px solid #24384c;
+    }
+    .brand svg { width: 34px; height: 34px; flex: 0 0 auto; }
+    .brand strong { display: block; color: white; font-size: 15px; }
+    .brand small { color: var(--sidebar); font-size: 12px; }
+    nav { padding: 10px 8px; display: flex; flex-direction: column; gap: 4px; flex: 1; min-height: 0; overflow: auto; }
+    nav button, nav a {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      width: 100%;
+      text-align: left;
+      background: transparent;
+      color: #d5e0ec;
+      border: 0;
+      border-radius: 8px;
+      padding: 9px 12px;
+      text-decoration: none;
+    }
+    nav button:hover, nav a:hover { background: var(--navy-2); }
+    nav button.active { background: #214057; color: white; box-shadow: inset 3px 0 0 #2dd4bf; }
+    .nav-label { display: inline-flex; align-items: center; gap: 6px; }
+    .nav-sub {
+      margin: 2px 8px 8px 16px;
+      padding-left: 8px;
+      border-left: 1px solid #2c4258;
+    }
+    .kind {
+      width: 100%;
+      text-align: left;
+      direction: ltr;
+      background: transparent;
+      color: #8ea0b5;
+      border: 0;
+      border-radius: 8px;
+      padding: 8px 8px 4px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+    .kind:hover { background: var(--navy-2); }
+    .kind-body, .reports-body { margin-left: 8px; }
+    .mode {
+      width: 100%;
+      text-align: left;
+      background: transparent;
+      color: #d5e0ec;
+      border: 0;
+      border-radius: 8px;
+      padding: 7px 8px;
+      font-weight: 650;
+    }
+    .mode:hover, .mode.on { background: var(--navy-2); color: white; }
+    .mode.on { box-shadow: inset 3px 0 0 #2dd4bf; }
+    .report-tree {
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      margin-bottom: 14px;
+      overflow: hidden;
+    }
+    .rp {
+      width: 100%;
+      display: block;
+      text-align: left;
+      background: white;
+      color: var(--ink);
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      padding: 10px 14px;
+    }
+    .rp-group:nth-child(even) > .rp { background: #e8edf2; }
+    .rp-group > .rp:hover { background: #dfe6ee; }
+    .rp .name { font-weight: 650; }
+    .rp .sub { display: block; margin-top: 3px; color: #5d6d80; font-size: 12px; }
+    .rp-children { padding: 6px 8px 8px 18px; background: #f8fafc; border-bottom: 1px solid var(--line); }
+    .rp-children .rp { border: 0; border-radius: 8px; padding: 8px 10px; margin-bottom: 4px; }
+    .rp-children .rp.done { background: #e7f6ee; box-shadow: inset 3px 0 0 #1f9d62; }
+    .rp-children .rp.done .name { color: #157a4b; }
+    .rp-children .rp.failed { background: #fdecee; box-shadow: inset 3px 0 0 #e11d48; }
+    .rp-children .rp.failed .name { color: #be123c; }
+    .rp-children .rp.running { background: #fff6e5; box-shadow: inset 3px 0 0 #d97706; }
+    .rp-children .rp.running .name { color: #b45309; }
+    .rp-children .rp.overview { background: #e8f1fb; box-shadow: inset 3px 0 0 #2f6fdb; }
+    .rp-children .rp.overview .name { color: #1d4f9c; }
+    .rp-children .rp.on { outline: 2px solid #0f766e; outline-offset: -2px; }
+    html.dark .report-tree { background: var(--card); }
+    html.dark .rp-group:nth-child(odd) > .rp { background: #1b2c3d; }
+    html.dark .rp-group:nth-child(even) > .rp { background: #243648; }
+    html.dark .rp-group > .rp:hover { background: #2c4258; }
+    html.dark .rp-children { background: #152232; }
+    html.dark .rp-children .rp.done { background: #143528; }
+    html.dark .rp-children .rp.done .name { color: #6ee7b7; }
+    html.dark .rp-children .rp.failed { background: #3b1820; }
+    html.dark .rp-children .rp.failed .name { color: #fda4af; }
+    html.dark .rp-children .rp.running { background: #3a2c14; }
+    html.dark .rp-children .rp.running .name { color: #fcd34d; }
+    html.dark .rp-children .rp.overview { background: #162a44; }
+    html.dark .rp-children .rp.overview .name { color: #93c5fd; }
+    .scan-bars { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+    .scan-bar {
+      display: grid;
+      grid-template-columns: minmax(140px, 220px) minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      width: 100%;
+      text-align: left;
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px 10px;
+    }
+    .scan-bar:hover { border-color: var(--teal); }
+    .stack { display: flex; height: 12px; border-radius: 99px; overflow: hidden; background: #e7edf3; }
+    .stack i { display: block; height: 100%; }
+    html.dark .scan-bar { background: var(--card); }
+    .hist-empty { margin: 0 10px 8px; color: #8ea0b5; font-size: 12px; }
+    .count {
+      min-width: 1.4rem;
+      padding: 0 6px;
+      height: 18px;
+      border-radius: 99px;
+      background: #2a4158;
+      color: #d5e0ec;
+      font-size: 11px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    nav button.active .count, .count.hot { background: var(--critical); color: white; }
+    .history { padding: 4px 8px 12px; overflow: auto; min-height: 0; }
+    .history h2 {
+      margin: 8px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #7f93a8;
+    }
+    .hist {
+      width: 100%;
+      text-align: left;
+      background: transparent;
+      color: inherit;
+      border: 0;
+      border-radius: 8px;
+      padding: 8px 10px;
+      margin-bottom: 2px;
+    }
+    .hist:hover { background: var(--navy-2); }
+    .hist.on { background: #214057; }
+    .hist-top { display: flex; align-items: center; gap: 8px; }
+    .hist .name {
+      font-weight: 600;
+      color: white;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      direction: ltr;
+      unicode-bidi: isolate;
+    }
+    .hist .sub { display: block; margin-top: 3px; color: #8ea0b5; font-size: 12px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; background: #64788c; }
+    .dot.done { background: #34d399; }
+    .dot.failed { background: #fb7185; }
+    .dot.running { background: #fbbf24; animation: pulse 1.3s infinite; }
+    .mini { display: flex; height: 4px; border-radius: 99px; overflow: hidden; background: #2a4158; margin-top: 6px; }
+    .mini i { display: block; height: 100%; }
+    .hist-project { font-weight: 700; }
+    .hist-children { margin-inline-start: 8px; }
+    .hist-children .hist { padding: 6px 8px; }
+    .logout {
+      width: 100%;
+      margin-top: 8px;
+      height: 32px;
+      background: transparent;
+      color: #d5e2ee;
+      border: 1px solid #33506a;
+      border-radius: 8px;
+    }
+    .login-screen {
+      min-height: 100%;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+    .login-card {
+      width: min(420px, 100%);
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 22px;
+    }
+    .login-card h1 { margin: 0 0 6px; font-size: 22px; }
+    .login-card p { margin: 0 0 16px; color: var(--muted); line-height: 1.7; }
+    .login-card label { display: block; margin-bottom: 12px; }
+    .login-card input { width: 100%; height: 40px; }
+    .pw-row { display: flex; gap: 8px; }
+    .pw-row input { flex: 1; }
+    .login-card button[type="submit"] {
+      width: 100%;
+      height: 40px;
+      margin-top: 4px;
+      background: var(--teal);
+      color: white;
+      border: 0;
+      border-radius: 8px;
+      font-weight: 700;
+    }
+    .login-card button[type="submit"]:disabled { opacity: .7; }
+    #toggle-password {
+      height: 40px;
+      border: 1px solid #c5d1de;
+      background: white;
+      border-radius: 8px;
+      padding: 0 10px;
+    }
+    .login-error {
+      background: #fdecea;
+      border: 1px solid #f5c2c0;
+      color: #8f1d1d;
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+    }
+    html.dark .login-card,
+    html.dark .launch,
+    html.dark .card,
+    html.dark .scanner,
+    html.dark input,
+    html.dark select.field { background: var(--card); color: var(--ink); }
+    html.dark input, html.dark select.field, html.dark .scanner { border-color: var(--line); }
+    .account-grid { display: grid; gap: 12px; max-width: 520px; }
+    .user-table { width: 100%; border-collapse: collapse; }
+    .user-table th, .user-table td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+    .user-table th { color: var(--muted); font-size: 12px; font-weight: 600; }
+    .row-actions { display: flex; gap: 6px; }
+    .filters { display: flex; gap: 8px; margin-bottom: 12px; }
+    .filters > * { flex: 1; }
+    #pw-match { color: var(--critical); font-size: 12px; margin-top: 6px; }
+    body.authed .login-screen { display: none; }
+    body:not(.authed) .app { display: none; }
+    .aside-foot {
+      margin-top: auto;
+      padding: 12px 16px 16px;
+      color: #7f93a8;
+      font-size: 11px;
+      border-top: 1px solid #24384c;
+    }
+
+    .main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+    .launch-wrap { padding: 16px 18px 0; }
+    .launch {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      padding: 14px 14px 12px;
+    }
+    .launch-row { display: flex; gap: 10px; align-items: end; }
+    .grow { flex: 1; min-width: 0; }
+    .field-label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 12px; font-weight: 600; }
+    input[type="url"], input[type="search"], input[type="text"], input[type="password"], input[type="email"], select.field {
+      width: 100%;
+      height: 42px;
+      border: 1px solid #c5d1de;
+      border-radius: 8px;
+      padding: 0 12px;
+      background: #fff;
+      outline: none;
+    }
+    input:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15, 118, 110, .15); }
+    .scanners {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .scanner {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      border: 1px solid #c5d1de;
+      border-radius: 10px;
+      padding: 10px 12px;
+      background: #fff;
+      cursor: pointer;
+    }
+    .scanner input {
+      width: 18px;
+      height: 18px;
+      margin: 2px 0 0;
+      accent-color: var(--teal);
+      flex: 0 0 auto;
+    }
+    .scanner:has(input:checked) {
+      border-color: var(--teal);
+      background: #f0fdfa;
+      box-shadow: inset 0 0 0 1px var(--teal);
+    }
+    .scanner:has(input:focus-visible) { outline: 2px solid var(--teal); outline-offset: 2px; }
+    .scanner b { display: block; font-size: 14px; }
+    .scanner small { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; line-height: 1.45; }
+    #go, #user-save, #pw-save, .ghost {
+      height: 42px;
+      border-radius: 8px;
+      padding: 0 16px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      white-space: nowrap;
+    }
+    #go, #user-save, #pw-save { background: var(--teal); color: white; border: 0; }
+    #go:hover, #user-save:hover, #pw-save:hover { background: var(--teal-2); }
+    #go:disabled, #user-save:disabled, #pw-save:disabled { background: #94a3b8; }
+    #go:disabled { cursor: progress; }
+    #user-save:disabled, #pw-save:disabled { cursor: not-allowed; }
+    .ghost {
+      border: 1px solid #c5d1de;
+      background: white;
+      color: var(--ink);
+      text-decoration: none;
+    }
+    .ghost:hover { border-color: var(--teal); color: var(--teal-2); }
+    .hint { margin: 8px 2px 0; color: var(--muted); font-size: 12px; }
+    .launch-mode { margin-bottom: 10px; }
+    .image-list {
+      margin-top: 8px;
+      max-height: 196px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+    }
+    .image-pick {
+      display: flex;
+      width: 100%;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      padding: 8px 12px;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      background: transparent;
+      cursor: pointer;
+      color: var(--ink);
+    }
+    .image-pick code { direction: ltr; unicode-bidi: isolate; font-size: 13px; }
+    .image-pick span { color: var(--muted); font-size: 12px; white-space: nowrap; }
+    .image-pick.on, .image-pick:hover { background: #f0fdfa; }
+    html.dark .image-list { background: var(--card); }
+    html.dark .image-pick.on, html.dark .image-pick:hover { background: #12343a; }
+    .sonar-card {
+      background: white; border: 1px solid var(--line); border-radius: 12px;
+      box-shadow: var(--shadow); padding: 12px 14px; margin-bottom: 12px;
+    }
+    .sonar-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .sonar-top h2 { margin: 0; font-size: 15px; }
+    .sonar-top .ghost { height: 34px; margin-left: auto; font-size: 13px; }
+    .sonar-card .meta { margin: 6px 0 10px; }
+    .sonar-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+    .sonar-metrics div { background: #f8fafc; border-radius: 10px; padding: 8px 10px; }
+    .sonar-metrics b { display: block; font-size: 22px; line-height: 1.2; }
+    .sonar-metrics span, .sonar-metrics small { display: block; color: var(--muted); font-size: 12px; }
+    .sonar-card .note { margin: 8px 0 0; }
+    #form-msg { min-height: 1.1em; margin: 4px 2px 0; font-size: 13px; color: var(--teal-2); }
+    #form-msg.bad { color: var(--critical); }
+    .progress { height: 3px; margin-top: 8px; background: #e2e8f0; border-radius: 99px; overflow: hidden; }
+    .progress span {
+      display: block; height: 100%; width: 35%; background: var(--teal);
+      animation: slide 1.1s ease-in-out infinite;
+    }
+
+    .content { overflow: auto; padding: 14px 18px 28px; min-height: 0; }
+    .scan-head, .page-head {
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px;
+    }
+    h1 { margin: 0; font-size: 22px; line-height: 1.3; }
+    .repo {
+      color: var(--muted); font-size: 12px; direction: ltr; unicode-bidi: isolate; text-align: left;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70vw;
+    }
+    .meta { margin-top: 4px; color: var(--muted); font-size: 12px; }
+    .badge {
+      border-radius: 99px; padding: 4px 10px; font-size: 12px; font-weight: 700; white-space: nowrap;
+      background: #e2e8f0; color: #334155;
+    }
+    .badge.done { background: #d1fae5; color: #065f46; }
+    .badge.running { background: #fef3c7; color: #92400e; }
+    .badge.failed { background: #ffe4e6; color: #9f1239; }
+
+    .summary {
+      display: grid; grid-template-columns: 128px minmax(0, 1fr); gap: 8px;
+      background: white; border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow);
+      padding: 12px; margin-bottom: 12px; align-items: center;
+    }
+    .donut { width: 116px; height: 116px; display: block; }
+    .stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+    .stat {
+      text-align: left; background: #f8fafc; border: 1px solid transparent; border-radius: 10px;
+      padding: 8px 10px; border-top: 3px solid var(--c, var(--line));
+    }
+    .stat:hover { background: white; border-color: var(--line); }
+    .stat.on { background: white; box-shadow: inset 0 0 0 2px var(--c); }
+    .stat .en { display: block; font-size: 10px; letter-spacing: .04em; color: var(--muted); font-weight: 700; }
+    .stat b { display: block; font-size: 22px; line-height: 1.2; color: var(--c); }
+    .stat .fa { color: var(--muted); font-size: 12px; }
+    .stat.critical { --c: var(--critical); }
+    .stat.high { --c: var(--high); }
+    .stat.medium { --c: var(--medium); }
+    .stat.low { --c: var(--low); }
+    .stat.info { --c: var(--info); }
+
+    .toolbar {
+      display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+      background: white; border: 1px solid var(--line); border-radius: 12px;
+      box-shadow: var(--shadow); padding: 10px 12px; margin-bottom: 12px;
+    }
+    .toolbar input { max-width: 280px; height: 36px; margin-left: auto; }
+    .seg { display: flex; background: #f8fafc; border: 1px solid var(--line); border-radius: 10px; padding: 3px; gap: 2px; }
+    .seg button {
+      background: transparent; border: 0; border-radius: 8px; padding: 0 12px; height: 34px;
+      color: var(--muted); font-weight: 600; display: inline-flex; align-items: center; gap: 6px;
+    }
+    .seg button em {
+      font-style: normal; font-size: 11px; background: #e7edf3; color: #3d4f63;
+      border-radius: 99px; min-width: 1.3rem; height: 18px; padding: 0 6px;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .seg button.on { background: var(--navy); color: white; }
+    .seg button.on em { background: rgba(255,255,255,.18); color: white; }
+    .shown { color: var(--muted); font-size: 12px; }
+
+    .card {
+      background: white; border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); overflow: clip;
+    }
+    #findings:empty { display: none; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 9px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid #edf2f7; }
+    th { font-size: 12px; color: var(--muted); font-weight: 600; background: #f8fafc; position: sticky; top: 0; }
+    tr.group { cursor: pointer; }
+    tr.group:hover td { background: #f8fafc; }
+    tr.group:focus-visible { outline: 2px solid var(--teal); outline-offset: -2px; }
+    .check { font-family: ui-monospace, "Cascadia Code", monospace; font-size: 12.5px; direction: ltr; text-align: left; }
+    .msg {
+      color: var(--muted); font-size: 12.5px; margin-top: 3px;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .kids .msg { display: block; -webkit-line-clamp: unset; }
+    .num { font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
+    .chev { color: var(--muted); font-weight: 400; }
+    .pill {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 64px; height: 22px; padding: 0 8px; border-radius: 99px;
+      font-size: 11px; font-weight: 700; color: white;
+    }
+    .pill.critical { background: var(--critical); }
+    .pill.high { background: var(--high); }
+    .pill.medium { background: var(--medium); color: #3f2e00; }
+    .pill.low { background: var(--low); }
+    .pill.info { background: var(--info); }
+    .kids td { background: #f8fafc; padding-top: 4px; }
+    .kids ul { list-style: none; margin: 0; padding: 0; }
+    #findings table { direction: ltr; }
+    .kids li { padding: 6px 0; border-top: 1px solid #e6edf4; display: flex; gap: 10px; justify-content: flex-start; align-items: baseline; }
+    .mono { font-family: ui-monospace, monospace; font-size: 12px; direction: ltr; unicode-bidi: isolate; }
+    .note {
+      background: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; border-radius: 10px;
+      padding: 10px 12px; margin-bottom: 12px; white-space: pre-wrap; font-size: 12.5px;
+    }
+    .empty {
+      background: white; border: 1px dashed #c5d1de; border-radius: 12px; padding: 36px 20px; text-align: center; color: var(--muted);
+    }
+    .empty strong { display: block; color: var(--ink); font-size: 16px; margin-bottom: 6px; }
+
+    .alert {
+      background: white; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+      margin-bottom: 8px; box-shadow: var(--shadow); border-inline-start: 4px solid var(--c, var(--info));
+    }
+    .alert.critical { --c: var(--critical); }
+    .alert.high { --c: var(--high); }
+    .alert.medium { --c: var(--medium); }
+    .alert.low { --c: var(--low); }
+    .alert.info { --c: var(--info); }
+    .alert-top { display: flex; gap: 8px; align-items: center; }
+    .alert-top strong { direction: ltr; unicode-bidi: isolate; }
+    .alert time, .host { margin-left: auto; color: var(--muted); font-size: 12px; direction: ltr; }
+    .alert p {
+      margin: 6px 0 0; direction: ltr; text-align: left; font-size: 12.5px; color: #243246;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .alert.open p { display: block; -webkit-line-clamp: unset; }
+    .alert { cursor: pointer; }
+    .falco-more { margin: 8px 0 0; padding: 0; list-style: none; }
+    .falco-more li { padding: 6px 0; border-top: 1px solid #e6edf4; direction: ltr; text-align: left; font-size: 12px; }
+    .filters { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+    .filters input { max-width: 320px; height: 36px; }
+
+    .k-layout { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 14px; align-items: start; }
+    .k-tree, .k-lesson {
+      background: white; border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow);
+    }
+    .k-tree { padding: 10px; position: sticky; top: 0; }
+    .k-tree input { margin-bottom: 8px; }
+    .tree, .tree ul { list-style: none; margin: 0; padding: 0; }
+    .tree ul { margin-inline-start: 12px; border-inline-start: 1px solid #d5dee8; }
+    .tree button {
+      width: 100%; text-align: left; background: transparent; border: 0; border-radius: 8px;
+      padding: 7px 8px; color: var(--ink);
+    }
+    .tree button:hover { background: #f4f7fb; }
+    .tree .branch { font-weight: 700; }
+    .tree .leaf.on { background: #e7f6f4; color: var(--teal-2); font-weight: 700; }
+    .tree li { position: relative; }
+    .tree ul li::before {
+      content: ""; position: absolute; inset-inline-start: 0; top: 16px; width: 10px;
+      border-top: 1px solid #d5dee8;
+    }
+    .k-lesson { padding: 18px 20px 22px; }
+    .k-lesson h2 { margin: 0 0 8px; font-size: 20px; }
+    .k-lesson p { margin: 0 0 10px; line-height: 1.75; }
+    .k-lesson ol, .k-lesson ul { margin: 0 0 12px; padding-inline-start: 1.2rem; line-height: 1.75; }
+    .k-lesson li { margin: 4px 0; }
+    .k-note {
+      background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 10px; padding: 10px 12px; margin: 0 0 12px;
+    }
+    .k-lesson .ghost { height: 36px; margin-top: 4px; }
+
+    @keyframes pulse {
+      70% { box-shadow: 0 0 0 6px rgba(251, 191, 36, 0); }
+    }
+    @keyframes slide {
+      from { transform: translateX(140%); }
+      to { transform: translateX(-240%); }
+    }
+    @media (max-width: 980px) {
+      .app { grid-template-columns: 1fr; height: auto; }
+      body { overflow: auto; }
+      aside { position: static; }
+      .history { display: flex; gap: 6px; overflow: auto; }
+      .hist { min-width: 180px; }
+      .launch-row, .stats, .summary, .toolbar, .filters, .scanners { display: flex; flex-wrap: wrap; }
+      .k-layout { grid-template-columns: 1fr; }
+      .k-tree { position: static; }
+      .summary { grid-template-columns: 1fr; }
+      .stats, .sonar-metrics { width: 100%; display: grid; grid-template-columns: repeat(2, 1fr); }
+      .main { min-height: 100vh; }
+    }
+  </style>
+</head>
+<body>
+  <div class="login-screen" id="login-screen">
+    <form class="login-card" id="login-form">
+      <h1>Sign in</h1>
+      <p>Sign in to start a scan and see Falco alerts.</p>
+      <div id="login-error" class="login-error" hidden></div>
+      <label>
+        <span class="field-label">Username</span>
+        <input id="username" name="username" autocomplete="username" required maxlength="64" dir="ltr">
+      </label>
+      <label>
+        <span class="field-label">Password</span>
+        <span class="pw-row">
+          <input id="password" name="password" type="password" autocomplete="current-password" required maxlength="128" dir="ltr">
+          <button type="button" id="toggle-password">Show</button>
+        </span>
+      </label>
+      <button type="submit" id="login-submit">Sign in</button>
+    </form>
+  </div>
+  <div class="app">
+    <aside>
+      <div class="brand">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><path fill="#2dd4bf" d="M16 2.5 27.5 7v8.2c0 7.2-4.6 12.2-11.5 14.3C9.1 27.4 4.5 22.4 4.5 15.2V7z"/></svg>
+        <div>
+          <strong>Security console</strong>
+          <small>Code and host scans</small>
+        </div>
+      </div>
+      <nav>
+        <button type="button" data-action="view" data-view="scans" class="active"><span class="nav-label"><span id="scans-chev">▾</span> Scans</span> <span class="count" id="scan-count">0</span></button>
+        <div class="nav-sub" id="history-wrap"></div>
+        <button type="button" data-action="view" data-view="falco">Live alerts <span class="count" id="falco-count">0</span></button>
+        <button type="button" data-action="view" data-view="knowledge">Knowledge</button>
+        <button type="button" data-action="view" data-view="users" id="nav-users" hidden>Users</button>
+        <button type="button" data-action="view" data-view="access" id="nav-access" hidden>Tool access</button>
+        <button type="button" data-action="view" data-view="account">Settings</button>
+        <a href="{{ sonar_url }}" target="_blank" rel="noopener">SonarQube <span aria-hidden="true">↗</span></a>
+      </nav>
+      <div class="aside-foot">
+        <div id="who"></div>
+        <button type="button" id="theme">Dark mode</button>
+        <button type="button" id="logout">Sign out</button>
+        <div>Semgrep · Checkov · Trivy · Falco · SonarQube</div>
+      </div>
+    </aside>
+    <div class="main">
+      <div class="launch-wrap">
+        <form class="launch" id="scan-form">
+          <div class="launch-row">
+            <label class="grow" id="repo-field">
+              <span class="field-label">Repository</span>
+              <input id="repo" type="url" required dir="ltr" placeholder="https://github.com/org/repo.git" value="https://github.com/TaghikhaniAlireza/Mace-eBPF.git">
+            </label>
+            <label class="grow" id="image-field" hidden>
+              <span class="field-label">Image</span>
+              <input id="image-ref" type="text" dir="ltr" placeholder="nginx:1.27" autocomplete="off" spellcheck="false">
+            </label>
+            <button type="submit" id="go">Start scan</button>
+          </div>
+          <p class="hint" id="target-hint">Enter a repository URL and choose the tools.</p>
+          <div id="image-list" class="image-list" hidden></div>
+          <div class="scanners" role="group" aria-label="Scanners">
+            <label class="scanner">
+              <input type="checkbox" name="tool" value="semgrep" checked>
+              <span><b>Semgrep</b><small>Vulnerability patterns in code</small></span>
+            </label>
+            <label class="scanner">
+              <input type="checkbox" name="tool" value="checkov" checked>
+              <span><b>Checkov</b><small>Infrastructure files</small></span>
+            </label>
+            <label class="scanner">
+              <input type="checkbox" name="tool" value="sonar" checked>
+              <span><b>SonarQube</b><small>Quality Gate on project alireza</small></span>
+            </label>
+            <label class="scanner">
+              <input type="checkbox" name="tool" value="trivy" checked>
+              <span><b>Trivy</b><small>Vulnerabilities, misconfig, and secrets</small></span>
+            </label>
+          </div>
+          <div id="form-msg" aria-live="polite"></div>
+          <div id="progress" class="progress" hidden><span></span></div>
+        </form>
+      </div>
+      <div class="content">
+        <section id="view-scans">
+          <div id="reports-nav" hidden>
+            <div class="report-tree" id="report-tree"></div>
+          </div>
+          <div id="empty" class="empty">
+            <strong id="empty-title">No scan selected</strong>
+            <span id="empty-text">Open Scan under Image or Repository.</span>
+          </div>
+          <div id="overview" hidden></div>
+          <div id="scan-panel" hidden>
+            <div id="scan-head"></div>
+            <div id="scan-error"></div>
+            <div id="summary"></div>
+            <div class="toolbar">
+              <div class="seg" id="tool-seg">
+                <button type="button" data-action="tool" data-tool="all" class="on">All <em id="n-all">0</em></button>
+                <button type="button" data-action="tool" data-tool="semgrep">Semgrep <em id="n-semgrep">0</em></button>
+                <button type="button" data-action="tool" data-tool="checkov">Checkov <em id="n-checkov">0</em></button>
+                <button type="button" data-action="tool" data-tool="sonar">SonarQube <em id="n-sonar">0</em></button>
+                <button type="button" data-action="tool" data-tool="trivy">Trivy <em id="n-trivy">0</em></button>
+              </div>
+              <input id="q" type="search" placeholder="Search rule, file, or message" dir="ltr">
+              <span class="shown" id="shown"></span>
+            </div>
+            <div id="sonar-card"></div>
+            <div class="card" id="findings"></div>
+          </div>
+        </section>
+        <section id="view-falco" hidden>
+          <div class="page-head">
+            <div>
+              <h1>Live alerts</h1>
+              <p class="meta">Falco watches the host on all three workers and sends new alerts here.</p>
+            </div>
+          </div>
+          <div id="falco-summary"></div>
+          <div class="filters">
+            <input id="fq" type="search" placeholder="Search rule or alert text" dir="ltr">
+          </div>
+          <div id="falco-list"></div>
+        </section>
+        <section id="view-knowledge" hidden>
+          <div class="page-head">
+            <div>
+              <h1>Knowledge</h1>
+              <p class="meta">What each tool does, and how to use it from this page.</p>
+            </div>
+          </div>
+          <div class="k-layout">
+            <div class="k-tree">
+              <input id="k-q" type="search" placeholder="Search lessons">
+              <div id="k-tree"></div>
+            </div>
+            <article class="k-lesson" id="k-lesson"></article>
+          </div>
+        </section>
+        <section id="view-users" hidden>
+          <div class="page-head">
+            <div>
+              <h1>Users</h1>
+              <p class="meta">Search, filter, edit, and delete. Roles: Admin, Developer, Viewer.</p>
+            </div>
+          </div>
+          <div id="user-error" class="login-error" hidden></div>
+          <div class="filters">
+            <input id="user-q" type="search" placeholder="Search username or email">
+            <select id="user-role" class="field">
+              <option value="all">All roles</option>
+              <option value="admin">Admin</option>
+              <option value="developer">Developer</option>
+              <option value="viewer">Viewer</option>
+            </select>
+          </div>
+          <div class="card" style="overflow:auto">
+            <table class="user-table">
+              <thead>
+                <tr><th>Username</th><th>Email</th><th>Role</th><th>Status</th><th>Tools</th><th></th></tr>
+              </thead>
+              <tbody id="user-rows"></tbody>
+            </table>
+          </div>
+          <form class="launch" id="user-form" style="margin-top:12px">
+            <h2 id="user-form-title" style="margin:0 0 12px;font-size:16px">New user</h2>
+            <div class="account-grid">
+              <label><span class="field-label">Username</span><input id="user-name" required maxlength="64" dir="ltr"></label>
+              <label><span class="field-label">Email</span><input id="user-email" type="email" required maxlength="254" dir="ltr"></label>
+              <label><span class="field-label">Password</span><input id="user-pass" type="password" maxlength="128" dir="ltr" autocomplete="new-password"></label>
+              <label><span class="field-label">Role</span>
+                <select id="user-form-role" class="field">
+                  <option value="admin">Admin</option>
+                  <option value="developer">Developer</option>
+                  <option value="viewer" selected>Viewer</option>
+                </select>
+              </label>
+              <label><input id="user-disabled" type="checkbox"> Disable account</label>
+            </div>
+            <div class="scanners" id="user-tools"></div>
+            <div style="display:flex;gap:8px;margin-top:12px">
+              <button type="submit" id="user-save">Save</button>
+              <button type="button" class="ghost" id="user-cancel">Cancel</button>
+            </div>
+          </form>
+        </section>
+        <section id="view-access" hidden>
+          <div class="page-head">
+            <div>
+              <h1>Tool access</h1>
+              <p class="meta">An admin always has every tool. For everyone else, reports and new scans stay on the tools that are on.</p>
+            </div>
+          </div>
+          <div id="access-msg" class="meta"></div>
+          <div id="access-list"></div>
+        </section>
+        <section id="view-account" hidden>
+          <div class="page-head">
+            <div>
+              <h1>Account settings</h1>
+              <p class="meta">Type the new password twice, then save.</p>
+            </div>
+          </div>
+          <form class="launch account-grid" id="password-form">
+            <div id="pw-error" class="login-error" hidden></div>
+            <div id="pw-ok" class="meta" hidden>Password updated.</div>
+            <label><span class="field-label">Current password</span><input id="pw-current" type="password" required maxlength="128" dir="ltr" autocomplete="current-password"></label>
+            <label><span class="field-label">New password</span><input id="pw-new" type="password" required minlength="12" maxlength="128" dir="ltr" autocomplete="new-password"></label>
+            <label>
+              <span class="field-label">Repeat new password</span>
+              <input id="pw-again" type="password" required minlength="12" maxlength="128" dir="ltr" autocomplete="new-password">
+              <div id="pw-match" hidden>The new password and the repeat do not match.</div>
+            </label>
+            <button type="submit" id="pw-save" disabled>Save</button>
+          </form>
+        </section>
+      </div>
+    </div>
+  </div>
+  <script>
+    const SEV = [
+      ["critical", "CRITICAL", "Critical", "#b71c1c"],
+      ["high", "HIGH", "High", "#e65100"],
+      ["medium", "MEDIUM", "Medium", "#f9a825"],
+      ["low", "LOW", "Low", "#689f38"],
+      ["info", "INFO", "Info", "#0288d1"]
+    ];
+    const STATUS = {running: "Running", done: "Done", failed: "Failed"};
+    const state = {
+      view: "scans",
+      scans: [],
+      scan: null,
+      alerts: [],
+      sev: "",
+      tool: "all",
+      q: "",
+      fsev: "",
+      fq: "",
+      open: new Set(),
+      fopen: new Set(),
+      groups: [],
+      falcoGroups: [],
+      seenId: null,
+      pendingMsg: null,
+      target: "repo",
+      pane: "report",
+      overviewKey: ""
+    };
+    let scanStamp = null;
+    let histStamp = null;
+    let reportStamp = null;
+    let falcoStamp = null;
+    let currentUser = null;
+    const histOpen = new Set();
+    const kindOpen = new Set();
+    const reportsOpen = new Set();
+    let scansMenuOpen = true;
+    function csrfToken() {
+      const match = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/);
+      return match ? decodeURIComponent(match[1]) : "";
+    }
+
+    async function api(url, options, retried) {
+      const opts = options || {};
+      const headers = Object.assign({"Accept": "application/json"}, opts.headers || {});
+      if (opts.method && opts.method !== "GET") headers["X-CSRF-Token"] = csrfToken();
+      const response = await fetch(url, Object.assign({}, opts, {headers, credentials: "same-origin"}));
+      if (response.status === 401 && !retried && url !== "/api/auth/refresh" && url !== "/api/auth/login" && url !== "/api/auth/me") {
+        const refreshed = await fetch("/api/auth/refresh", {
+          method: "POST",
+          headers: {"X-CSRF-Token": csrfToken(), "Accept": "application/json"},
+          credentials: "same-origin"
+        });
+        if (refreshed.ok) return api(url, options, true);
+        showLogin();
+      }
+      return response;
+    }
+
+    function showLogin() {
+      currentUser = null;
+      document.body.classList.remove("authed");
+    }
+
+    function showApp(user) {
+      currentUser = user;
+      document.body.classList.add("authed");
+      document.querySelector("#who").textContent = user.username + " · " + (ROLE_LABEL[user.role] || user.role);
+      document.querySelector("#nav-users").hidden = user.role !== "admin";
+      document.querySelector("#nav-access").hidden = user.role !== "admin";
+      if (user.role !== "admin" && (state.view === "users" || state.view === "access")) setView("scans");
+      syncLaunch();
+      syncThemeButton();
+    }
+
+    function esc(value) {
+      return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      }[ch]));
+    }
+
+    function bucket(value) {
+      const name = String(value || "").toUpperCase();
+      if (["CRITICAL", "EMERGENCY", "ALERT"].includes(name)) return "critical";
+      if (["HIGH", "ERROR"].includes(name)) return "high";
+      if (["MEDIUM", "WARNING", "WARN"].includes(name)) return "medium";
+      if (name === "LOW") return "low";
+      return "info";
+    }
+
+    function repoName(url) {
+      try {
+        const base = new URL(url).pathname.replace(/\/+$/, "").split("/").pop() || url;
+        return decodeURIComponent(base.replace(/\.git$/, ""));
+      } catch (err) {
+        return url;
+      }
+    }
+
+    function counts(rows, pick) {
+      const tally = {critical: 0, high: 0, medium: 0, low: 0, info: 0};
+      rows.forEach((row) => { tally[bucket(pick(row))] += 1; });
+      return tally;
+    }
+
+    function donut(tally) {
+      const total = SEV.reduce((sum, item) => sum + tally[item[0]], 0);
+      const radius = 46;
+      const circ = 2 * Math.PI * radius;
+      const active = SEV.filter((item) => tally[item[0]] > 0);
+      const gap = active.length > 1 ? 3 : 0;
+      let offset = 0;
+      const arcs = total === 0
+        ? '<circle cx="60" cy="60" r="46" fill="none" stroke="#e2e8f0" stroke-width="12"/>'
+        : active.map((item) => {
+            const len = Math.max(0, (tally[item[0]] / total) * circ - gap);
+            const node = '<circle cx="60" cy="60" r="' + radius + '" fill="none" stroke="' + item[3] + '" stroke-width="12" stroke-dasharray="' + len + ' ' + (circ - len) + '" stroke-dashoffset="' + (-offset) + '"/>';
+            offset += (tally[item[0]] / total) * circ;
+            return node;
+          }).join("");
+      return '<svg viewBox="0 0 120 120" class="donut" role="img" aria-label="' + total + ' findings"><g transform="rotate(-90 60 60)">' + arcs + '</g><text x="60" y="58" text-anchor="middle" font-size="22" font-weight="700" fill="#152232">' + total + '</text><text x="60" y="76" text-anchor="middle" font-size="11" fill="#5d6d80">findings</text></svg>';
+    }
+
+    function stats(tally, action) {
+      return '<div class="stats">' + SEV.map((item) => {
+        const on = (action === "sev" ? state.sev : state.fsev) === item[0] ? " on" : "";
+        return '<button type="button" class="stat ' + item[0] + on + '" data-action="' + action + '" data-sev="' + item[0] + '"><span class="en">' + item[1] + '</span><b>' + tally[item[0]] + '</b><span class="fa">' + item[2] + '</span></button>';
+      }).join("") + "</div>";
+    }
+
+    const ROLE_LABEL = {admin: "Admin", developer: "Developer", viewer: "Viewer"};
+    const TOOL_LABEL = {semgrep: "Semgrep", checkov: "Checkov", sonar: "SonarQube", trivy: "Trivy"};
+    let accountUsers = [];
+    let editingUser = null;
+
+    function setView(view) {
+      state.view = view;
+      ["scans", "falco", "knowledge", "users", "access", "account"].forEach((name) => {
+        document.querySelector("#view-" + name).hidden = view !== name;
+      });
+      syncLaunch();
+      document.querySelectorAll("nav [data-view]").forEach((el) => el.classList.toggle("active", el.dataset.view === view));
+      if (view === "users" || view === "access") loadAccounts();
+    }
+
+    let localImages = [];
+    let imagesLoaded = false;
+    const repoChecks = {semgrep: true, checkov: true, sonar: true, trivy: true};
+
+    function sizeText(bytes) {
+      const value = Number(bytes) || 0;
+      if (value >= 1e9) return (value / 1e9).toFixed(1) + " GB";
+      if (value >= 1e6) return Math.round(value / 1e6) + " MB";
+      return Math.round(value / 1e3) + " KB";
+    }
+
+    function renderImageList() {
+      const box = document.querySelector("#image-list");
+      const query = (document.querySelector("#image-ref").value || "").trim().toLowerCase();
+      const current = document.querySelector("#image-ref").value;
+      const rows = localImages.filter((row) => !query || row.ref.toLowerCase().includes(query));
+      if (!rows.length) {
+        box.innerHTML = '<p class="hint">Not on work-01. Keep the name and start the scan so Trivy pulls it.</p>';
+        return;
+      }
+      box.innerHTML = rows.map((row) => {
+        const on = row.ref === current ? " on" : "";
+        return '<button type="button" class="image-pick' + on + '" data-action="pick-image" data-ref="' + esc(row.ref) + '"><code>' + esc(row.ref) + "</code><span>" + esc(row.id) + " · " + sizeText(row.size) + "</span></button>";
+      }).join("");
+    }
+
+    async function loadImages(force) {
+      if (imagesLoaded && !force) {
+        renderImageList();
+        return;
+      }
+      const box = document.querySelector("#image-list");
+      box.innerHTML = '<p class="hint">Loading images on work-01...</p>';
+      const response = await api("/api/images");
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        box.innerHTML = '<p class="hint">' + esc(body.error || "Could not load the list.") + "</p>";
+        return;
+      }
+      localImages = Array.isArray(body) ? body : [];
+      imagesLoaded = true;
+      renderImageList();
+    }
+
+    function syncLaunch() {
+      const starter = currentUser && currentUser.role !== "viewer";
+      const showingImage = state.target === "image";
+      document.querySelector(".launch-wrap").hidden = !starter || state.view !== "scans" || state.pane !== "scan";
+      document.querySelector("#repo-field").hidden = showingImage;
+      document.querySelector("#image-field").hidden = !showingImage;
+      document.querySelector("#image-list").hidden = !showingImage;
+      document.querySelector("#repo").required = !showingImage && state.pane === "scan";
+      document.querySelector("#target-hint").textContent = showingImage
+        ? "Image scans use Trivy. Pick an image on work-01, or type a name to pull it."
+        : "Repository scans use Semgrep, Checkov, and SonarQube.";
+      document.querySelectorAll("input[name=tool]").forEach((input) => {
+        const allowed = !currentUser || (currentUser.access && currentUser.access[input.value]);
+        const belongs = showingImage ? input.value === "trivy" : input.value !== "trivy";
+        const hide = !allowed || !belongs;
+        input.closest(".scanner").hidden = hide;
+        if (showingImage) input.checked = allowed && input.value === "trivy";
+        else input.checked = Boolean(allowed && belongs && repoChecks[input.value]);
+      });
+      if (showingImage && starter && state.pane === "scan") loadImages(false);
+    }
+
+    function setTarget(next) {
+      if (next === state.target) return;
+      if (next === "image") {
+        document.querySelectorAll("input[name=tool]").forEach((input) => {
+          repoChecks[input.value] = input.checked;
+        });
+      } else {
+        document.querySelectorAll("input[name=tool]").forEach((input) => {
+          const allowed = !currentUser || (currentUser.access && currentUser.access[input.value]);
+          input.checked = Boolean(allowed && repoChecks[input.value]);
+        });
+      }
+      state.target = next;
+      syncLaunch();
+    }
+
+    const KNOWLEDGE = [
+      {
+        id: "console",
+        title: "Console",
+        lessons: [
+          {
+            id: "how",
+            title: "Start a scan",
+            html: "<p>Open Image or Repository in the left menu. Each one has Scan and Reports.</p><ol><li>Scan under Image runs Trivy only. Pick an image on work-01, or type a name to pull it.</li><li>Scan under Repository runs Semgrep, Checkov, and SonarQube. Enter an http or https Git URL.</li><li>Reports opens on the right. Projects are a dropdown there. Open one to see its scans.</li><li>Overview, the last item under a project, charts every scan of that project.</li></ol><p class=\"k-note\">Falco is not one of these checkboxes. It watches the hosts, not a repository.</p><button type=\"button\" class=\"ghost\" data-action=\"view\" data-view=\"scans\">Go to scans</button>"
+          },
+          {
+            id: "read",
+            title: "Read a result",
+            html: "<p>The chart counts Semgrep, Checkov, and Trivy findings: Critical, High, Medium, Low, and Info. Click a color to keep only that severity. Click it again to clear the filter.</p><ul><li>The bar under the chart splits the result by tool. The number is that tool's count.</li><li>Search matches the rule name, file path, and message.</li><li>Open a row to see the file and line.</li><li>SonarQube is not line-by-line in this table. Its filter shows the Quality Gate card.</li></ul>"
+          }
+        ]
+      },
+      {
+        id: "semgrep",
+        title: "Semgrep",
+        lessons: [
+          {
+            id: "semgrep-what",
+            title: "What Semgrep does",
+            html: "<p>Semgrep reads source for vulnerability patterns: injection, secrets in code, and unsafe library use.</p><p>It only sees files in that Git repository. It does not see live traffic or a running container.</p><p>ERROR becomes High, WARNING becomes Medium, and INFO becomes Info.</p>"
+          },
+          {
+            id: "semgrep-use",
+            title: "Use Semgrep",
+            html: "<ol><li>Leave Semgrep checked.</li><li>Enter the repository URL and start the scan.</li><li>Click Semgrep in the result bar to keep only those rows.</li><li>Open a rule to see the file.</li></ol><p>Findings do not fail the scan. The status stays Done, and the Semgrep count is the number of findings.</p>"
+          }
+        ]
+      },
+      {
+        id: "checkov",
+        title: "Checkov",
+        lessons: [
+          {
+            id: "checkov-what",
+            title: "What Checkov does",
+            html: "<p>Checkov reads infrastructure files: Dockerfile, Compose, Kubernetes, and Terraform. It looks for insecure settings, not application logic.</p><p>For example it reports an image running as root, or a Dockerfile without HEALTHCHECK.</p>"
+          },
+          {
+            id: "checkov-use",
+            title: "Use Checkov",
+            html: "<ol><li>Leave Checkov checked.</li><li>Start the scan.</li><li>Click Checkov in the result bar. The number is failed infrastructure checks.</li><li>Open a row to see the file path.</li></ol><p>A repository with no infrastructure files keeps a Checkov count of zero. That is not a tool failure.</p>"
+          }
+        ]
+      },
+      {
+        id: "trivy",
+        title: "Trivy",
+        lessons: [
+          {
+            id: "trivy-what",
+            title: "What Trivy does",
+            html: "<p>On a repository, Trivy looks for vulnerable libraries, misconfiguration, and secrets. On an image, it looks through the image layers for the same three things.</p><p>The vulnerability database is downloaded during the scan. The first run is slower. Later runs use the cache on the worker.</p>"
+          },
+          {
+            id: "trivy-use",
+            title: "Use Trivy",
+            html: "<p>For source code, stay on Repository and leave Trivy checked.</p><ol><li>For a container image, click Image.</li><li>Pick one from the work-01 list, or type a name such as nginx:1.27.</li><li>Trivy stays checked. Click Start scan.</li><li>If the image is not on work-01, Trivy pulls it and then scans it.</li><li>Open the Trivy filter and expand a CVE.</li></ol>"
+          }
+        ]
+      },
+      {
+        id: "sonar",
+        title: "SonarQube",
+        lessons: [
+          {
+            id: "sonar-what",
+            title: "What SonarQube does",
+            html: "<p>SonarQube scores code quality and security on its own server. This console shows the summary.</p><ul><li>Quality Gate: passed or failed.</li><li>Bug: a defect that breaks behavior.</li><li>Vulnerability: a security issue.</li><li>Code Smell: code that is hard to maintain.</li><li>Hotspot: a spot a person should review.</li></ul><p>Those four numbers are not added into the Semgrep and Checkov chart.</p>"
+          },
+          {
+            id: "sonar-use",
+            title: "Use SonarQube",
+            html: "<ol><li>SonarQube is on by default, with Semgrep and Checkov. Uncheck it if this repository should not replace the current analysis.</li><li>Start the scan. Analysis takes longer than the other tools.</li><li>Read the SonarQube card, or click SonarQube in the result bar.</li><li>Open the code in SonarQube for each issue.</li></ol><p class=\"k-note\">Results are stored in the alireza project. A new scan replaces the previous analysis of that project.</p>"
+          }
+        ]
+      },
+      {
+        id: "falco",
+        title: "Falco",
+        lessons: [
+          {
+            id: "falco-what",
+            title: "What Falco does",
+            html: "<p>Falco does not scan a Git repository. On each worker it watches live behavior: a program starting, or a sensitive file opening.</p><p>Alerts collect under Live alerts. Alerts for one rule share a card, and the number is the event count.</p>"
+          },
+          {
+            id: "falco-use",
+            title: "Use Falco",
+            html: "<ol><li>Open Live alerts in the left menu. Falco is not a checkbox on the scan bar.</li><li>Click a severity to keep, for example, only Critical.</li><li>Search by rule name or alert text.</li><li>Open a card to see the latest events and their times.</li></ol><p>Falco runs on its own. New alerts still arrive when no scan is running.</p><button type=\"button\" class=\"ghost\" data-action=\"view\" data-view=\"falco\">Go to live alerts</button>"
+          }
+        ]
+      }
+    ];
+
+    const kOpen = new Set(["console"]);
+    let kLesson = "how";
+
+    function lessonById(id) {
+      for (const branch of KNOWLEDGE) {
+        const found = branch.lessons.find((item) => item.id === id);
+        if (found) return found;
+      }
+      return KNOWLEDGE[0].lessons[0];
+    }
+
+    function renderKnowledge() {
+      const query = (document.querySelector("#k-q").value || "").trim();
+      const tree = document.querySelector("#k-tree");
+      tree.innerHTML = "<ul class=\"tree\">" + KNOWLEDGE.map((branch) => {
+        const lessons = branch.lessons.filter((item) => !query || (branch.title + " " + item.title).includes(query));
+        if (!lessons.length) return "";
+        const open = query || kOpen.has(branch.id);
+        const leaves = open ? "<ul>" + lessons.map((item) => "<li><button type=\"button\" class=\"leaf" + (item.id === kLesson ? " on" : "") + "\" data-action=\"k-lesson\" data-id=\"" + item.id + "\">" + esc(item.title) + "</button></li>").join("") + "</ul>" : "";
+        return "<li><button type=\"button\" class=\"branch\" data-action=\"k-branch\" data-id=\"" + branch.id + "\">" + (open ? "▾ " : "▸ ") + esc(branch.title) + "</button>" + leaves + "</li>";
+      }).join("") + "</ul>";
+      const lesson = lessonById(kLesson);
+      document.querySelector("#k-lesson").innerHTML = "<h2>" + esc(lesson.title) + "</h2>" + lesson.html;
+    }
+
+    function isImageScan(item) {
+      return item.target === "image" || Boolean(item.image && !item.repo);
+    }
+
+    function scanTitle(item) {
+      if (isImageScan(item)) return item.image || "Image";
+      return repoName(item.repo);
+    }
+
+    function projectKey(item) {
+      if (isImageScan(item)) return "image:" + String(item.image || "").toLowerCase();
+      return String(item.repo || "").replace(/\.git$/i, "").replace(/\/+$/, "").toLowerCase();
+    }
+
+    function scanRow(item) {
+      const tally = counts(item.findings || [], (row) => row.severity);
+      const total = (item.findings || []).length;
+      const bar = SEV.map((sev) => tally[sev[0]] ? '<i style="width:' + (tally[sev[0]] / total * 100) + '%;background:' + sev[3] + '"></i>' : "").join("");
+      const when = (item.created_at || "").replace(" UTC", "");
+      const on = state.scan && state.scan.id === item.id ? " on" : "";
+      return '<button type="button" class="hist' + on + '" data-action="open" data-id="' + esc(item.id) + '"><span class="hist-top"><i class="dot ' + esc(item.status) + '"></i><span class="name">' + esc(STATUS[item.status] || item.status) + " · " + total + " findings</span></span>" + (total ? '<span class="mini">' + bar + "</span>" : "") + '<span class="sub">' + esc(when) + "</span></button>";
+    }
+
+    function reportScanRow(item) {
+      const total = (item.findings || []).length || item.finding_count || 0;
+      const when = (item.created_at || "").replace(" UTC", "");
+      const tone = item.status === "done" ? " done" : item.status === "failed" ? " failed" : item.status === "running" ? " running" : "";
+      const on = state.pane === "report" && state.scan && state.scan.id === item.id ? " on" : "";
+      return '<button type="button" class="rp' + tone + on + '" data-action="open" data-id="' + esc(item.id) + '"><span class="name">' + esc(STATUS[item.status] || item.status) + " · " + total + ' findings</span><span class="sub">' + esc(when) + "</span></button>";
+    }
+
+    function reportGroup(group) {
+      const open = histOpen.has(group.key);
+      const latest = group.items[0];
+      const total = (latest.findings || []).length || latest.finding_count || 0;
+      const countLabel = group.items.length === 1 ? "1 scan" : group.items.length + " scans";
+      const summary = countLabel + " · " + (STATUS[latest.status] || latest.status) + " · " + total + " findings";
+      const overviewOn = state.pane === "overview" && state.overviewKey === group.key ? " on" : "";
+      const children = open
+        ? '<div class="rp-children">' + group.items.map(reportScanRow).join("") + '<button type="button" class="rp overview' + overviewOn + '" data-action="overview" data-key="' + esc(group.key) + '"><span class="name">Overview</span><span class="sub">Chart of every scan</span></button></div>'
+        : "";
+      return '<div class="rp-group"><button type="button" class="rp" data-action="hist-project" data-key="' + esc(group.key) + '" title="' + esc(group.name) + '"><span class="name">' + (open ? "▾ " : "▸ ") + esc(group.name) + '</span><span class="sub">' + esc(summary) + "</span></button>" + children + "</div>";
+    }
+
+    function kindMarkup(kind, label) {
+      const open = kindOpen.has(kind);
+      const scanOn = state.pane === "scan" && state.target === kind ? " on" : "";
+      const reportsOn = (state.pane === "report" || state.pane === "overview") && state.target === kind ? " on" : "";
+      const body = open
+        ? '<div class="kind-body"><button type="button" class="mode' + scanOn + '" data-action="mode-scan" data-kind="' + kind + '">Scan</button><button type="button" class="mode' + reportsOn + '" data-action="mode-reports" data-kind="' + kind + '">Reports</button></div>'
+        : "";
+      return '<button type="button" class="kind" data-action="hist-kind" data-kind="' + kind + '">' + (open ? "▾" : "▸") + " " + label + "</button>" + body;
+    }
+
+    function renderHistory() {
+      const stamp = [
+        state.scans.map((item) => item.id + item.status + (item.findings || []).length).join(),
+        [...kindOpen].join(),
+        state.pane,
+        state.target,
+        state.overviewKey,
+        scansMenuOpen ? "1" : "0"
+      ].join("|");
+      const box = document.querySelector("#history-wrap");
+      document.querySelector("#scan-count").textContent = String(state.scans.length);
+      document.querySelector("#scans-chev").textContent = scansMenuOpen ? "▾" : "▸";
+      box.hidden = !scansMenuOpen;
+      if (stamp === histStamp && box.childElementCount) {
+        box.querySelectorAll(".hist").forEach((el) => el.classList.toggle("on", el.dataset.id === (state.scan && state.scan.id)));
+        return;
+      }
+      histStamp = stamp;
+      box.innerHTML = kindMarkup("image", "Image") + kindMarkup("repo", "Repository");
+    }
+
+    function showOnlyProject(key) {
+      histOpen.clear();
+      if (key) histOpen.add(key);
+      reportStamp = null;
+    }
+
+    function renderReportsNav() {
+      const wrap = document.querySelector("#reports-nav");
+      const show = state.view === "scans" && (state.pane === "report" || state.pane === "overview");
+      wrap.hidden = !show;
+      if (!show) return;
+      const wantImage = state.target === "image";
+      const groups = collectGroups().filter((group) => group.image === wantImage);
+      const stamp = [
+        wantImage ? "image" : "repo",
+        state.pane,
+        state.overviewKey,
+        state.scan && state.scan.id,
+        [...histOpen].join(),
+        groups.map((group) => group.key + ":" + group.items.map((item) => item.id + item.status + ((item.findings || []).length || item.finding_count || 0)).join(",")).join("|")
+      ].join("~");
+      const box = document.querySelector("#report-tree");
+      if (stamp === reportStamp && box.childElementCount) return;
+      reportStamp = stamp;
+      box.innerHTML = groups.length ? groups.map(reportGroup).join("") : '<p class="hist-empty">No reports yet</p>';
+    }
+
+    function showPanes() {
+      const report = state.pane === "report" && state.scan;
+      const starter = currentUser && currentUser.role !== "viewer";
+      document.querySelector(".launch-wrap").hidden = !starter || state.view !== "scans" || state.pane !== "scan";
+      document.querySelector("#scan-panel").hidden = !report;
+      document.querySelector("#overview").hidden = state.pane !== "overview";
+      renderReportsNav();
+      const empty = document.querySelector("#empty");
+      empty.hidden = state.pane === "overview" || Boolean(report);
+      if (!empty.hidden) {
+        const imageMode = state.target === "image";
+        const title = state.pane === "scan" ? (imageMode ? "Trivy image scan" : "Repository scan") : "No scan selected";
+        const text = state.pane === "scan"
+          ? (imageMode ? "Choose an image above. Only Trivy runs." : "Enter a repository URL above. Semgrep, Checkov, and SonarQube are available.")
+          : "Open Reports and choose a scan or Overview.";
+        document.querySelector("#empty-title").textContent = title;
+        document.querySelector("#empty-text").textContent = text;
+      }
+    }
+
+    function scanTally(item) {
+      if (item.findings && item.findings.length) return counts(item.findings, (row) => row.severity);
+      const saved = item.severity || {};
+      return {
+        critical: saved.critical || 0,
+        high: saved.high || 0,
+        medium: saved.medium || 0,
+        low: saved.low || 0,
+        info: saved.info || 0
+      };
+    }
+
+    function renderOverview() {
+      const box = document.querySelector("#overview");
+      const groups = collectGroups();
+      const group = groups.find((item) => item.key === state.overviewKey);
+      if (!group) {
+        box.innerHTML = '<div class="empty"><strong>No project selected</strong>Open Reports and choose Overview.</div>';
+        return;
+      }
+      const totals = {critical: 0, high: 0, medium: 0, low: 0, info: 0};
+      group.items.forEach((item) => {
+        const tally = scanTally(item);
+        SEV.forEach((sev) => { totals[sev[0]] += tally[sev[0]]; });
+      });
+      const max = Math.max(1, ...group.items.map((item) => SEV.reduce((sum, sev) => sum + scanTally(item)[sev[0]], 0)));
+      const bars = group.items.map((item) => {
+        const tally = scanTally(item);
+        const total = SEV.reduce((sum, sev) => sum + tally[sev[0]], 0);
+        const pieces = SEV.map((sev) => tally[sev[0]] ? '<i style="width:' + (tally[sev[0]] / max * 100) + '%;background:' + sev[3] + '"></i>' : "").join("");
+        const when = (item.created_at || "").replace(" UTC", "");
+        return '<button type="button" class="scan-bar" data-action="open" data-id="' + esc(item.id) + '"><span><b>' + esc(STATUS[item.status] || item.status) + '</b><span class="sub">' + esc(when) + '</span></span><span class="stack">' + pieces + '</span><span class="num">' + total + '</span></button>';
+      }).join("");
+      box.innerHTML = '<div class="scan-head"><div><h1>' + esc(group.name) + '</h1><div class="repo">Overview</div><div class="meta">' + group.items.length + " scans</div></div></div>" + '<div class="summary">' + donut(totals) + stats(totals, "keep") + "</div>" + '<div class="scan-bars">' + bars + "</div>";
+    }
+
+    function collectGroups() {
+      const groups = [];
+      const index = new Map();
+      state.scans.forEach((item) => {
+        const key = projectKey(item);
+        if (!index.has(key)) {
+          const group = {key, name: scanTitle(item), image: isImageScan(item), items: []};
+          index.set(key, group);
+          groups.push(group);
+        }
+        index.get(key).items.push(item);
+      });
+      return groups;
+    }
+
+    function renderScanHead() {
+      showPanes();
+      if (state.pane === "overview") renderOverview();
+      const scan = state.scan;
+      if (state.pane !== "report" || !scan) return;
+      const names = TOOL_LABEL;
+      const tools = (scan.tools || []).map((tool) => names[tool] || tool).join(" · ");
+      const subtitle = isImageScan(scan) ? "Image" : scan.repo;
+      document.querySelector("#scan-head").innerHTML = '<div class="scan-head"><div><h1>' + esc(scanTitle(scan)) + '</h1><div class="repo">' + esc(subtitle) + '</div><div class="meta">' + esc(tools) + " · " + esc((scan.created_at || "").replace(" UTC", "")) + (scan.finished_at ? " to " + esc(scan.finished_at.replace(" UTC", "")) : "") + '</div></div><span class="badge ' + esc(scan.status) + '">' + esc(STATUS[scan.status] || scan.status) + "</span></div>";
+      const error = document.querySelector("#scan-error");
+      error.innerHTML = scan.error ? '<div class="note">' + esc(scan.error) + "</div>" : "";
+    }
+
+    function gateBadge(status) {
+      if (status === "OK") return ["done", "Passed"];
+      if (status === "ERROR") return ["failed", "Failed"];
+      if (status === "WARN") return ["running", "Warning"];
+      return ["", "Unknown"];
+    }
+
+    function renderSonar() {
+      const box = document.querySelector("#sonar-card");
+      const scan = state.scan;
+      const sonar = scan && scan.sonar;
+      const wants = scan && (scan.tools || []).includes("sonar");
+      const visible = state.tool === "all" || state.tool === "sonar";
+      if (!scan || !visible) {
+        box.innerHTML = "";
+        return;
+      }
+      if (state.tool === "sonar" && !sonar && !(wants && scan.status === "running")) {
+        box.innerHTML = '<div class="sonar-card"><div class="empty"><strong>This scan has no SonarQube result</strong>Check SonarQube above and run it again.</div></div>';
+        return;
+      }
+      if (!sonar && !(wants && scan.status === "running")) {
+        box.innerHTML = "";
+        return;
+      }
+      if (!sonar) {
+        box.innerHTML = '<div class="sonar-card"><div class="sonar-top"><h2>SonarQube</h2><span class="badge running">Analyzing</span></div></div>';
+        return;
+      }
+      if (sonar.error && !sonar.quality_gate) {
+        box.innerHTML = '<div class="sonar-card"><div class="sonar-top"><h2>SonarQube</h2></div><div class="note">' + esc(sonar.error) + "</div></div>";
+        return;
+      }
+      const badge = gateBadge(sonar.quality_gate);
+      const metrics = [
+        ["bugs", "Bug", "Bug"],
+        ["vulnerabilities", "Vulnerability", "Vulnerability"],
+        ["code_smells", "Code Smell", "Code smell"],
+        ["security_hotspots", "Hotspot", "Hotspot"]
+      ];
+      box.innerHTML = '<div class="sonar-card"><div class="sonar-top"><h2>SonarQube</h2><span class="badge ' + badge[0] + '">Quality Gate ' + badge[1] + '</span><a class="ghost" href="' + esc(sonar.url) + '" target="_blank" rel="noopener">Open in SonarQube</a></div><p class="meta">Project ' + esc(sonar.project_key) + '</p><div class="sonar-metrics">' + metrics.map((item) => '<div><b>' + esc(sonar[item[0]] ?? 0) + "</b><span>" + item[1] + "</span><small>" + item[2] + "</small></div>").join("") + "</div></div>";
+    }
+
+    function renderSummary() {
+      const rows = (state.scan && state.scan.findings) || [];
+      const tally = counts(rows, (row) => row.severity);
+      document.querySelector("#summary").innerHTML = '<div class="summary">' + donut(tally) + stats(tally, "sev") + "</div>";
+    }
+
+    function sonarTotal(scan) {
+      const sonar = scan && scan.sonar;
+      if (!sonar || sonar.error && !sonar.quality_gate) return 0;
+      if (!sonar.quality_gate && sonar.bugs == null) return 0;
+      return ["bugs", "vulnerabilities", "code_smells", "security_hotspots"].reduce((sum, key) => sum + (Number(sonar[key]) || 0), 0);
+    }
+
+    function paintFilters() {
+      const findings = (state.scan && state.scan.findings) || [];
+      const countsByTool = {
+        all: findings.length,
+        semgrep: findings.filter((row) => row.tool === "semgrep").length,
+        checkov: findings.filter((row) => row.tool === "checkov").length,
+        trivy: findings.filter((row) => row.tool === "trivy").length,
+        sonar: sonarTotal(state.scan)
+      };
+      document.querySelectorAll("#tool-seg button").forEach((el) => {
+        el.classList.toggle("on", el.dataset.tool === state.tool);
+        const badge = el.querySelector("em");
+        if (badge) badge.textContent = String(countsByTool[el.dataset.tool] || 0);
+      });
+      document.querySelector("#q").hidden = state.tool === "sonar";
+    }
+
+    function filteredFindings() {
+      const q = state.q.trim().toLowerCase();
+      return ((state.scan && state.scan.findings) || []).filter((row) => {
+        if (state.sev && bucket(row.severity) !== state.sev) return false;
+        if (state.tool !== "all" && row.tool !== state.tool) return false;
+        if (!q) return true;
+        return (row.check + " " + row.path + " " + row.message + " " + row.severity).toLowerCase().includes(q);
+      });
+    }
+
+    function renderFindings() {
+      if (state.tool === "sonar") {
+        document.querySelector("#shown").textContent = "";
+        document.querySelector("#findings").innerHTML = "";
+        return;
+      }
+      const rows = filteredFindings();
+      const groups = new Map();
+      rows.forEach((row) => {
+        const key = row.tool + "\0" + row.check + "\0" + bucket(row.severity);
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(row);
+      });
+      const order = {critical: 0, high: 1, medium: 2, low: 3, info: 4};
+      state.groups = [...groups.values()].sort((a, b) => {
+        const diff = order[bucket(a[0].severity)] - order[bucket(b[0].severity)];
+        return diff || b.length - a.length;
+      });
+      document.querySelector("#shown").textContent = rows.length + " findings in " + state.groups.length + " rules";
+      if (state.scan && state.scan.status === "running" && !rows.length) {
+        const phase = state.scan.phase || "scan";
+        document.querySelector("#findings").innerHTML = '<div class="empty"><strong>Running ' + esc(phase) + '</strong>The table fills when the result is ready.</div>';
+        return;
+      }
+      if (!state.groups.length) {
+        const sonarOnly = state.scan && (state.scan.tools || []).join() === "sonar" && state.scan.sonar && !state.scan.sonar.error;
+        document.querySelector("#findings").innerHTML = sonarOnly
+          ? '<div class="empty"><strong>The SonarQube summary is above</strong>Line-by-line issues open in SonarQube.</div>'
+          : '<div class="empty"><strong>Nothing matches this filter</strong>Clear the severity filter or the search.</div>';
+        return;
+      }
+      const body = state.groups.map((instances, index) => {
+        const sample = instances[0];
+        const level = bucket(sample.severity);
+        const label = SEV.find((item) => item[0] === level);
+        const key = sample.tool + "\0" + sample.check + "\0" + level;
+        const messages = [...new Set(instances.map((row) => row.message).filter(Boolean))];
+        const parentMsg = messages.length === 1 ? '<div class="msg">' + esc(messages[0]) + "</div>" : "";
+        const open = state.open.has(key);
+        const kids = instances.map((row) => '<li><span class="mono">' + esc(row.path) + (row.line ? ":" + esc(row.line) : "") + "</span>" + (messages.length > 1 ? '<span class="msg">' + esc(row.message) + "</span>" : "") + "</li>").join("");
+        return '<tr class="group" data-action="toggle" data-i="' + index + '" tabindex="0"><td><span class="pill ' + level + '">' + label[2] + '</span></td><td><div class="check">' + esc(sample.check || "—") + "</div>" + parentMsg + '</td><td>' + esc(TOOL_LABEL[sample.tool] || sample.tool) + '</td><td class="num">' + instances.length + ' <span class="chev">' + (open ? "▾" : "▸") + '</span></td></tr>' + (open ? '<tr class="kids"><td colspan="4"><ul>' + kids + "</ul></td></tr>" : "");
+      }).join("");
+      document.querySelector("#findings").innerHTML = '<table><thead><tr><th>Severity</th><th>Rule</th><th>Tool</th><th>Count</th></tr></thead><tbody>' + body + "</tbody></table>";
+    }
+
+    function syncScan() {
+      const scan = state.scan;
+      const sonar = (scan && scan.sonar) || {};
+      const stamp = scan ? [scan.id, scan.status, (scan.findings || []).length, scan.finished_at, scan.error, scan.phase || "", sonar.quality_gate || "", sonar.error || ""].join("|") : "";
+      const running = state.scans.some((item) => item.status === "running");
+      document.querySelector("#go").disabled = running;
+      document.querySelector("#progress").hidden = !running;
+      if (stamp === scanStamp) return;
+      if (!scan || scan.id !== state.seenId) {
+        state.seenId = scan && scan.id;
+        state.sev = "";
+        state.tool = "all";
+        state.q = "";
+        state.open = new Set();
+        document.querySelector("#q").value = "";
+      }
+      scanStamp = stamp;
+      renderScanHead();
+      if (scan) {
+        renderSonar();
+        renderSummary();
+        paintFilters();
+        renderFindings();
+        if (scan.status === "running") {
+          const msg = document.querySelector("#form-msg");
+          msg.className = "";
+          msg.textContent = scan.phase ? "Running " + scan.phase + "..." : "Running...";
+        }
+      }
+      if (state.pendingMsg && scan && scan.id === state.pendingMsg && scan.status !== "running") {
+        const msg = document.querySelector("#form-msg");
+        msg.className = scan.status === "failed" ? "bad" : "";
+        msg.textContent = scan.status === "done" ? "Scan finished." : "Scan failed.";
+        state.pendingMsg = null;
+      }
+    }
+
+    function renderFalco() {
+      const hot = state.alerts.filter((item) => ["critical", "high"].includes(bucket(item.priority))).length;
+      const badge = document.querySelector("#falco-count");
+      badge.textContent = String(state.alerts.length);
+      badge.classList.toggle("hot", hot > 0);
+      const stamp = [state.fsev, state.fq, state.alerts.length, state.alerts[0] && state.alerts[0].time, state.alerts[0] && state.alerts[0].rule].join("|");
+      if (stamp === falcoStamp) return;
+      falcoStamp = stamp;
+      const tally = counts(state.alerts, (row) => row.priority);
+      document.querySelector("#falco-summary").innerHTML = '<div class="summary">' + donut(tally) + stats(tally, "fsev") + "</div>";
+      const q = state.fq.trim().toLowerCase();
+      const rows = state.alerts.filter((item) => {
+        if (state.fsev && bucket(item.priority) !== state.fsev) return false;
+        if (!q) return true;
+        return (item.rule + " " + item.output + " " + item.source + " " + item.priority).toLowerCase().includes(q);
+      });
+      const list = document.querySelector("#falco-list");
+      if (!state.alerts.length) {
+        list.innerHTML = '<div class="empty"><strong>No alerts yet</strong>This list fills when a worker reports an event.</div>';
+        return;
+      }
+      if (!rows.length) {
+        list.innerHTML = '<div class="empty"><strong>Nothing matches this filter</strong></div>';
+        return;
+      }
+      const grouped = new Map();
+      rows.forEach((item) => {
+        const key = bucket(item.priority) + "\0" + (item.rule || "");
+        if (!grouped.has(key)) grouped.set(key, []);
+        grouped.get(key).push(item);
+      });
+      const order = {critical: 0, high: 1, medium: 2, low: 3, info: 4};
+      state.falcoGroups = [...grouped.values()].sort((a, b) => {
+        const diff = order[bucket(a[0].priority)] - order[bucket(b[0].priority)];
+        return diff || b.length - a.length;
+      });
+      list.innerHTML = state.falcoGroups.map((items, index) => {
+        const item = items[0];
+        const level = bucket(item.priority);
+        const label = SEV.find((sev) => sev[0] === level);
+        const key = level + "\0" + (item.rule || "");
+        const open = state.fopen.has(key);
+        const extra = open ? '<ul class="falco-more">' + items.slice(0, 8).map((row) => '<li><b>' + esc(row.time || "") + "</b> " + esc(row.output || "") + "</li>").join("") + "</ul>" : "";
+        return '<article class="alert ' + level + (open ? " open" : "") + '" data-action="falco-toggle" data-i="' + index + '"><div class="alert-top"><span class="pill ' + level + '">' + label[2] + '</span><strong>' + esc(item.rule || item.priority) + '</strong><span class="num">' + items.length + '</span><time>' + esc(item.time || "") + "</time></div><p>" + esc(item.output || "") + "</p>" + extra + "</article>";
+      }).join("");
+    }
+
+    document.addEventListener("click", (event) => {
+      const el = event.target.closest("[data-action]");
+      if (!el) return;
+      const action = el.dataset.action;
+      if (action === "view") {
+        if (el.dataset.view === "scans" && state.view === "scans") {
+          scansMenuOpen = !scansMenuOpen;
+          histStamp = null;
+          renderHistory();
+        } else {
+          if (el.dataset.view === "scans") scansMenuOpen = true;
+          setView(el.dataset.view);
+          if (el.dataset.view === "scans") {
+            histStamp = null;
+            renderHistory();
+          }
+        }
+      }
+      if (action === "k-branch") {
+        if (kOpen.has(el.dataset.id)) kOpen.delete(el.dataset.id);
+        else kOpen.add(el.dataset.id);
+        renderKnowledge();
+      }
+      if (action === "k-lesson") {
+        kLesson = el.dataset.id;
+        renderKnowledge();
+      }
+      if (action === "hist-kind") {
+        const kind = el.dataset.kind;
+        if (kindOpen.has(kind)) kindOpen.delete(kind);
+        else kindOpen.add(kind);
+        histStamp = null;
+        renderHistory();
+      }
+      if (action === "hist-project") {
+        const key = el.dataset.key;
+        const opening = !histOpen.has(key);
+        if (opening) {
+          showOnlyProject(key);
+          const group = collectGroups().find((item) => item.key === key);
+          if (group && group.items[0]) {
+            state.pane = "report";
+            state.overviewKey = "";
+            state.target = group.image ? "image" : "repo";
+            state.scan = group.items[0];
+            scanStamp = null;
+          }
+          histStamp = null;
+          syncScan();
+          renderHistory();
+        } else {
+          histOpen.delete(key);
+          reportStamp = null;
+          renderReportsNav();
+        }
+      }
+      if (action === "mode-scan") {
+        const kind = el.dataset.kind;
+        if (state.target === "repo") {
+          document.querySelectorAll("input[name=tool]").forEach((input) => {
+            repoChecks[input.value] = input.checked;
+          });
+        }
+        state.pane = "scan";
+        state.target = kind;
+        state.overviewKey = "";
+        scansMenuOpen = true;
+        kindOpen.add(kind);
+        setView("scans");
+        scanStamp = null;
+        histStamp = null;
+        syncScan();
+        renderHistory();
+      }
+      if (action === "mode-reports") {
+        const kind = el.dataset.kind;
+        const wantImage = kind === "image";
+        scansMenuOpen = true;
+        kindOpen.add(kind);
+        state.pane = "report";
+        state.target = kind;
+        state.overviewKey = "";
+        const groups = collectGroups().filter((group) => group.image === wantImage);
+        const first = groups[0] && groups[0].items[0];
+        if (first) {
+          state.scan = first;
+          showOnlyProject(groups[0].key);
+        } else if (!state.scan || isImageScan(state.scan) !== wantImage) state.scan = null;
+        scanStamp = null;
+        reportStamp = null;
+        setView("scans");
+        histStamp = null;
+        syncScan();
+        renderHistory();
+      }
+      if (action === "overview") {
+        state.pane = "overview";
+        state.overviewKey = el.dataset.key;
+        showOnlyProject(el.dataset.key);
+        const image = el.dataset.key.indexOf("image:") === 0;
+        state.target = image ? "image" : "repo";
+        kindOpen.add(state.target);
+        scansMenuOpen = true;
+        setView("scans");
+        scanStamp = null;
+        reportStamp = null;
+        histStamp = null;
+        syncScan();
+        renderHistory();
+      }
+      if (action === "open") {
+        state.pane = "report";
+        state.overviewKey = "";
+        state.scan = state.scans.find((item) => item.id === el.dataset.id) || state.scan;
+        if (state.scan) {
+          state.target = isImageScan(state.scan) ? "image" : "repo";
+          showOnlyProject(projectKey(state.scan));
+          kindOpen.add(state.target);
+        }
+        setView("scans");
+        scanStamp = null;
+        reportStamp = null;
+        histStamp = null;
+        syncScan();
+        renderHistory();
+      }
+      if (action === "sev") {
+        state.sev = state.sev === el.dataset.sev ? "" : el.dataset.sev;
+        renderSummary();
+        renderFindings();
+      }
+      if (action === "fsev") {
+        state.fsev = state.fsev === el.dataset.sev ? "" : el.dataset.sev;
+        falcoStamp = null;
+        renderFalco();
+      }
+      if (action === "target") setTarget(el.dataset.target);
+      if (action === "pick-image") {
+        document.querySelector("#image-ref").value = el.dataset.ref || "";
+        renderImageList();
+      }
+      if (action === "tool") {
+        state.tool = el.dataset.tool;
+        paintFilters();
+        renderSonar();
+        renderFindings();
+      }
+      if (action === "falco-toggle") {
+        const group = state.falcoGroups[Number(el.dataset.i)];
+        if (!group) return;
+        const sample = group[0];
+        const key = bucket(sample.priority) + "\0" + (sample.rule || "");
+        if (state.fopen.has(key)) state.fopen.delete(key);
+        else state.fopen.add(key);
+        falcoStamp = null;
+        renderFalco();
+      }
+      if (action === "toggle") {
+        const group = state.groups[Number(el.dataset.i)];
+        if (!group) return;
+        const sample = group[0];
+        const key = sample.tool + "\0" + sample.check + "\0" + bucket(sample.severity);
+        if (state.open.has(key)) state.open.delete(key);
+        else state.open.add(key);
+        renderFindings();
+      }
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && event.target.dataset && event.target.dataset.action === "toggle") {
+        event.target.click();
+      }
+    });
+
+    document.querySelector("#q").addEventListener("input", (event) => {
+      state.q = event.target.value;
+      renderFindings();
+    });
+    document.querySelector("#k-q").addEventListener("input", () => renderKnowledge());
+    renderKnowledge();
+
+    document.querySelector("#fq").addEventListener("input", (event) => {
+      state.fq = event.target.value;
+      falcoStamp = null;
+      renderFalco();
+    });
+
+    document.querySelector("#image-ref").addEventListener("input", () => {
+      if (imagesLoaded) renderImageList();
+    });
+
+    document.querySelector("#scan-form").addEventListener("change", (event) => {
+      if (event.target.name === "tool" && state.target !== "image") repoChecks[event.target.value] = event.target.checked;
+    });
+
+    document.querySelector("#scan-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const imageMode = state.target === "image";
+      const tools = imageMode
+        ? ["trivy"]
+        : [...document.querySelectorAll("input[name=tool]:checked")].map((el) => el.value);
+      const msg = document.querySelector("#form-msg");
+      msg.className = "";
+      msg.textContent = "Scan queued.";
+      const payload = imageMode
+        ? {target: "image", image: document.querySelector("#image-ref").value.trim(), tools}
+        : {target: "repo", repo: document.querySelector("#repo").value, tools};
+      const response = await api("/api/scans", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(payload)
+      });
+      const body = await response.json();
+      if (!response.ok) {
+        msg.className = "bad";
+        msg.textContent = body.error || "Could not start.";
+        return;
+      }
+      state.pendingMsg = body.id;
+      state.pane = "report";
+      state.overviewKey = "";
+      state.scan = body;
+      scansMenuOpen = true;
+      kindOpen.add(imageMode ? "image" : "repo");
+      reportsOpen.add(imageMode ? "image" : "repo");
+      showOnlyProject(projectKey(body));
+      state.scans = [body, ...state.scans.filter((item) => item.id !== body.id)];
+      setView("scans");
+      scanStamp = null;
+      histStamp = null;
+      syncScan();
+      renderHistory();
+      msg.textContent = imageMode ? "Scanning image..." : "Cloning and scanning...";
+    });
+
+    async function tick() {
+      if (!currentUser) return;
+      try {
+        const [scanResponse, alertResponse] = await Promise.all([
+          api("/api/scans"),
+          api("/api/falco")
+        ]);
+        if (!currentUser) return;
+        if (!scanResponse.ok || !alertResponse.ok) {
+          if (scanResponse.status === 401 || alertResponse.status === 401) showLogin();
+          return;
+        }
+        const scans = await scanResponse.json();
+        const alerts = await alertResponse.json();
+        state.scans = Array.isArray(scans) ? scans : [];
+        state.alerts = Array.isArray(alerts) ? alerts : [];
+        if (!state.scan && state.scans[0]) {
+          state.scan = state.scans[0];
+          state.target = isImageScan(state.scan) ? "image" : "repo";
+          showOnlyProject(projectKey(state.scan));
+        }
+        const fresh = state.scans.find((item) => state.scan && item.id === state.scan.id);
+        if (fresh) state.scan = fresh;
+        renderHistory();
+        syncScan();
+        renderFalco();
+      } catch (err) {
+        if (currentUser) document.querySelector("#form-msg").textContent = "Lost contact with the console.";
+      }
+      const running = state.scans.some((item) => item.status === "running");
+      setTimeout(tick, running ? 3000 : 5000);
+    }
+
+    document.querySelector("#toggle-password").addEventListener("click", () => {
+      const input = document.querySelector("#password");
+      const show = input.type === "password";
+      input.type = show ? "text" : "password";
+      document.querySelector("#toggle-password").textContent = show ? "Hide" : "Show";
+    });
+
+    document.querySelector("#login-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const button = document.querySelector("#login-submit");
+      const error = document.querySelector("#login-error");
+      error.hidden = true;
+      button.disabled = true;
+      button.textContent = "Signing in";
+      try {
+        const response = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: {"Content-Type": "application/json", "Accept": "application/json"},
+          credentials: "same-origin",
+          body: JSON.stringify({
+            username: document.querySelector("#username").value,
+            password: document.querySelector("#password").value
+          })
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          error.hidden = false;
+          error.textContent = body.error || "Sign-in failed.";
+          return;
+        }
+        document.querySelector("#password").value = "";
+        showApp(body);
+        tick();
+      } catch (err) {
+        error.hidden = false;
+        error.textContent = "Lost contact with the console.";
+      } finally {
+        button.disabled = false;
+        button.textContent = "Sign in";
+      }
+    });
+
+    function syncThemeButton() {
+      const dark = document.documentElement.classList.contains("dark");
+      document.querySelector("#theme").textContent = dark ? "Light mode" : "Dark mode";
+    }
+
+    document.querySelector("#theme").addEventListener("click", () => {
+      const dark = document.documentElement.classList.toggle("dark");
+      localStorage.setItem("console-theme", dark ? "dark" : "light");
+      syncThemeButton();
+    });
+    syncThemeButton();
+
+    function toolNames(access) {
+      return Object.keys(TOOL_LABEL).filter((tool) => access && access[tool]).map((tool) => TOOL_LABEL[tool]).join(", ") || "—";
+    }
+
+    function userFormTools(access, role) {
+      const box = document.querySelector("#user-tools");
+      box.innerHTML = Object.keys(TOOL_LABEL).map((tool) => {
+        const on = role === "admin" || (access && access[tool]);
+        return '<label class="scanner"><input type="checkbox" name="user-tool" value="' + tool + '"' + (on ? " checked" : "") + (role === "admin" ? " disabled" : "") + '><span><b>' + TOOL_LABEL[tool] + '</b></span></label>';
+      }).join("");
+    }
+
+    function resetUserForm() {
+      editingUser = null;
+      document.querySelector("#user-form-title").textContent = "New user";
+      document.querySelector("#user-name").value = "";
+      document.querySelector("#user-email").value = "";
+      document.querySelector("#user-pass").value = "";
+      document.querySelector("#user-pass").required = true;
+      document.querySelector("#user-form-role").value = "viewer";
+      document.querySelector("#user-disabled").checked = false;
+      userFormTools({semgrep: true, checkov: true, sonar: false, trivy: true}, "viewer");
+    }
+
+    function renderUsers() {
+      const needle = document.querySelector("#user-q").value.trim().toLowerCase();
+      const role = document.querySelector("#user-role").value;
+      const rows = accountUsers.filter((user) => {
+        const text = (user.username + " " + user.email).toLowerCase();
+        return (role === "all" || user.role === role) && (!needle || text.includes(needle));
+      });
+      document.querySelector("#user-rows").innerHTML = rows.map((user) => (
+        '<tr><td>' + esc(user.username) + '</td><td dir="ltr">' + esc(user.email) + '</td><td>' + esc(ROLE_LABEL[user.role] || user.role) + '</td><td>' + (user.disabled ? "Disabled" : "Active") + '</td><td>' + esc(toolNames(user.access)) + '</td><td><div class="row-actions"><button type="button" class="ghost" data-action="edit-user" data-id="' + user.id + '">Edit</button><button type="button" class="ghost" data-action="delete-user" data-id="' + user.id + '">Delete</button></div></td></tr>'
+      )).join("") || '<tr><td colspan="6">No users match this filter.</td></tr>';
+    }
+
+    function renderAccess() {
+      document.querySelector("#access-list").innerHTML = accountUsers.map((user) => {
+        const tools = Object.keys(TOOL_LABEL).map((tool) => {
+          const on = user.role === "admin" || user.access[tool];
+          return '<button type="button" class="scanner" data-action="access-tool" data-id="' + user.id + '" data-tool="' + tool + '"' + (user.role === "admin" ? " disabled" : "") + ' style="text-align:left"><b>' + TOOL_LABEL[tool] + '</b><small>' + (on ? "On" : "Off") + '</small></button>';
+        }).join("");
+        return '<div class="card" style="padding:12px;margin-bottom:8px"><strong>' + esc(user.username) + '</strong><div class="meta">' + esc(ROLE_LABEL[user.role] || "") + (user.email ? " · " + esc(user.email) : "") + '</div><div class="scanners" style="margin-top:8px">' + tools + '</div></div>';
+      }).join("");
+    }
+
+    async function loadAccounts() {
+      const response = await api("/api/users");
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        const box = document.querySelector("#user-error");
+        box.hidden = false;
+        box.textContent = body.error || "Could not load users.";
+        return;
+      }
+      accountUsers = await response.json();
+      document.querySelector("#user-error").hidden = true;
+      renderUsers();
+      renderAccess();
+    }
+
+    document.querySelector("#user-q").addEventListener("input", renderUsers);
+    document.querySelector("#user-role").addEventListener("change", renderUsers);
+    document.querySelector("#user-form-role").addEventListener("change", (event) => {
+      userFormTools(editingUser ? editingUser.access : {semgrep: true, checkov: false, sonar: false, trivy: true}, event.target.value);
+    });
+    document.querySelector("#user-cancel").addEventListener("click", resetUserForm);
+    resetUserForm();
+
+    document.querySelector("#user-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const role = document.querySelector("#user-form-role").value;
+      const access = {semgrep: false, checkov: false, sonar: false, trivy: false};
+      document.querySelectorAll("input[name=user-tool]").forEach((input) => {
+        access[input.value] = role === "admin" || input.checked;
+      });
+      const payload = {
+        username: document.querySelector("#user-name").value.trim(),
+        email: document.querySelector("#user-email").value.trim(),
+        role,
+        disabled: document.querySelector("#user-disabled").checked,
+        access
+      };
+      const password = document.querySelector("#user-pass").value;
+      if (password) payload.password = password;
+      const response = await api(editingUser ? "/api/users/" + editingUser.id : "/api/users", {
+        method: editingUser ? "PATCH" : "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(payload)
+      });
+      const body = await response.json().catch(() => ({}));
+      const box = document.querySelector("#user-error");
+      if (!response.ok) {
+        box.hidden = false;
+        box.textContent = body.error || "Could not save.";
+        return;
+      }
+      box.hidden = true;
+      resetUserForm();
+      await loadAccounts();
+    });
+
+    document.querySelector("#view-users").addEventListener("click", async (event) => {
+      const button = event.target.closest("[data-action]");
+      if (!button) return;
+      const user = accountUsers.find((item) => String(item.id) === button.dataset.id);
+      if (!user) return;
+      if (button.dataset.action === "edit-user") {
+        editingUser = user;
+        document.querySelector("#user-form-title").textContent = "Edit " + user.username;
+        document.querySelector("#user-name").value = user.username;
+        document.querySelector("#user-email").value = user.email;
+        document.querySelector("#user-pass").value = "";
+        document.querySelector("#user-pass").required = false;
+        document.querySelector("#user-form-role").value = user.role;
+        document.querySelector("#user-disabled").checked = user.disabled;
+        userFormTools(user.access, user.role);
+      }
+      if (button.dataset.action === "delete-user") {
+        if (!window.confirm("Delete user " + user.username + "?")) return;
+        const response = await api("/api/users/" + user.id, {method: "DELETE"});
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const box = document.querySelector("#user-error");
+          box.hidden = false;
+          box.textContent = body.error || "Could not delete.";
+          return;
+        }
+        await loadAccounts();
+      }
+    });
+
+    document.querySelector("#access-list").addEventListener("click", async (event) => {
+      const button = event.target.closest("[data-action=access-tool]");
+      if (!button || button.disabled) return;
+      const user = accountUsers.find((item) => String(item.id) === button.dataset.id);
+      if (!user || user.role === "admin") return;
+      const access = Object.assign({}, user.access);
+      access[button.dataset.tool] = !access[button.dataset.tool];
+      const response = await api("/api/users/" + user.id, {
+        method: "PATCH",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          username: user.username,
+          email: user.email,
+          role: user.role,
+          disabled: user.disabled,
+          access
+        })
+      });
+      const msg = document.querySelector("#access-msg");
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        msg.textContent = body.error || "Could not save.";
+        return;
+      }
+      msg.textContent = "Access saved for " + user.username + ".";
+      await loadAccounts();
+    });
+
+    function syncPasswordSubmit() {
+      const next = document.querySelector("#pw-new").value;
+      const again = document.querySelector("#pw-again").value;
+      const current = document.querySelector("#pw-current").value;
+      const mismatch = again.length > 0 && next !== again;
+      document.querySelector("#pw-match").hidden = !mismatch;
+      document.querySelector("#pw-save").disabled = !(current && next.length >= 12 && next === again);
+    }
+
+    ["#pw-current", "#pw-new", "#pw-again"].forEach((selector) => {
+      document.querySelector(selector).addEventListener("input", syncPasswordSubmit);
+    });
+
+    document.querySelector("#password-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const next = document.querySelector("#pw-new").value;
+      const again = document.querySelector("#pw-again").value;
+      const error = document.querySelector("#pw-error");
+      const ok = document.querySelector("#pw-ok");
+      error.hidden = true;
+      ok.hidden = true;
+      if (next !== again) {
+        error.hidden = false;
+        error.textContent = "The new password and the repeat do not match.";
+        return;
+      }
+      const button = document.querySelector("#pw-save");
+      button.disabled = true;
+      button.textContent = "Saving";
+      try {
+        const response = await api("/api/auth/password", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            current_password: document.querySelector("#pw-current").value,
+            new_password: next
+          })
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          error.hidden = false;
+          error.textContent = body.error || "Could not change the password.";
+          return;
+        }
+        document.querySelector("#password-form").reset();
+        ok.hidden = false;
+      } finally {
+        button.textContent = "Save";
+        syncPasswordSubmit();
+      }
+    });
+
+    document.querySelector("#logout").addEventListener("click", async () => {
+      await api("/api/auth/logout", {method: "POST"});
+      state.scans = [];
+      state.alerts = [];
+      state.scan = null;
+      showLogin();
+    });
+
+    async function boot() {
+      try {
+        const response = await fetch("/api/auth/me", {headers: {"Accept": "application/json"}, credentials: "same-origin"});
+        if (response.status === 401) {
+          const refreshed = await fetch("/api/auth/refresh", {method: "POST", credentials: "same-origin"});
+          if (refreshed.ok) {
+            const again = await fetch("/api/auth/me", {headers: {"Accept": "application/json"}, credentials: "same-origin"});
+            if (again.ok) {
+              showApp(await again.json());
+              tick();
+              return;
+            }
+          }
+        }
+        if (!response.ok) {
+          showLogin();
+          return;
+        }
+        showApp(await response.json());
+        tick();
+      } catch (err) {
+        showLogin();
+      }
+    }
+    boot();
+  </script>
+</body>
+</html>

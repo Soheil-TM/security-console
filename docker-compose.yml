@@ -1,0 +1,64 @@
+# Single-host Docker. The same image is used by Swarm and Kubernetes.
+# Generate the four secret files before `docker compose up` and do not commit them.
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: console
+      POSTGRES_DB: security_console_db
+      POSTGRES_PASSWORD_FILE: /run/secrets/console_db_password
+    secrets:
+      - console_db_password
+    volumes:
+      - console_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U console -d security_console_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  console:
+    build: .
+    image: security-console:16
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      CONSOLE_DB_HOST: db
+      CONSOLE_ADMIN_USERNAME: admin
+      CONSOLE_JWT_KEY_FILE: /run/secrets/console_jwt_key
+      CONSOLE_ADMIN_PASSWORD_FILE: /run/secrets/console_admin_password
+      CONSOLE_DB_PASSWORD_FILE: /run/secrets/console_db_password
+      FALCO_INGEST_TOKEN_FILE: /run/secrets/falco_ingest_token
+      COOKIE_SECURE: "0"
+      DATA_DIR: /data
+      SONAR_URL: ${SONAR_URL:-http://192.168.205.155:9000}
+      SONAR_PROJECT_KEY: ${SONAR_PROJECT_KEY:-alireza}
+      HOST_SCAN_DIR: /var/lib/security-scans
+      SCAN_DIR: /scans
+    secrets:
+      - console_jwt_key
+      - console_admin_password
+      - console_db_password
+      - falco_ingest_token
+    ports:
+      - "8091:8080"
+    volumes:
+      - console_data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/security-scans:/scans
+
+secrets:
+  console_jwt_key:
+    file: ./secrets/console_jwt_key.txt
+  console_admin_password:
+    file: ./secrets/console_admin_password.txt
+  console_db_password:
+    file: ./secrets/console_db_password.txt
+  falco_ingest_token:
+    file: ./secrets/falco_ingest_token.txt
+
+volumes:
+  console_pg:
+  console_data:

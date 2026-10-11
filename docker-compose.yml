@@ -20,7 +20,7 @@ services:
 
   console:
     build: .
-    image: security-console:16
+    image: security-console:17
     depends_on:
       db:
         condition: service_healthy

@@ -31,31 +31,49 @@ _OPEN = {("POST", "/api/auth/login"), ("POST", "/api/auth/refresh")}
 _ACCESS_MINUTES = 20
 _REFRESH_DAYS = 7
 _LOGIN_LIMIT = 5
+_BOOTSTRAP_PASSWORD = "admin"
+_BOOTSTRAP_FLAG = "bootstrap_admin_v1"
+_WHILE_CHANGING_PASSWORD = {
+    ("GET", "/api/auth/me"),
+    ("POST", "/api/auth/password"),
+    ("POST", "/api/auth/logout"),
+}
 
 
 def prepare_auth() -> None:
-    """Create the auth schema and the first admin when the table is empty."""
+    """Create the auth schema and the first admin when the table is empty.
+
+    The first password is admin. That account must replace it before the
+    console can be used. An existing admin is switched to that password
+    once, so a later restart does not undo the replacement.
+    """
 
     if len(jwt_key()) < 32:
         raise RuntimeError("console JWT key must be at least 32 characters")
     db.prepare_database()
-    if db.count_users() > 0:
-        return
     username = os.environ.get("CONSOLE_ADMIN_USERNAME", "admin").strip()
-    password = db.read_secret(
-        "CONSOLE_ADMIN_PASSWORD",
-        "CONSOLE_ADMIN_PASSWORD_FILE",
-    )
-    if not _valid_username(username) or len(password) < 12:
-        raise RuntimeError("initial admin credentials are not configured")
+    if not _valid_username(username):
+        raise RuntimeError("initial admin username is not configured")
+    if db.count_users() == 0:
+        _insert_bootstrap_admin(username)
+        db.set_flag(_BOOTSTRAP_FLAG)
+        return
+    if db.has_flag(_BOOTSTRAP_FLAG):
+        return
+    db.require_password_change(username, hash_password(_BOOTSTRAP_PASSWORD))
+    db.set_flag(_BOOTSTRAP_FLAG)
+
+
+def _insert_bootstrap_admin(username: str) -> None:
     db.insert_user(
         username,
-        hash_password(password),
+        hash_password(_BOOTSTRAP_PASSWORD),
         "admin",
         allow_semgrep=True,
         allow_checkov=True,
         allow_sonar=True,
         allow_trivy=True,
+        must_change_password=True,
     )
 
 
@@ -131,6 +149,13 @@ def _guard_request() -> Response | None:
     g.user = user
     if request.method in {"POST", "PUT", "PATCH", "DELETE"} and not _csrf_ok():
         return jsonify({"error": "Request rejected."}), 403
+    if user.get("must_change_password") and (
+        request.method,
+        request.path,
+    ) not in _WHILE_CHANGING_PASSWORD:
+        return jsonify(
+            {"error": "Change your password before continuing."}
+        ), 403
     if (
         request.path == "/api/users" or request.path.startswith("/api/users/")
     ) and user["role"] != "admin":
@@ -241,6 +266,7 @@ def _session_payload(user: dict[str, Any]) -> dict[str, Any]:
         "email": user.get("email") or "",
         "role": user["role"],
         "access": access_map(user),
+        "must_change_password": bool(user.get("must_change_password")),
     }
 
 

@@ -8,7 +8,7 @@ import pytest
 from argon2 import PasswordHasher
 from flask import Flask, jsonify
 
-from security_console.auth import install_auth
+from security_console.auth import install_auth, prepare_auth
 from security_console.db import insert_user, prepare_database, reset_auth_tables
 
 _HASHER = PasswordHasher()
@@ -276,6 +276,46 @@ def test_admin_cannot_delete_self(client):
     )
 
     assert response.status_code == 409
+
+
+def test_first_password_must_be_replaced_before_the_console_opens(client):
+    insert_user(
+        "fresh",
+        _HASHER.hash("admin"),
+        "developer",
+        must_change_password=True,
+    )
+    login = _login(client, "fresh", "admin")
+    csrf = _csrf(login)
+
+    blocked = client.get("/api/scans")
+    changed = client.post(
+        "/api/auth/password",
+        json={
+            "current_password": "admin",
+            "new_password": "replacement-pass",
+        },
+        headers={"X-CSRF-Token": csrf},
+    )
+    opened = client.get("/api/scans")
+
+    assert login.status_code == 200
+    assert login.get_json()["must_change_password"] is True
+    assert blocked.status_code == 403
+    assert changed.status_code == 200
+    assert opened.status_code == 200
+    assert client.get("/api/auth/me").get_json()["must_change_password"] is False
+
+
+def test_empty_database_signs_in_as_admin(client):
+    reset_auth_tables()
+    prepare_auth()
+
+    response = _login(client, "admin", "admin")
+
+    assert response.status_code == 200
+    assert response.get_json()["username"] == "admin"
+    assert response.get_json()["must_change_password"] is True
 
 
 def test_password_change_checks_the_current_password(client):

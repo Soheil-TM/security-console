@@ -24,7 +24,13 @@ SCHEMA = (
         allow_checkov boolean NOT NULL DEFAULT true,
         allow_sonar boolean NOT NULL DEFAULT false,
         allow_trivy boolean NOT NULL DEFAULT true,
+        must_change_password boolean NOT NULL DEFAULT false,
         created_at timestamptz NOT NULL DEFAULT now()
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS app_flags (
+        name text PRIMARY KEY
     )
     """,
     """
@@ -229,6 +235,11 @@ MIGRATIONS = (
         ADD COLUMN IF NOT EXISTS allow_trivy boolean NOT NULL DEFAULT true
     """,
     """
+    ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS must_change_password boolean
+        NOT NULL DEFAULT false
+    """,
+    """
     DO $$
     DECLARE constraint_name text;
     BEGIN
@@ -294,6 +305,7 @@ def insert_user(
     allow_checkov: bool = True,
     allow_sonar: bool = False,
     allow_trivy: bool = True,
+    must_change_password: bool = False,
 ) -> int:
     """Insert one account and return its id."""
 
@@ -302,9 +314,10 @@ def insert_user(
             """
             INSERT INTO users (
                 username, email, password_hash, role,
-                allow_semgrep, allow_checkov, allow_sonar, allow_trivy
+                allow_semgrep, allow_checkov, allow_sonar, allow_trivy,
+                must_change_password
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
             (
@@ -316,6 +329,7 @@ def insert_user(
                 allow_checkov,
                 allow_sonar,
                 allow_trivy,
+                must_change_password,
             ),
         ).fetchone()
         conn.commit()
@@ -331,7 +345,8 @@ def find_user(username: str) -> dict[str, Any] | None:
         row = conn.execute(
             """
             SELECT id, username, email, password_hash, role, disabled,
-                   allow_semgrep, allow_checkov, allow_sonar, allow_trivy
+                   allow_semgrep, allow_checkov, allow_sonar, allow_trivy,
+                   must_change_password
             FROM users
             WHERE username = %s
             """,
@@ -349,7 +364,7 @@ def find_user_by_id(user_id: int) -> dict[str, Any] | None:
             """
             SELECT id, username, email, role, disabled,
                    allow_semgrep, allow_checkov, allow_sonar,
-                   allow_trivy, created_at
+                   allow_trivy, must_change_password, created_at
             FROM users
             WHERE id = %s
             """,
@@ -461,7 +476,11 @@ def set_password_hash(user_id: int, password_hash: str) -> None:
 
     with connect() as conn:
         conn.execute(
-            "UPDATE users SET password_hash = %s WHERE id = %s",
+            """
+            UPDATE users
+            SET password_hash = %s, must_change_password = false
+            WHERE id = %s
+            """,
             (password_hash, user_id),
         )
         conn.commit()
@@ -598,12 +617,54 @@ def access_revoked(jti: str) -> bool:
     return row is not None
 
 
+def has_flag(name: str) -> bool:
+    """Return whether a one-time startup marker is stored."""
+
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM app_flags WHERE name = %s",
+            (name,),
+        ).fetchone()
+        conn.commit()
+    return row is not None
+
+
+def set_flag(name: str) -> None:
+    """Store a one-time startup marker. Repeating it is harmless."""
+
+    with connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO app_flags (name)
+            VALUES (%s)
+            ON CONFLICT (name) DO NOTHING
+            """,
+            (name,),
+        )
+        conn.commit()
+
+
+def require_password_change(username: str, password_hash: str) -> None:
+    """Set one account's password and require a change at the next sign-in."""
+
+    with connect() as conn:
+        conn.execute(
+            """
+            UPDATE users
+            SET password_hash = %s, must_change_password = true
+            WHERE username = %s
+            """,
+            (password_hash, username),
+        )
+        conn.commit()
+
+
 def reset_auth_tables() -> None:
     """Delete auth rows. Used by tests so each case starts empty."""
 
     with connect() as conn:
         conn.execute(
-            "TRUNCATE refresh_tokens, revoked_access, login_attempts, users "
-            "RESTART IDENTITY CASCADE"
+            "TRUNCATE refresh_tokens, revoked_access, login_attempts, "
+            "users, app_flags RESTART IDENTITY CASCADE"
         )
         conn.commit()

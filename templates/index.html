@@ -251,12 +251,13 @@
       border: 1px solid #33506a;
       border-radius: 8px;
     }
-    .login-screen {
+    .login-screen, .password-gate {
       min-height: 100%;
       display: grid;
       place-items: center;
       padding: 24px;
     }
+    .password-gate { display: none; }
     .login-card {
       width: min(420px, 100%);
       background: white;
@@ -312,6 +313,8 @@
     .filters > * { flex: 1; }
     #pw-match { color: var(--critical); font-size: 12px; margin-top: 6px; }
     body.authed .login-screen { display: none; }
+    body.must-change .password-gate { display: grid; }
+    body.must-change .app { display: none; }
     body:not(.authed) .app { display: none; }
     .aside-foot {
       margin-top: auto;
@@ -642,6 +645,26 @@
       <button type="submit" id="login-submit">Sign in</button>
     </form>
   </div>
+  <div class="password-gate" id="password-gate">
+    <form class="login-card" id="gate-form">
+      <h1>Change your password</h1>
+      <p>The first password has to be replaced before the console opens. Use at least 12 characters and type the new password twice.</p>
+      <div id="gate-error" class="login-error" hidden></div>
+      <label>
+        <span class="field-label">Current password</span>
+        <input id="gate-current" type="password" required maxlength="128" dir="ltr" autocomplete="current-password">
+      </label>
+      <label>
+        <span class="field-label">New password</span>
+        <input id="gate-new" type="password" required minlength="12" maxlength="128" dir="ltr" autocomplete="new-password">
+      </label>
+      <label>
+        <span class="field-label">Repeat new password</span>
+        <input id="gate-again" type="password" required minlength="12" maxlength="128" dir="ltr" autocomplete="new-password">
+      </label>
+      <button type="submit" id="gate-submit">Save password</button>
+    </form>
+  </div>
   <div class="app">
     <aside>
       <div class="brand">
@@ -905,12 +928,17 @@
 
     function showLogin() {
       currentUser = null;
-      document.body.classList.remove("authed");
+      document.body.classList.remove("authed", "must-change");
     }
 
     function showApp(user) {
       currentUser = user;
       document.body.classList.add("authed");
+      if (user.must_change_password) {
+        document.body.classList.add("must-change");
+        return;
+      }
+      document.body.classList.remove("must-change");
       document.querySelector("#who").textContent = user.username + " · " + (ROLE_LABEL[user.role] || user.role);
       document.querySelector("#nav-users").hidden = user.role !== "admin";
       document.querySelector("#nav-access").hidden = user.role !== "admin";
@@ -1893,7 +1921,7 @@
         }
         document.querySelector("#password").value = "";
         showApp(body);
-        tick();
+        if (!body.must_change_password) tick();
       } catch (err) {
         error.hidden = false;
         error.textContent = "Lost contact with the console.";
@@ -2127,6 +2155,48 @@
       }
     });
 
+    document.querySelector("#gate-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const next = document.querySelector("#gate-new").value;
+      const again = document.querySelector("#gate-again").value;
+      const error = document.querySelector("#gate-error");
+      const button = document.querySelector("#gate-submit");
+      error.hidden = true;
+      if (next !== again) {
+        error.hidden = false;
+        error.textContent = "The new password and the repeat do not match.";
+        return;
+      }
+      button.disabled = true;
+      button.textContent = "Saving";
+      try {
+        const response = await api("/api/auth/password", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            current_password: document.querySelector("#gate-current").value,
+            new_password: next
+          })
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          error.hidden = false;
+          error.textContent = body.error || "Could not change the password.";
+          return;
+        }
+        document.querySelector("#gate-form").reset();
+        currentUser.must_change_password = false;
+        showApp(currentUser);
+        tick();
+      } catch (err) {
+        error.hidden = false;
+        error.textContent = "Lost contact with the console.";
+      } finally {
+        button.disabled = false;
+        button.textContent = "Save password";
+      }
+    });
+
     document.querySelector("#logout").addEventListener("click", async () => {
       await api("/api/auth/logout", {method: "POST"});
       state.scans = [];
@@ -2143,8 +2213,9 @@
           if (refreshed.ok) {
             const again = await fetch("/api/auth/me", {headers: {"Accept": "application/json"}, credentials: "same-origin"});
             if (again.ok) {
-              showApp(await again.json());
-              tick();
+              const user = await again.json();
+              showApp(user);
+              if (!user.must_change_password) tick();
               return;
             }
           }
@@ -2153,8 +2224,9 @@
           showLogin();
           return;
         }
-        showApp(await response.json());
-        tick();
+        const user = await response.json();
+        showApp(user);
+        if (!user.must_change_password) tick();
       } catch (err) {
         showLogin();
       }

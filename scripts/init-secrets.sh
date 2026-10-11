@@ -21,4 +21,4 @@ write_if_missing secrets/console_db_password.txt 18
 write_if_missing secrets/console_jwt_key.txt 32
 write_if_missing secrets/falco_ingest_token.txt 18
 
-echo "admin password is in secrets/console_admin_password.txt"
+echo "First sign-in is username admin and password admin. Change that password after you sign in."

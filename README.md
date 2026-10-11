@@ -1,11 +1,10 @@
-# کنسول امنیت
+# Security console
 
-صفحهٔ وب برای اجرای Semgrep و Checkov و دیدن خلاصهٔ SonarQube و هشدار Falco.
-ورود با کوکی HttpOnly است. رمزها داخل کد نیستند.
+A web page for running Semgrep, Checkov, and Trivy, and for reading a SonarQube summary and Falco alerts. Sign-in uses an HttpOnly cookie. Passwords are not stored in the source.
 
-## بالا آوردن روی هر سرور
+## Start on any server
 
-روی سروری که Docker و Docker Compose دارد:
+On a server that has Docker and Docker Compose:
 
 ```bash
 git clone https://github.com/Soheil-TM/security-console.git
@@ -14,48 +13,47 @@ cd security-console
 docker compose up -d --build
 ```
 
-صفحه روی پورت ۸۰۹۱ باز می‌شود. نام کاربر `admin` است. رمز را اسکریپت در `secrets/console_admin_password.txt` می‌سازد و آن فایل وارد git نمی‌شود.
+The page opens on port 8091. The first account is `admin` with password `admin`. After the first sign-in the console stays closed until that password is replaced. The new password must be at least 12 characters, typed twice.
 
-اسکن Semgrep و Checkov و Trivy و SonarQube از سوکت Docker همان سرور یک کانتینر کوتاه می‌سازد و ایمیج ابزار را در صورت نبودن می‌گیرد. برای SonarQube آدرس سرور را بده:
+Semgrep, Checkov, Trivy, and SonarQube each start a short-lived container through the Docker socket on that server, and pull the scanner image when it is missing. Point SonarQube at its server:
 
 ```bash
 SONAR_URL=https://sonar.example.com SONAR_PROJECT_KEY=my-project docker compose up -d --build
 ```
 
-توکن SonarQube را جدا در `secrets/sonar_token.txt` بگذار. بدون آن، سه ابزار دیگر کار می‌کنند و SonarQube رد می‌شود.
+Put the SonarQube token in `secrets/sonar_token.txt`. Without that file, the other scanners still run and SonarQube is skipped.
 
-## رازها
+## Secrets
 
-این چهار فایل را بساز و در git نگذار، یا `./scripts/init-secrets.sh` را اجرا کن:
+Create these files and keep them out of git, or run `./scripts/init-secrets.sh`:
 
-- `secrets/console_admin_password.txt` حداقل ۱۲ نویسه
 - `secrets/console_db_password.txt`
-- `secrets/console_jwt_key.txt` حداقل ۳۲ نویسه
+- `secrets/console_jwt_key.txt` — at least 32 characters
 - `secrets/falco_ingest_token.txt`
 
-نام کاربر اول `admin` است و فقط وقتی هیچ کاربری نباشد ساخته می‌شود.
+`init-secrets.sh` also writes `secrets/console_admin_password.txt` so Compose can mount it. That file is not the sign-in password. The first sign-in is always username `admin` and password `admin`, and it must be changed before the console opens. The account is created only when the user table is empty. On an existing database, the `admin` account is switched to that password once.
 
 ## Docker
 
-`docker compose up --build` یک Postgres مخصوص کنسول و خود کنسول را روی پورت ۸۰۹۱ بالا می‌آورد.
+`docker compose up --build` starts a Postgres database for the console and the console itself on port 8091.
 
 ## Docker Swarm
 
-ایمیج `security-console:16` باید روی work-01 باشد. استقرار:
+The image `security-console:17` must be on work-01. Deploy it with:
 
 ```bash
 docker stack deploy -c docker-stack.yml --resolve-image never console
 ```
 
-روی این خوشه پایگاه کاربران، دیتابیس `security_console_db` روی Postgres موجود SonarQube است. کنسول با نقش `console` وصل می‌شود، نه با نقش برنامهٔ SonarQube.
+On this cluster the user database is `security_console_db` on the Postgres instance that SonarQube already uses. The console connects as the `console` role, not as the SonarQube application role.
 
 ## Kubernetes
 
-مانیفست `deploy/kubernetes/console.yaml` همان ایمیج را با Postgres جدا بالا می‌آورد. مقدارهای `CHANGE_ME` را عوض کن. `COOKIE_SECURE` آنجا روشن است و جلوی کنسول باید TLS باشد.
+The manifest `deploy/kubernetes/console.yaml` starts the same image with its own Postgres. Replace every `CHANGE_ME` value. `COOKIE_SECURE` is on there, so TLS must sit in front of the console.
 
-اجرای بررسی هنوز یک کانتینر داکر روی سوکت Docker می‌سازد. بدون آن سوکت، ورود و دیدن نتیجه کار می‌کند و شروع بررسی خطا می‌دهد.
+Starting a scan still creates a Docker container through the Docker socket. Without that socket, sign-in and saved results work, and starting a scan returns an error.
 
-## تست
+## Tests
 
 ```bash
 DATABASE_URL=postgresql://console:console@127.0.0.1:5432/security_console_db \

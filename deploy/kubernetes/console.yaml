@@ -110,7 +110,7 @@ spec:
     spec:
       containers:
         - name: console
-          image: security-console:16
+          image: security-console:17
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080

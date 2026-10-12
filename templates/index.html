@@ -57,7 +57,13 @@
     }
     button, input { font: inherit; color: inherit; }
     button { cursor: pointer; }
-    .app { display: grid; grid-template-columns: 280px minmax(0, 1fr); height: 100%; }
+    .app { display: flex; flex-direction: column; height: 100%; }
+    .workspace {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr);
+      flex: 1;
+      min-height: 0;
+    }
 
     aside {
       background: var(--navy);
@@ -152,8 +158,12 @@
     .rp-children .rp { border: 0; border-radius: 8px; padding: 8px 10px; margin-bottom: 4px; }
     .rp-children .rp.done { background: #e7f6ee; box-shadow: inset 3px 0 0 #1f9d62; }
     .rp-children .rp.done .name { color: #157a4b; }
-    .rp-children .rp.failed { background: #fdecee; box-shadow: inset 3px 0 0 #e11d48; }
-    .rp-children .rp.failed .name { color: #be123c; }
+    .rp-children .rp.failed {
+      background: #fffbeb;
+      color: #d97706;
+      box-shadow: inset 0 0 0 1px #f59e0b, inset 3px 0 0 #f59e0b;
+    }
+    .rp-children .rp.failed .name { color: #d97706; }
     .rp-children .rp.running { background: #fff6e5; box-shadow: inset 3px 0 0 #d97706; }
     .rp-children .rp.running .name { color: #b45309; }
     .rp-children .rp.overview { background: #e8f1fb; box-shadow: inset 3px 0 0 #2f6fdb; }
@@ -166,8 +176,12 @@
     html.dark .rp-children { background: #152232; }
     html.dark .rp-children .rp.done { background: #143528; }
     html.dark .rp-children .rp.done .name { color: #6ee7b7; }
-    html.dark .rp-children .rp.failed { background: #3b1820; }
-    html.dark .rp-children .rp.failed .name { color: #fda4af; }
+    html.dark .rp-children .rp.failed {
+      background: rgba(245, 158, 11, .14);
+      color: #fbbf24;
+      box-shadow: inset 0 0 0 1px #f59e0b, inset 3px 0 0 #f59e0b;
+    }
+    html.dark .rp-children .rp.failed .name { color: #fbbf24; }
     html.dark .rp-children .rp.running { background: #3a2c14; }
     html.dark .rp-children .rp.running .name { color: #fcd34d; }
     html.dark .rp-children .rp.overview { background: #162a44; }
@@ -235,7 +249,7 @@
     .hist .sub { display: block; margin-top: 3px; color: #8ea0b5; font-size: 12px; }
     .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; background: #64788c; }
     .dot.done { background: #34d399; }
-    .dot.failed { background: #fb7185; }
+    .dot.failed { background: #f59e0b; }
     .dot.running { background: #fbbf24; animation: pulse 1.3s infinite; }
     .mini { display: flex; height: 4px; border-radius: 99px; overflow: hidden; background: #2a4158; margin-top: 6px; }
     .mini i { display: block; height: 100%; }
@@ -323,6 +337,153 @@
       font-size: 11px;
       border-top: 1px solid #24384c;
     }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 0 16px;
+      background: var(--navy);
+      color: #d5e0ec;
+      border-bottom: 1px solid #24384c;
+      position: sticky;
+      top: 0;
+      z-index: 40;
+    }
+    .topbar .brand { border-bottom: 0; padding: 12px 0; }
+    .profile { position: relative; }
+    .profile-btn {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 40px;
+      padding: 4px 12px 4px 4px;
+      border: 1px solid #33506a;
+      border-radius: 999px;
+      background: #214057;
+      color: white;
+    }
+    .profile-btn:hover, .profile-btn[aria-expanded="true"] { background: #2a5270; }
+    .avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: #2dd4bf;
+      color: #0c1622;
+      font-weight: 700;
+      flex: 0 0 auto;
+    }
+    .profile-meta { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.2; }
+    .profile-meta strong { font-size: 13px; }
+    .role-badge {
+      display: inline-flex;
+      align-items: center;
+      margin-top: 2px;
+      border-radius: 99px;
+      padding: 1px 8px;
+      font-size: 11px;
+      font-weight: 700;
+      background: rgba(45, 212, 191, .18);
+      color: #99f6e4;
+    }
+    .profile-menu {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      width: min(320px, calc(100vw - 24px));
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--card);
+      color: var(--ink);
+      box-shadow: 0 16px 40px rgba(12, 22, 34, .28);
+    }
+    .profile-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px 12px;
+      margin-bottom: 4px;
+      border-bottom: 1px solid var(--line);
+    }
+    .profile-card strong { display: block; }
+    .profile-menu .role-badge { background: #ccfbf1; color: #115e59; }
+    html.dark .profile-menu .role-badge { background: rgba(45, 212, 191, .18); color: #99f6e4; }
+    .menu-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 8px 10px;
+      font-weight: 600;
+    }
+    .profile-menu select.field { width: auto; min-width: 132px; height: 34px; }
+    .menu-note {
+      margin: 0 10px 8px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .menu-item {
+      display: block;
+      width: 100%;
+      text-align: left;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--ink);
+      padding: 10px;
+      font-weight: 650;
+    }
+    .menu-item:hover { background: #f4f7fb; }
+    html.dark .menu-item:hover { background: #243648; }
+    .menu-item.danger { color: var(--critical); }
+    .switch {
+      width: 42px;
+      height: 24px;
+      padding: 0;
+      border: 0;
+      border-radius: 99px;
+      background: #94a3b8;
+      position: relative;
+      flex: 0 0 auto;
+    }
+    .switch[aria-checked="true"] { background: var(--teal); }
+    .switch-knob {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: white;
+      transition: transform .15s ease;
+    }
+    .switch[aria-checked="true"] .switch-knob { transform: translateX(18px); }
+    .idle-warn {
+      position: fixed;
+      inset: 0;
+      z-index: 80;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: rgba(12, 22, 34, .62);
+    }
+    .idle-card {
+      width: min(420px, 100%);
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--card);
+      color: var(--ink);
+      box-shadow: var(--shadow);
+    }
+    .idle-card h2 { margin: 0 0 8px; font-size: 20px; }
+    .idle-card p { margin: 0; color: var(--muted); line-height: 1.6; }
+    .idle-card strong { color: var(--ink); }
+    .idle-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 
     .main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
     .launch-wrap { padding: 16px 18px 0; }
@@ -377,7 +538,7 @@
     .scanner:has(input:focus-visible) { outline: 2px solid var(--teal); outline-offset: 2px; }
     .scanner b { display: block; font-size: 14px; }
     .scanner small { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; line-height: 1.45; }
-    #go, #user-save, #pw-save, .ghost {
+    #go, #user-save, #pw-save, #idle-stay, .ghost {
       height: 42px;
       border-radius: 8px;
       padding: 0 16px;
@@ -387,9 +548,9 @@
       justify-content: center;
       white-space: nowrap;
     }
-    #go, #user-save, #pw-save { background: var(--teal); color: white; border: 0; }
-    #go:hover, #user-save:hover, #pw-save:hover { background: var(--teal-2); }
-    #go:disabled, #user-save:disabled, #pw-save:disabled { background: #94a3b8; }
+    #go, #user-save, #pw-save, #idle-stay { background: var(--teal); color: white; border: 0; }
+    #go:hover, #user-save:hover, #pw-save:hover, #idle-stay:hover { background: var(--teal-2); }
+    #go:disabled, #user-save:disabled, #pw-save:disabled, #idle-stay:disabled { background: #94a3b8; }
     #go:disabled { cursor: progress; }
     #user-save:disabled, #pw-save:disabled { cursor: not-allowed; }
     .ghost {
@@ -448,7 +609,8 @@
       animation: slide 1.1s ease-in-out infinite;
     }
 
-    .content { overflow: auto; padding: 14px 18px 28px; min-height: 0; }
+    .content { overflow: auto; padding: 0 18px 28px; min-height: 0; }
+    .content > section { padding-top: 14px; }
     .scan-head, .page-head {
       display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px;
     }
@@ -511,10 +673,24 @@
     .card {
       background: white; border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); overflow: clip;
     }
+    #findings { overflow: visible; }
     #findings:empty { display: none; }
     table { width: 100%; border-collapse: collapse; }
+    #findings table { border-collapse: separate; border-spacing: 0; }
     th, td { padding: 9px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid #edf2f7; }
-    th { font-size: 12px; color: var(--muted); font-weight: 600; background: #f8fafc; position: sticky; top: 0; }
+    th { font-size: 12px; color: var(--muted); font-weight: 600; background: #f8fafc; }
+    #findings thead th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: #f8fafc;
+      box-shadow: inset 0 -1px 0 #edf2f7;
+    }
+    html.dark #findings thead th {
+      background: var(--card);
+      color: var(--muted);
+      box-shadow: inset 0 -1px 0 var(--line);
+    }
     tr.group { cursor: pointer; }
     tr.group:hover td { background: #f8fafc; }
     tr.group:focus-visible { outline: 2px solid var(--teal); outline-offset: -2px; }
@@ -611,7 +787,10 @@
       to { transform: translateX(-240%); }
     }
     @media (max-width: 980px) {
-      .app { grid-template-columns: 1fr; height: auto; }
+      .app { height: auto; }
+      .workspace { grid-template-columns: 1fr; }
+      .profile-meta { display: none; }
+      .profile-btn { padding-right: 4px; }
       body { overflow: auto; }
       aside { position: static; }
       .history { display: flex; gap: 6px; overflow: auto; }
@@ -666,7 +845,7 @@
     </form>
   </div>
   <div class="app">
-    <aside>
+    <header class="topbar">
       <div class="brand">
         <svg viewBox="0 0 32 32" aria-hidden="true"><path fill="#2dd4bf" d="M16 2.5 27.5 7v8.2c0 7.2-4.6 12.2-11.5 14.3C9.1 27.4 4.5 22.4 4.5 15.2V7z"/></svg>
         <div>
@@ -674,6 +853,44 @@
           <small>Code and host scans</small>
         </div>
       </div>
+      <div class="profile" id="profile">
+        <button type="button" class="profile-btn" id="profile-btn" aria-haspopup="true" aria-expanded="false" aria-controls="profile-menu">
+          <span class="avatar" id="profile-avatar">?</span>
+          <span class="profile-meta">
+            <strong id="profile-name"></strong>
+            <span class="role-badge" id="profile-role"></span>
+          </span>
+        </button>
+        <div class="profile-menu" id="profile-menu" hidden>
+          <div class="profile-card">
+            <span class="avatar" id="menu-avatar">?</span>
+            <div>
+              <strong id="menu-name"></strong>
+              <span class="role-badge" id="menu-role"></span>
+            </div>
+          </div>
+          <div class="menu-row">
+            <span>Dark mode</span>
+            <button type="button" id="theme" class="switch" role="switch" aria-checked="false" aria-label="Dark mode"><span class="switch-knob"></span></button>
+          </div>
+          <label class="menu-row" for="idle-timeout">
+            <span>Idle timeout</span>
+            <select id="idle-timeout" class="field">
+              <option value="5">5 minutes</option>
+              <option value="15" selected>15 minutes</option>
+              <option value="30">30 minutes</option>
+              <option value="60">60 minutes</option>
+            </select>
+          </label>
+          <p class="menu-note" id="idle-note">The session ends after this much inactivity. The shortest is 5 minutes and the longest is 60, and it cannot be left on forever.</p>
+          <p class="menu-note" id="idle-msg" hidden></p>
+          <button type="button" class="menu-item" id="change-password">Change password</button>
+          <button type="button" class="menu-item danger" id="logout">Sign out</button>
+        </div>
+      </div>
+    </header>
+    <div class="workspace">
+    <aside>
       <nav>
         <button type="button" data-action="view" data-view="scans" class="active"><span class="nav-label"><span id="scans-chev">▾</span> Scans</span> <span class="count" id="scan-count">0</span></button>
         <div class="nav-sub" id="history-wrap"></div>
@@ -684,12 +901,7 @@
         <button type="button" data-action="view" data-view="account">Settings</button>
         <a href="{{ sonar_url }}" target="_blank" rel="noopener">SonarQube <span aria-hidden="true">↗</span></a>
       </nav>
-      <div class="aside-foot">
-        <div id="who"></div>
-        <button type="button" id="theme">Dark mode</button>
-        <button type="button" id="logout">Sign out</button>
-        <div>Semgrep · Checkov · Trivy · Falco · SonarQube</div>
-      </div>
+      <div class="aside-foot">Semgrep · Checkov · Trivy · Falco · SonarQube</div>
     </aside>
     <div class="main">
       <div class="launch-wrap">
@@ -847,7 +1059,7 @@
           <div class="page-head">
             <div>
               <h1>Account settings</h1>
-              <p class="meta">Type the new password twice, then save.</p>
+              <p class="meta">Type the new password twice, then save. Idle timeout is in the account menu.</p>
             </div>
           </div>
           <form class="launch account-grid" id="password-form">
@@ -863,6 +1075,17 @@
             <button type="submit" id="pw-save" disabled>Save</button>
           </form>
         </section>
+      </div>
+    </div>
+    </div>
+  </div>
+  <div class="idle-warn" id="idle-warn" hidden>
+    <div class="idle-card" role="alertdialog" aria-modal="true" aria-labelledby="idle-title">
+      <h2 id="idle-title">Session ending</h2>
+      <p><span id="idle-copy">You have been inactive. You will be signed out in</span> <strong id="idle-count">60</strong> seconds.</p>
+      <div class="idle-actions">
+        <button type="button" class="ghost" id="idle-leave">Sign out</button>
+        <button type="button" id="idle-stay">Stay signed in</button>
       </div>
     </div>
   </div>
@@ -900,6 +1123,17 @@
     let reportStamp = null;
     let falcoStamp = null;
     let currentUser = null;
+    const IDLE_CHOICES = [5, 15, 30, 60];
+    const IDLE_WARN_MS = 60 * 1000;
+    const ACTIVITY_SYNC_MS = 45 * 1000;
+    let idleMinutes = 15;
+    let idleDeadline = 0;
+    let absoluteDeadline = 0;
+    let lastInputAt = 0;
+    let lastPostedAt = 0;
+    let idleTimer = null;
+    let warningOpen = false;
+    let activityPosting = false;
     const histOpen = new Set();
     const kindOpen = new Set();
     const reportsOpen = new Set();
@@ -914,37 +1148,186 @@
       const headers = Object.assign({"Accept": "application/json"}, opts.headers || {});
       if (opts.method && opts.method !== "GET") headers["X-CSRF-Token"] = csrfToken();
       const response = await fetch(url, Object.assign({}, opts, {headers, credentials: "same-origin"}));
-      if (response.status === 401 && !retried && url !== "/api/auth/refresh" && url !== "/api/auth/login" && url !== "/api/auth/me") {
-        const refreshed = await fetch("/api/auth/refresh", {
-          method: "POST",
-          headers: {"X-CSRF-Token": csrfToken(), "Accept": "application/json"},
-          credentials: "same-origin"
-        });
-        if (refreshed.ok) return api(url, options, true);
-        showLogin();
+      if (response.status === 401 && !retried && url !== "/api/auth/refresh" && url !== "/api/auth/login") {
+        const body = await response.clone().json().catch(() => ({}));
+        if (body.code === "idle_expired" || body.code === "absolute_expired") {
+          showIdleEnded(body.error);
+          return response;
+        }
+        if (url !== "/api/auth/me") {
+          const refreshed = await fetch("/api/auth/refresh", {
+            method: "POST",
+            headers: {"X-CSRF-Token": csrfToken(), "Accept": "application/json"},
+            credentials: "same-origin"
+          });
+          if (refreshed.ok) return api(url, options, true);
+          const refreshBody = await refreshed.clone().json().catch(() => ({}));
+          if (refreshBody.code === "idle_expired" || refreshBody.code === "absolute_expired") {
+            showIdleEnded(refreshBody.error);
+          } else {
+            showLogin();
+          }
+        }
       }
       return response;
     }
 
     function showLogin() {
       currentUser = null;
+      stopIdleWatch();
+      closeProfileMenu();
       document.body.classList.remove("authed", "must-change");
+    }
+
+    function showIdleEnded(message) {
+      showLogin();
+      const error = document.querySelector("#login-error");
+      error.hidden = false;
+      error.textContent = message || "Your session ended because of inactivity.";
+      fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {"Accept": "application/json", "X-CSRF-Token": csrfToken()}
+      }).catch(() => {});
     }
 
     function showApp(user) {
       currentUser = user;
       document.body.classList.add("authed");
+      paintProfile(user);
+      startIdleWatch();
       if (user.must_change_password) {
         document.body.classList.add("must-change");
+        closeProfileMenu();
         return;
       }
       document.body.classList.remove("must-change");
-      document.querySelector("#who").textContent = user.username + " · " + (ROLE_LABEL[user.role] || user.role);
       document.querySelector("#nav-users").hidden = user.role !== "admin";
       document.querySelector("#nav-access").hidden = user.role !== "admin";
       if (user.role !== "admin" && (state.view === "users" || state.view === "access")) setView("scans");
       syncLaunch();
       syncThemeButton();
+    }
+
+    function paintProfile(user) {
+      const role = ROLE_LABEL[user.role] || user.role || "";
+      const initial = String(user.username || "?").slice(0, 1).toUpperCase();
+      document.querySelector("#profile-name").textContent = user.username || "";
+      document.querySelector("#menu-name").textContent = user.username || "";
+      document.querySelector("#profile-role").textContent = role;
+      document.querySelector("#menu-role").textContent = role;
+      document.querySelector("#profile-avatar").textContent = initial;
+      document.querySelector("#menu-avatar").textContent = initial;
+      applyIdleClock(user);
+    }
+
+    function applyIdleClock(body) {
+      const minutes = Number(body.idle_timeout_minutes);
+      if (IDLE_CHOICES.includes(minutes)) {
+        idleMinutes = minutes;
+        const select = document.querySelector("#idle-timeout");
+        if (select) select.value = String(minutes);
+      }
+      const idleLeft = Number(body.remaining_seconds);
+      const absoluteLeft = Number(body.absolute_remaining_seconds);
+      if (Number.isFinite(idleLeft)) idleDeadline = Date.now() + idleLeft * 1000;
+      if (Number.isFinite(absoluteLeft)) absoluteDeadline = Date.now() + absoluteLeft * 1000;
+      const hours = Number(body.absolute_timeout_hours);
+      if (Number.isFinite(hours) && hours > 0) {
+        document.querySelector("#idle-note").textContent =
+          "The session ends after this much inactivity. The shortest is 5 minutes and the longest is 60, and it cannot be left on forever. It also ends " +
+          hours + " hours after sign-in.";
+      }
+    }
+
+    function nextDeadline() {
+      if (!idleDeadline && !absoluteDeadline) return null;
+      if (absoluteDeadline && (!idleDeadline || absoluteDeadline < idleDeadline)) {
+        return {at: absoluteDeadline, kind: "absolute"};
+      }
+      return {at: idleDeadline, kind: "idle"};
+    }
+
+    function noteInput() {
+      if (warningOpen || !currentUser) return;
+      lastInputAt = Date.now();
+    }
+
+    async function maybePostActivity() {
+      if (warningOpen || !currentUser || activityPosting) return;
+      if (lastInputAt <= lastPostedAt) return;
+      if (Date.now() - lastPostedAt < ACTIVITY_SYNC_MS) return;
+      activityPosting = true;
+      try {
+        const response = await api("/api/auth/activity", {method: "POST"});
+        if (!response.ok) return;
+        lastPostedAt = Date.now();
+        applyIdleClock(await response.json());
+      } catch (err) {
+        // A failed heartbeat must not keep the session alive.
+      } finally {
+        activityPosting = false;
+      }
+    }
+
+    function openIdleWarn(remainingMs, kind) {
+      document.querySelector("#idle-count").textContent = String(Math.max(1, Math.ceil(remainingMs / 1000)));
+      document.querySelector("#idle-copy").textContent = kind === "absolute"
+        ? "This session has reached its maximum lifetime. You will be signed out in"
+        : "You have been inactive. You will be signed out in";
+      document.querySelector("#idle-stay").hidden = kind === "absolute";
+      if (warningOpen) return;
+      warningOpen = true;
+      document.querySelector("#idle-warn").hidden = false;
+      document.querySelector(kind === "absolute" ? "#idle-leave" : "#idle-stay").focus();
+    }
+
+    function closeIdleWarn() {
+      warningOpen = false;
+      const box = document.querySelector("#idle-warn");
+      if (box) box.hidden = true;
+    }
+
+    function onIdleTick() {
+      if (!currentUser) return;
+      maybePostActivity();
+      const soon = nextDeadline();
+      if (!soon) return;
+      const remaining = soon.at - Date.now();
+      if (remaining <= 0) {
+        showIdleEnded(soon.kind === "absolute"
+          ? "Your session reached the maximum lifetime. Sign in again."
+          : "Your session ended because of inactivity.");
+        return;
+      }
+      if (remaining <= IDLE_WARN_MS) openIdleWarn(remaining, soon.kind);
+    }
+
+    function startIdleWatch() {
+      stopIdleWatch();
+      lastInputAt = Date.now();
+      lastPostedAt = Date.now();
+      idleTimer = setInterval(onIdleTick, 1000);
+    }
+
+    function stopIdleWatch() {
+      if (idleTimer) clearInterval(idleTimer);
+      idleTimer = null;
+      closeIdleWarn();
+    }
+
+    function closeProfileMenu() {
+      const menu = document.querySelector("#profile-menu");
+      const button = document.querySelector("#profile-btn");
+      if (menu) menu.hidden = true;
+      if (button) button.setAttribute("aria-expanded", "false");
+    }
+
+    function toggleProfileMenu() {
+      const menu = document.querySelector("#profile-menu");
+      const open = menu.hidden;
+      menu.hidden = !open;
+      document.querySelector("#profile-btn").setAttribute("aria-expanded", open ? "true" : "false");
     }
 
     function esc(value) {
@@ -1237,21 +1620,40 @@
       return String(item.repo || "").replace(/\.git$/i, "").replace(/\/+$/, "").toLowerCase();
     }
 
+    function scanIsFailed(item) {
+      return item.status === "failed" || Boolean(String(item.error || "").trim());
+    }
+
+    function historyName(item, total) {
+      if (scanIsFailed(item)) {
+        const detail = String(item.error || "").trim() && !total ? "Error" : total + " findings";
+        return "Failed · " + detail;
+      }
+      return (STATUS[item.status] || item.status || "Done") + " · " + total + " findings";
+    }
+
+    function historyTone(item) {
+      if (scanIsFailed(item)) return " failed";
+      if (item.status === "done") return " done";
+      if (item.status === "running") return " running";
+      return "";
+    }
+
     function scanRow(item) {
       const tally = counts(item.findings || [], (row) => row.severity);
       const total = (item.findings || []).length;
       const bar = SEV.map((sev) => tally[sev[0]] ? '<i style="width:' + (tally[sev[0]] / total * 100) + '%;background:' + sev[3] + '"></i>' : "").join("");
       const when = (item.created_at || "").replace(" UTC", "");
       const on = state.scan && state.scan.id === item.id ? " on" : "";
-      return '<button type="button" class="hist' + on + '" data-action="open" data-id="' + esc(item.id) + '"><span class="hist-top"><i class="dot ' + esc(item.status) + '"></i><span class="name">' + esc(STATUS[item.status] || item.status) + " · " + total + " findings</span></span>" + (total ? '<span class="mini">' + bar + "</span>" : "") + '<span class="sub">' + esc(when) + "</span></button>";
+      const dot = scanIsFailed(item) ? "failed" : item.status;
+      return '<button type="button" class="hist' + on + '" data-action="open" data-id="' + esc(item.id) + '"><span class="hist-top"><i class="dot ' + esc(dot) + '"></i><span class="name">' + esc(historyName(item, total)) + "</span></span>" + (total ? '<span class="mini">' + bar + "</span>" : "") + '<span class="sub">' + esc(when) + "</span></button>";
     }
 
     function reportScanRow(item) {
       const total = (item.findings || []).length || item.finding_count || 0;
       const when = (item.created_at || "").replace(" UTC", "");
-      const tone = item.status === "done" ? " done" : item.status === "failed" ? " failed" : item.status === "running" ? " running" : "";
       const on = state.pane === "report" && state.scan && state.scan.id === item.id ? " on" : "";
-      return '<button type="button" class="rp' + tone + on + '" data-action="open" data-id="' + esc(item.id) + '"><span class="name">' + esc(STATUS[item.status] || item.status) + " · " + total + ' findings</span><span class="sub">' + esc(when) + "</span></button>";
+      return '<button type="button" class="rp' + historyTone(item) + on + '" data-action="open" data-id="' + esc(item.id) + '"><span class="name">' + esc(historyName(item, total)) + '</span><span class="sub">' + esc(when) + "</span></button>";
     }
 
     function reportGroup(group) {
@@ -1259,7 +1661,7 @@
       const latest = group.items[0];
       const total = (latest.findings || []).length || latest.finding_count || 0;
       const countLabel = group.items.length === 1 ? "1 scan" : group.items.length + " scans";
-      const summary = countLabel + " · " + (STATUS[latest.status] || latest.status) + " · " + total + " findings";
+      const summary = countLabel + " · " + historyName(latest, total);
       const overviewOn = state.pane === "overview" && state.overviewKey === group.key ? " on" : "";
       const children = open
         ? '<div class="rp-children">' + group.items.map(reportScanRow).join("") + '<button type="button" class="rp overview' + overviewOn + '" data-action="overview" data-key="' + esc(group.key) + '"><span class="name">Overview</span><span class="sub">Chart of every scan</span></button></div>'
@@ -1317,7 +1719,7 @@
         state.overviewKey,
         state.scan && state.scan.id,
         [...histOpen].join(),
-        groups.map((group) => group.key + ":" + group.items.map((item) => item.id + item.status + ((item.findings || []).length || item.finding_count || 0)).join(",")).join("|")
+        groups.map((group) => group.key + ":" + group.items.map((item) => item.id + item.status + (String(item.error || "").trim() ? "!" : "") + ((item.findings || []).length || item.finding_count || 0)).join(",")).join("|")
       ].join("~");
       const box = document.querySelector("#report-tree");
       if (stamp === reportStamp && box.childElementCount) return;
@@ -1933,7 +2335,9 @@
 
     function syncThemeButton() {
       const dark = document.documentElement.classList.contains("dark");
-      document.querySelector("#theme").textContent = dark ? "Light mode" : "Dark mode";
+      const button = document.querySelector("#theme");
+      button.setAttribute("aria-checked", dark ? "true" : "false");
+      button.setAttribute("aria-label", dark ? "Dark mode on" : "Dark mode off");
     }
 
     document.querySelector("#theme").addEventListener("click", () => {
@@ -1942,6 +2346,63 @@
       syncThemeButton();
     });
     syncThemeButton();
+
+    document.querySelector("#profile-btn").addEventListener("click", (event) => {
+      event.stopPropagation();
+      noteInput();
+      toggleProfileMenu();
+    });
+    document.addEventListener("click", (event) => {
+      noteInput();
+      if (!event.target.closest("#profile")) closeProfileMenu();
+    });
+    document.addEventListener("keydown", (event) => {
+      noteInput();
+      if (event.key === "Escape") closeProfileMenu();
+    });
+    document.addEventListener("mousemove", noteInput);
+    document.addEventListener("touchstart", noteInput, {passive: true});
+    document.querySelector("#change-password").addEventListener("click", () => {
+      closeProfileMenu();
+      setView("account");
+    });
+    document.querySelector("#idle-timeout").addEventListener("change", async (event) => {
+      const select = event.target;
+      const previous = String(idleMinutes);
+      const msg = document.querySelector("#idle-msg");
+      msg.hidden = true;
+      const response = await api("/api/auth/idle-timeout", {
+        method: "PUT",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({idle_timeout_minutes: Number(select.value)})
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        select.value = previous;
+        if (body.code === "idle_expired" || body.code === "absolute_expired") return;
+        msg.hidden = false;
+        msg.textContent = body.error || "Could not save the idle timeout.";
+        return;
+      }
+      applyIdleClock(body);
+    });
+    document.querySelector("#idle-stay").addEventListener("click", async () => {
+      const response = await api("/api/auth/activity", {method: "POST"});
+      if (!response.ok) return;
+      applyIdleClock(await response.json());
+      closeIdleWarn();
+      lastInputAt = Date.now();
+      lastPostedAt = Date.now();
+    });
+    document.querySelector("#idle-leave").addEventListener("click", async () => {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {"Accept": "application/json", "X-CSRF-Token": csrfToken()}
+      }).catch(() => {});
+      showLogin();
+      document.querySelector("#login-error").hidden = true;
+    });
 
     function toolNames(access) {
       return Object.keys(TOOL_LABEL).filter((tool) => access && access[tool]).map((tool) => TOOL_LABEL[tool]).join(", ") || "—";
@@ -2149,6 +2610,8 @@
         }
         document.querySelector("#password-form").reset();
         ok.hidden = false;
+        const me = await api("/api/auth/me");
+        if (me.ok) applyIdleClock(await me.json());
       } finally {
         button.textContent = "Save";
         syncPasswordSubmit();
@@ -2185,8 +2648,10 @@
           return;
         }
         document.querySelector("#gate-form").reset();
-        currentUser.must_change_password = false;
-        showApp(currentUser);
+        const me = await api("/api/auth/me");
+        const user = me.ok ? await me.json() : currentUser;
+        user.must_change_password = false;
+        showApp(user);
         tick();
       } catch (err) {
         error.hidden = false;
@@ -2198,30 +2663,45 @@
     });
 
     document.querySelector("#logout").addEventListener("click", async () => {
+      closeProfileMenu();
       await api("/api/auth/logout", {method: "POST"});
       state.scans = [];
       state.alerts = [];
       state.scan = null;
       showLogin();
+      document.querySelector("#login-error").hidden = true;
     });
+
+    function expiryBody(body) {
+      return body && (body.code === "idle_expired" || body.code === "absolute_expired");
+    }
 
     async function boot() {
       try {
-        const response = await fetch("/api/auth/me", {headers: {"Accept": "application/json"}, credentials: "same-origin"});
+        let response = await fetch("/api/auth/me", {headers: {"Accept": "application/json"}, credentials: "same-origin"});
         if (response.status === 401) {
-          const refreshed = await fetch("/api/auth/refresh", {method: "POST", credentials: "same-origin"});
-          if (refreshed.ok) {
-            const again = await fetch("/api/auth/me", {headers: {"Accept": "application/json"}, credentials: "same-origin"});
-            if (again.ok) {
-              const user = await again.json();
-              showApp(user);
-              if (!user.must_change_password) tick();
-              return;
-            }
+          const first = await response.json().catch(() => ({}));
+          if (expiryBody(first)) {
+            showIdleEnded(first.error);
+            return;
           }
+          const refreshed = await fetch("/api/auth/refresh", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: {"Accept": "application/json", "X-CSRF-Token": csrfToken()}
+          });
+          if (!refreshed.ok) {
+            const body = await refreshed.json().catch(() => ({}));
+            if (expiryBody(body)) showIdleEnded(body.error);
+            else showLogin();
+            return;
+          }
+          response = await fetch("/api/auth/me", {headers: {"Accept": "application/json"}, credentials: "same-origin"});
         }
         if (!response.ok) {
-          showLogin();
+          const body = await response.json().catch(() => ({}));
+          if (expiryBody(body)) showIdleEnded(body.error);
+          else showLogin();
           return;
         }
         const user = await response.json();

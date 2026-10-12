@@ -1947,21 +1947,25 @@
       return "";
     }
 
+    function scanWhen(item) {
+      const when = (item.created_at || "").replace(" UTC", "");
+      const who = String(item.owner || "").trim();
+      return who ? when + " · " + who : when;
+    }
+
     function scanRow(item) {
       const tally = counts(item.findings || [], (row) => row.severity);
       const total = (item.findings || []).length;
       const bar = SEV.map((sev) => tally[sev[0]] ? '<i style="width:' + (tally[sev[0]] / total * 100) + '%;background:' + sev[3] + '"></i>' : "").join("");
-      const when = (item.created_at || "").replace(" UTC", "");
       const on = state.scan && state.scan.id === item.id ? " on" : "";
       const dot = scanIsFailed(item) ? "failed" : item.status;
-      return '<button type="button" class="hist' + on + '" data-action="open" data-id="' + esc(item.id) + '"><span class="hist-top"><i class="dot ' + esc(dot) + '"></i><span class="name">' + esc(historyName(item, total)) + "</span></span>" + (total ? '<span class="mini">' + bar + "</span>" : "") + '<span class="sub">' + esc(when) + "</span></button>";
+      return '<button type="button" class="hist' + on + '" data-action="open" data-id="' + esc(item.id) + '"><span class="hist-top"><i class="dot ' + esc(dot) + '"></i><span class="name">' + esc(historyName(item, total)) + "</span></span>" + (total ? '<span class="mini">' + bar + "</span>" : "") + '<span class="sub">' + esc(scanWhen(item)) + "</span></button>";
     }
 
     function reportScanRow(item) {
       const total = (item.findings || []).length || item.finding_count || 0;
-      const when = (item.created_at || "").replace(" UTC", "");
       const on = state.pane === "report" && state.scan && state.scan.id === item.id ? " on" : "";
-      return '<button type="button" class="rp' + historyTone(item) + on + '" data-action="open" data-id="' + esc(item.id) + '"><span class="name">' + esc(historyName(item, total)) + '</span><span class="sub">' + esc(when) + "</span></button>";
+      return '<button type="button" class="rp' + historyTone(item) + on + '" data-action="open" data-id="' + esc(item.id) + '"><span class="name">' + esc(historyName(item, total)) + '</span><span class="sub">' + esc(scanWhen(item)) + "</span></button>";
     }
 
     function reportGroup(group) {

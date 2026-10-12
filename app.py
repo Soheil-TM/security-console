@@ -11,7 +11,7 @@ from typing import Any
 
 from flask import Flask, Response, g, jsonify, render_template, request
 
-from security_console.access import can_start_scan, present_scan
+from security_console.access import can_start_scan, present_scan, recent_per_project
 from security_console.alerts import alert_from_payload
 from security_console.auth import (
     ConfigError,
@@ -189,13 +189,8 @@ def get_images() -> View:
 def list_scans() -> Response:
     user = getattr(g, "user", None) or {}
     summary = request.args.get("summary") == "1"
-    ordered = sorted(scans.values(), key=lambda item: item["created_at"], reverse=True)
-    visible = []
-    for item in ordered:
-        shown = present_scan(user, item, summary=summary)
-        if shown is not None:
-            visible.append(shown)
-    return jsonify(visible[:20])
+    visible = recent_per_project(user, list(scans.values()), summary=summary)
+    return jsonify(visible)
 
 
 @app.get("/api/scans/<scan_id>")

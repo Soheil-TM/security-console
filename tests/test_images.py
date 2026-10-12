@@ -9,10 +9,27 @@ def test_valid_image_ref_accepts_local_and_remote_names() -> None:
     assert valid_image_ref("nginx")
     assert valid_image_ref("nginx:1.27")
     assert valid_image_ref("ghcr.io/org/app:1.2.3")
-    assert valid_image_ref("localhost:5000/app:latest")
+    assert valid_image_ref("10.1.2.3:5000/team/app:1")
+    assert valid_image_ref("registry.example:5000/app:1")
     digest = "a" * 64
     assert valid_image_ref(f"python@sha256:{digest}")
     assert valid_image_ref(f"sha256:{digest}")
+
+
+def test_valid_image_ref_rejects_metadata_and_loopback_registries() -> None:
+    assert not valid_image_ref("169.254.169.254/nginx:1.27")
+    assert not valid_image_ref("169.254.169.254:80/nginx:1.27")
+    assert not valid_image_ref("127.0.0.1:5000/app:latest")
+    assert not valid_image_ref("localhost:5000/app:latest")
+    assert not valid_image_ref("metadata.google.internal/nginx:1")
+    assert not valid_image_ref("100.100.100.200:443/app:1")
+    assert not valid_image_ref("010.0.0.1:5000/app:1")
+    assert not valid_image_ref("[::1]/nginx:1")
+    assert not valid_image_ref("[::1]:5000/app:latest")
+    assert not valid_image_ref("[::ffff:127.0.0.1]/nginx:1")
+    assert not valid_image_ref("[::ffff:169.254.169.254]:443/app:1")
+    assert not valid_image_ref("[fd00:ec2::254]/nginx:1")
+    assert not valid_image_ref("[fe80::1]/nginx:1")
 
 
 def test_valid_image_ref_rejects_flags_and_paths() -> None:

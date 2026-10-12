@@ -1,0 +1,10 @@
+# Development port publish. Docker Compose loads this file automatically
+# for `docker compose up`. An explicit `-f` list does not load it, so
+# `docker compose -f docker-compose.yml -f docker-compose.production.yml`
+# does not inherit this public binding. Compose merges port lists by
+# appending, including releases that do not support the !override tag.
+
+services:
+  console:
+    ports:
+      - "8091:8080"

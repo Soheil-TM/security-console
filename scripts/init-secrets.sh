@@ -1,5 +1,6 @@
 #!/bin/sh
-# Create the four secret files Compose needs. Existing files are left as they are.
+# Create the secret files Compose needs. Existing files are left as they are.
+# The first console login is not one of these files.
 set -eu
 cd "$(dirname "$0")/.."
 mkdir -p secrets
@@ -16,9 +17,10 @@ write_if_missing() {
   echo "created $file"
 }
 
-write_if_missing secrets/console_admin_password.txt 18
 write_if_missing secrets/console_db_password.txt 18
 write_if_missing secrets/console_jwt_key.txt 32
 write_if_missing secrets/falco_ingest_token.txt 18
+write_if_missing secrets/scanner_token.txt 24
 
-echo "First sign-in is username admin and password admin. Change that password after you sign in."
+echo "First sign-in is username admin and password admin."
+echo "Change that password before exposing the console. It is not written to a log."

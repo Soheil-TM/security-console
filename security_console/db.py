@@ -5,11 +5,12 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import Any
 
 import psycopg
 from psycopg.rows import dict_row
+
+from security_console.secrets import read_secret as _read_secret
 
 SCHEMA = (
     """
@@ -25,6 +26,8 @@ SCHEMA = (
         allow_sonar boolean NOT NULL DEFAULT false,
         allow_trivy boolean NOT NULL DEFAULT true,
         must_change_password boolean NOT NULL DEFAULT false,
+        session_version integer NOT NULL DEFAULT 0,
+        idle_timeout_minutes integer NOT NULL DEFAULT 15,
         created_at timestamptz NOT NULL DEFAULT now()
     )
     """,
@@ -39,7 +42,9 @@ SCHEMA = (
         user_id bigint NOT NULL REFERENCES users (id),
         token_hash text NOT NULL UNIQUE,
         expires_at timestamptz NOT NULL,
-        revoked_at timestamptz
+        revoked_at timestamptz,
+        last_activity_at timestamptz NOT NULL DEFAULT now(),
+        created_at timestamptz NOT NULL DEFAULT now()
     )
     """,
     """
@@ -59,6 +64,18 @@ SCHEMA = (
     """
     CREATE INDEX IF NOT EXISTS login_attempts_ip_time
         ON login_attempts (ip, attempted_at)
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS ingest_attempts (
+        id bigserial PRIMARY KEY,
+        ip text NOT NULL,
+        succeeded boolean NOT NULL,
+        attempted_at timestamptz NOT NULL DEFAULT now()
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS ingest_attempts_ip_time
+        ON ingest_attempts (ip, attempted_at)
     """,
 )
 
@@ -80,10 +97,7 @@ class DbSettings:
 def read_secret(env_name: str, file_env: str) -> str:
     """Return a secret from a file when configured, otherwise from the env."""
 
-    file_path = os.environ.get(file_env, "").strip()
-    if file_path:
-        return Path(file_path).read_text(encoding="utf-8").strip()
-    return os.environ.get(env_name, "").strip()
+    return _read_secret(env_name, file_env)
 
 
 def load_settings() -> DbSettings:
@@ -240,6 +254,11 @@ MIGRATIONS = (
         NOT NULL DEFAULT false
     """,
     """
+    ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS session_version integer
+        NOT NULL DEFAULT 0
+    """,
+    """
     DO $$
     DECLARE constraint_name text;
     BEGIN
@@ -269,6 +288,35 @@ MIGRATIONS = (
         allow_sonar = true,
         allow_trivy = true
     WHERE role = 'admin'
+    """,
+    """
+    ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS idle_timeout_minutes integer
+        NOT NULL DEFAULT 15
+    """,
+    """
+    DO $$
+    BEGIN
+        IF NOT EXISTS (
+            SELECT 1
+            FROM pg_constraint
+            WHERE conname = 'users_idle_timeout_check'
+        ) THEN
+            ALTER TABLE users
+                ADD CONSTRAINT users_idle_timeout_check
+                CHECK (idle_timeout_minutes IN (5, 15, 30, 60));
+        END IF;
+    END $$
+    """,
+    """
+    ALTER TABLE refresh_tokens
+        ADD COLUMN IF NOT EXISTS last_activity_at timestamptz
+        NOT NULL DEFAULT now()
+    """,
+    """
+    ALTER TABLE refresh_tokens
+        ADD COLUMN IF NOT EXISTS created_at timestamptz
+        NOT NULL DEFAULT now()
     """,
 )
 
@@ -346,7 +394,7 @@ def find_user(username: str) -> dict[str, Any] | None:
             """
             SELECT id, username, email, password_hash, role, disabled,
                    allow_semgrep, allow_checkov, allow_sonar, allow_trivy,
-                   must_change_password
+                   must_change_password, session_version, idle_timeout_minutes
             FROM users
             WHERE username = %s
             """,
@@ -364,7 +412,8 @@ def find_user_by_id(user_id: int) -> dict[str, Any] | None:
             """
             SELECT id, username, email, role, disabled,
                    allow_semgrep, allow_checkov, allow_sonar,
-                   allow_trivy, must_change_password, created_at
+                   allow_trivy, must_change_password, session_version,
+                   idle_timeout_minutes, created_at
             FROM users
             WHERE id = %s
             """,
@@ -452,7 +501,8 @@ def update_user(
                 SET username = %s, email = %s, role = %s, disabled = %s,
                     allow_semgrep = %s, allow_checkov = %s,
                     allow_sonar = %s, allow_trivy = %s,
-                    password_hash = %s
+                    password_hash = %s,
+                    session_version = session_version + 1
                 WHERE id = %s
                 """,
                 (
@@ -468,22 +518,42 @@ def update_user(
                     user_id,
                 ),
             )
+            _revoke_refresh_conn(conn, user_id)
         conn.commit()
 
 
 def set_password_hash(user_id: int, password_hash: str) -> None:
-    """Replace one account password hash."""
+    """Replace one password and end every existing session for that account."""
 
     with connect() as conn:
         conn.execute(
             """
             UPDATE users
-            SET password_hash = %s, must_change_password = false
+            SET password_hash = %s,
+                must_change_password = false,
+                session_version = session_version + 1
             WHERE id = %s
             """,
             (password_hash, user_id),
         )
+        _revoke_refresh_conn(conn, user_id)
         conn.commit()
+
+
+def _revoke_refresh_conn(
+    conn: psycopg.Connection[dict[str, Any]],
+    user_id: int,
+) -> None:
+    """Revoke every live refresh token for one account on an open transaction."""
+
+    conn.execute(
+        """
+        UPDATE refresh_tokens
+        SET revoked_at = %s
+        WHERE user_id = %s AND revoked_at IS NULL
+        """,
+        (datetime.now(UTC), user_id),
+    )
 
 
 def delete_user(user_id: int) -> None:
@@ -517,6 +587,45 @@ def recent_failures(ip: str) -> int:
     return int(row["n"])
 
 
+def recent_ingest(ip: str, *, failures_only: bool) -> int:
+    """Count Falco ingest calls for this address during the last minute."""
+
+    cutoff = datetime.now(UTC) - timedelta(minutes=1)
+    query = """
+        SELECT count(*) AS n
+        FROM ingest_attempts
+        WHERE ip = %s AND attempted_at > %s
+    """
+    params: list[Any] = [ip, cutoff]
+    if failures_only:
+        query += " AND succeeded = false"
+    with connect() as conn:
+        row = conn.execute(query, params).fetchone()
+        conn.commit()
+    if row is None:
+        return 0
+    return int(row["n"])
+
+
+def record_ingest(ip: str, succeeded: bool) -> None:
+    """Store one Falco ingest call and drop rows older than a day."""
+
+    cutoff = datetime.now(UTC) - timedelta(days=1)
+    with connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO ingest_attempts (ip, succeeded)
+            VALUES (%s, %s)
+            """,
+            (ip, succeeded),
+        )
+        conn.execute(
+            "DELETE FROM ingest_attempts WHERE attempted_at < %s",
+            (cutoff,),
+        )
+        conn.commit()
+
+
 def record_attempt(ip: str, succeeded: bool) -> None:
     """Store one login attempt and drop rows older than a day."""
 
@@ -536,18 +645,37 @@ def record_attempt(ip: str, succeeded: bool) -> None:
         conn.commit()
 
 
-def store_refresh(user_id: int, token_hash: str, expires_at: datetime) -> None:
-    """Persist a hashed refresh token."""
+def store_refresh(
+    user_id: int,
+    token_hash: str,
+    expires_at: datetime,
+    last_activity_at: datetime | None = None,
+    created_at: datetime | None = None,
+) -> int:
+    """Persist a hashed refresh token and return its session id."""
 
+    now = datetime.now(UTC)
     with connect() as conn:
-        conn.execute(
+        row = conn.execute(
             """
-            INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
-            VALUES (%s, %s, %s)
+            INSERT INTO refresh_tokens (
+                user_id, token_hash, expires_at, last_activity_at, created_at
+            )
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING id
             """,
-            (user_id, token_hash, expires_at),
-        )
+            (
+                user_id,
+                token_hash,
+                expires_at,
+                last_activity_at or now,
+                created_at or now,
+            ),
+        ).fetchone()
         conn.commit()
+    if row is None:
+        raise RuntimeError("refresh token insert did not return an id")
+    return int(row["id"])
 
 
 def take_refresh(token_hash: str) -> dict[str, Any] | None:
@@ -562,12 +690,78 @@ def take_refresh(token_hash: str) -> dict[str, Any] | None:
             WHERE token_hash = %s
               AND revoked_at IS NULL
               AND expires_at > %s
-            RETURNING user_id, expires_at
+            RETURNING id, user_id, expires_at, last_activity_at, created_at
             """,
             (now, token_hash, now),
         ).fetchone()
         conn.commit()
     return dict(row) if row else None
+
+
+def get_session(session_id: int) -> dict[str, Any] | None:
+    """Return one refresh session, including a revoked row."""
+
+    with connect() as conn:
+        row = conn.execute(
+            """
+            SELECT id, user_id, expires_at, revoked_at,
+                   last_activity_at, created_at
+            FROM refresh_tokens
+            WHERE id = %s
+            """,
+            (session_id,),
+        ).fetchone()
+        conn.commit()
+    return dict(row) if row else None
+
+
+def touch_session(session_id: int) -> bool:
+    """Record activity on a live session. A revoked row is left unchanged."""
+
+    now = datetime.now(UTC)
+    with connect() as conn:
+        row = conn.execute(
+            """
+            UPDATE refresh_tokens
+            SET last_activity_at = %s
+            WHERE id = %s AND revoked_at IS NULL AND expires_at > %s
+            RETURNING id
+            """,
+            (now, session_id, now),
+        ).fetchone()
+        conn.commit()
+    return row is not None
+
+
+def revoke_session(session_id: int) -> None:
+    """Revoke one refresh session. A missing row is ignored."""
+
+    now = datetime.now(UTC)
+    with connect() as conn:
+        conn.execute(
+            """
+            UPDATE refresh_tokens
+            SET revoked_at = %s
+            WHERE id = %s AND revoked_at IS NULL
+            """,
+            (now, session_id),
+        )
+        conn.commit()
+
+
+def set_idle_timeout(user_id: int, minutes: int) -> None:
+    """Store the idle timeout chosen by this account."""
+
+    with connect() as conn:
+        conn.execute(
+            """
+            UPDATE users
+            SET idle_timeout_minutes = %s
+            WHERE id = %s
+            """,
+            (minutes, user_id),
+        )
+        conn.commit()
 
 
 def revoke_refresh(token_hash: str) -> None:
@@ -645,7 +839,11 @@ def set_flag(name: str) -> None:
 
 
 def require_password_change(username: str, password_hash: str) -> None:
-    """Set one account's password and require a change at the next sign-in."""
+    """Set one account's password and require a change at the next sign-in.
+
+    Startup does not call this. An upgrade must not overwrite an existing
+    administrator password.
+    """
 
     with connect() as conn:
         conn.execute(
@@ -665,6 +863,6 @@ def reset_auth_tables() -> None:
     with connect() as conn:
         conn.execute(
             "TRUNCATE refresh_tokens, revoked_access, login_attempts, "
-            "users, app_flags RESTART IDENTITY CASCADE"
+            "ingest_attempts, users, app_flags RESTART IDENTITY CASCADE"
         )
         conn.commit()

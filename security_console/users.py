@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from typing import Any
 
 import psycopg
@@ -11,8 +12,14 @@ from psycopg.errors import UniqueViolation
 
 from security_console import db
 from security_console.access import ROLES, TOOLS, access_map
-from security_console.auth import hash_password, valid_username, verify_password
+from security_console.auth import (
+    hash_password,
+    restart_session,
+    valid_username,
+    verify_password,
+)
 
+Reply = Response | tuple[Response, int]
 _EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
@@ -20,27 +27,27 @@ def install_users(app: Flask) -> None:
     """Attach account routes. The request guard already requires a session."""
 
     @app.get("/api/users")
-    def list_accounts() -> Response:
+    def list_accounts() -> Reply:
         return _call(app, _list_accounts)
 
     @app.post("/api/users")
-    def create_account() -> Response:
+    def create_account() -> Reply:
         return _call(app, lambda: _create_account(app))
 
     @app.patch("/api/users/<int:user_id>")
-    def update_account(user_id: int) -> Response:
+    def update_account(user_id: int) -> Reply:
         return _call(app, lambda: _update_account(app, user_id))
 
     @app.delete("/api/users/<int:user_id>")
-    def remove_account(user_id: int) -> Response:
+    def remove_account(user_id: int) -> Reply:
         return _call(app, lambda: _remove_account(app, user_id))
 
     @app.post("/api/auth/password")
-    def change_password() -> Response:
+    def change_password() -> Reply:
         return _call(app, lambda: _change_password(app))
 
 
-def _call(app: Flask, action: Any) -> Response:
+def _call(app: Flask, action: Callable[[], Reply]) -> Reply:
     try:
         return action()
     except psycopg.Error:
@@ -52,6 +59,11 @@ def public_user(user: dict[str, Any]) -> dict[str, Any]:
     """Return account fields that are safe to send to the browser."""
 
     created = user.get("created_at")
+    created_at = ""
+    if created is not None:
+        isoformat = getattr(created, "isoformat", None)
+        if callable(isoformat):
+            created_at = str(isoformat())
     return {
         "id": int(user["id"]),
         "username": user["username"],
@@ -59,7 +71,7 @@ def public_user(user: dict[str, Any]) -> dict[str, Any]:
         "role": user["role"],
         "disabled": bool(user.get("disabled")),
         "access": access_map(user),
-        "created_at": created.isoformat() if hasattr(created, "isoformat") else "",
+        "created_at": created_at,
     }
 
 
@@ -67,7 +79,7 @@ def _list_accounts() -> Response:
     return jsonify([public_user(user) for user in db.list_users()])
 
 
-def _create_account(app: Flask) -> Response:
+def _create_account(app: Flask) -> Reply:
     parsed = _account_body(request.get_json(silent=True), password_required=True)
     if isinstance(parsed, Response):
         return parsed
@@ -91,7 +103,7 @@ def _create_account(app: Flask) -> Response:
     return jsonify(public_user(created)), 201
 
 
-def _update_account(app: Flask, user_id: int) -> Response:
+def _update_account(app: Flask, user_id: int) -> Reply:
     current = db.find_user_by_id(user_id)
     if current is None:
         return jsonify({"error": "User not found."}), 404
@@ -125,7 +137,7 @@ def _update_account(app: Flask, user_id: int) -> Response:
     return jsonify(public_user(updated))
 
 
-def _remove_account(app: Flask, user_id: int) -> Response:
+def _remove_account(app: Flask, user_id: int) -> Reply:
     current = db.find_user_by_id(user_id)
     if current is None:
         return jsonify({"error": "User not found."}), 404
@@ -138,7 +150,7 @@ def _remove_account(app: Flask, user_id: int) -> Response:
     return jsonify({"ok": True})
 
 
-def _change_password(app: Flask) -> Response:
+def _change_password(app: Flask) -> Reply:
     body = request.get_json(silent=True)
     if not isinstance(body, dict):
         return jsonify({"error": "Current password is incorrect."}), 400
@@ -162,8 +174,13 @@ def _change_password(app: Flask) -> Response:
             {"error": "The new password must be at least 12 characters."}
         ), 400
     db.set_password_hash(int(g.user["id"]), hash_password(new_password))
+    fresh = db.find_user_by_id(int(g.user["id"]))
     app.logger.info("password changed user_id=%s", g.user["id"])
-    return jsonify({"ok": True})
+    if fresh is None:
+        return jsonify({"error": "Could not change the password."}), 500
+    response = jsonify({"ok": True})
+    restart_session(response, fresh)
+    return response
 
 
 def _account_body(
@@ -172,28 +189,29 @@ def _account_body(
     password_required: bool,
 ) -> dict[str, Any] | Response:
     if not isinstance(body, dict):
-        return jsonify({"error": "The account details are incomplete."}), 400
+        return _reject("The account details are incomplete.", 400)
     username = body.get("username")
     email = body.get("email")
     role = body.get("role")
     password = body.get("password") or ""
-    access = body.get("access") if isinstance(body.get("access"), dict) else {}
+    raw_access = body.get("access")
+    access: dict[str, Any] = raw_access if isinstance(raw_access, dict) else {}
     if not isinstance(username, str) or not valid_username(username.strip()):
-        return jsonify({"error": "Username is invalid."}), 400
+        return _reject("Username is invalid.", 400)
     if (
         not isinstance(email, str)
         or len(email.strip()) > 254
         or not _EMAIL.fullmatch(email.strip())
     ):
-        return jsonify({"error": "Email is invalid."}), 400
+        return _reject("Email is invalid.", 400)
     if role not in ROLES:
-        return jsonify({"error": "Role is invalid."}), 400
+        return _reject("Role is invalid.", 400)
     if not isinstance(password, str) or len(password) > 128:
-        return jsonify({"error": "Password is invalid."}), 400
+        return _reject("Password is invalid.", 400)
     if password_required and len(password) < 12:
-        return jsonify({"error": "Password must be at least 12 characters."}), 400
+        return _reject("Password must be at least 12 characters.", 400)
     if password and len(password) < 12:
-        return jsonify({"error": "Password must be at least 12 characters."}), 400
+        return _reject("Password must be at least 12 characters.", 400)
     disabled = bool(body.get("disabled"))
     flags = {
         tool: bool(access.get(tool))
@@ -212,6 +230,12 @@ def _account_body(
         "allow_sonar": flags["sonar"],
         "allow_trivy": flags["trivy"],
     }
+
+
+def _reject(message: str, status: int) -> Response:
+    response = jsonify({"error": message})
+    response.status_code = status
+    return response
 
 
 def _removes_last_admin(

@@ -21,6 +21,7 @@ export async function api(path, options = {}) {
     const refreshed = await fetch("/api/auth/refresh", {
       method: "POST",
       credentials: "same-origin",
+      headers: { Accept: "application/json", "X-CSRF-Token": csrfToken() },
     });
     if (refreshed.ok) {
       headers["X-CSRF-Token"] = csrfToken();

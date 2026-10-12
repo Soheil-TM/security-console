@@ -1,0 +1,22 @@
+# Production override. TLS stays in the reverse proxy. The console port is
+# bound to loopback so only a proxy on this host can reach it.
+#
+#   TRUSTED_PROXIES=<proxy address seen by the console> \
+#   docker compose -f docker-compose.yml -f docker-compose.production.yml up -d --build
+#
+# Do not add docker-compose.override.yml to that -f list. That file is the
+# development publish, and Compose would append it beside this loopback port.
+#
+# The proxy must set X-Forwarded-For to the client address. The application
+# trusts that header only when the TCP peer is listed in TRUSTED_PROXIES.
+# Do not publish port 8092. Do not put the console on an untrusted network
+# until the initial admin password has been changed.
+
+services:
+  console:
+    environment:
+      CONSOLE_ENV: production
+      COOKIE_SECURE: "1"
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+    ports:
+      - "127.0.0.1:8091:8080"

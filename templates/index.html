@@ -200,6 +200,17 @@
       padding: 8px 10px;
     }
     .scan-bar:hover { border-color: var(--teal); }
+    html.dark .scan-bar { color: var(--ink); }
+    html.dark .scan-bar:hover {
+      background: #243648;
+      border-color: #2dd4bf;
+      color: var(--ink);
+    }
+    html.dark .scan-bar:focus-visible { outline: 2px solid #2dd4bf; outline-offset: 2px; }
+    html.dark .stack { background: #2c4258; }
+    html.dark .rp { color: var(--ink); }
+    html.dark .rp .sub { color: #c5d5e4; }
+    html.dark .rp-children .rp.on { outline-color: #2dd4bf; }
     .stack { display: flex; height: 12px; border-radius: 99px; overflow: hidden; background: #e7edf3; }
     .stack i { display: block; height: 100%; }
     html.dark .scan-bar { background: var(--card); }
@@ -278,13 +289,42 @@
       border: 1px solid var(--line);
       border-radius: 12px;
       padding: 22px;
+      box-shadow: var(--shadow);
     }
     .login-card h1 { margin: 0 0 6px; font-size: 22px; }
     .login-card p { margin: 0 0 16px; color: var(--muted); line-height: 1.7; }
     .login-card label { display: block; margin-bottom: 12px; }
-    .login-card input { width: 100%; height: 40px; }
-    .pw-row { display: flex; gap: 8px; }
-    .pw-row input { flex: 1; }
+    .login-card input {
+      width: 100%;
+      height: 42px;
+      border: 1px solid #c5d1de;
+      border-radius: 8px;
+      background: #fff;
+      box-shadow: inset 0 1px 2px rgba(21, 34, 50, .04);
+    }
+    .login-card input:focus {
+      border-color: var(--teal);
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(15, 118, 110, .18);
+    }
+    .pw-row { position: relative; display: block; }
+    .pw-row input { width: 100%; padding-right: 44px; appearance: none; }
+    .pw-row input::-ms-reveal,
+    .pw-row input::-ms-clear {
+      display: none;
+      width: 0;
+      height: 0;
+    }
+    .pw-row input::-webkit-credentials-auto-fill-button,
+    .pw-row input::-webkit-strong-password-auto-fill-button,
+    .pw-row input::-webkit-contacts-auto-fill-button,
+    .pw-row input::-webkit-caps-lock-indicator {
+      visibility: hidden;
+      display: none !important;
+      pointer-events: none;
+      position: absolute;
+      right: 0;
+    }
     .login-card button[type="submit"] {
       width: 100%;
       height: 40px;
@@ -297,12 +337,53 @@
     }
     .login-card button[type="submit"]:disabled { opacity: .7; }
     #toggle-password {
-      height: 40px;
-      border: 1px solid #c5d1de;
-      background: white;
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 42px;
+      height: 42px;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
       border-radius: 8px;
-      padding: 0 10px;
+      padding: 0;
+      display: grid;
+      place-items: center;
     }
+    #toggle-password svg { width: 20px; height: 20px; }
+    #toggle-password .eye-open { display: block; }
+    #toggle-password .eye-off { display: none; }
+    #toggle-password[aria-pressed="true"] .eye-open { display: none; }
+    #toggle-password[aria-pressed="true"] .eye-off { display: block; }
+    #toggle-password:hover,
+    #toggle-password:focus-visible { color: var(--teal); background: transparent; }
+    #toggle-password:focus-visible { outline: 2px solid var(--teal); outline-offset: -3px; }
+    html.dark .login-card input {
+      background: var(--bg);
+      color: var(--ink);
+      border-color: var(--line);
+      box-shadow: none;
+    }
+    html.dark .login-card input:focus {
+      border-color: #2dd4bf;
+      box-shadow: 0 0 0 3px rgba(45, 212, 191, .28);
+    }
+    html.dark .login-card input:-webkit-autofill,
+    html.dark .login-card input:-webkit-autofill:hover,
+    html.dark .login-card input:-webkit-autofill:focus {
+      -webkit-text-fill-color: var(--ink);
+      caret-color: var(--ink);
+      border-color: var(--line);
+      box-shadow: 0 0 0 1000px var(--bg) inset;
+    }
+    html.dark .login-card input:-webkit-autofill:focus {
+      border-color: #2dd4bf;
+      box-shadow: 0 0 0 1000px var(--bg) inset, 0 0 0 3px rgba(45, 212, 191, .28);
+    }
+    html.dark #toggle-password { color: var(--muted); background: transparent; }
+    html.dark #toggle-password:hover,
+    html.dark #toggle-password:focus-visible { color: #99f6e4; background: transparent; }
+    html.dark #toggle-password:focus-visible { outline-color: #2dd4bf; }
     .login-error {
       background: #fdecea;
       border: 1px solid #f5c2c0;
@@ -322,6 +403,18 @@
     .user-table { width: 100%; border-collapse: collapse; }
     .user-table th, .user-table td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); }
     .user-table th { color: var(--muted); font-size: 12px; font-weight: 600; }
+    html.dark th,
+    html.dark .user-table th {
+      background: #152232;
+      color: #c5d5e4;
+      border-bottom-color: var(--line);
+    }
+    html.dark td,
+    html.dark .user-table td {
+      color: var(--ink);
+      border-bottom-color: var(--line);
+    }
+    html.dark .user-table tr:hover td { background: #243648; color: var(--ink); }
     .row-actions { display: flex; gap: 6px; }
     .filters { display: flex; gap: 8px; margin-bottom: 12px; }
     .filters > * { flex: 1; }
@@ -507,6 +600,7 @@
       outline: none;
     }
     input:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15, 118, 110, .15); }
+    .login-card .pw-row input { padding-right: 44px; }
     .scanners {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
@@ -535,6 +629,15 @@
       background: #f0fdfa;
       box-shadow: inset 0 0 0 1px var(--teal);
     }
+    html.dark .scanner:has(input:checked) {
+      background: #12343a;
+      border-color: #2dd4bf;
+      color: var(--ink);
+    }
+    html.dark .scanner b { color: var(--ink); }
+    html.dark .scanner small,
+    html.dark .launch .hint,
+    html.dark .launch .field-label { color: #c5d5e4; }
     .scanner:has(input:focus-visible) { outline: 2px solid var(--teal); outline-offset: 2px; }
     .scanner b { display: block; font-size: 14px; }
     .scanner small { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; line-height: 1.45; }
@@ -587,7 +690,9 @@
     .image-pick span { color: var(--muted); font-size: 12px; white-space: nowrap; }
     .image-pick.on, .image-pick:hover { background: #f0fdfa; }
     html.dark .image-list { background: var(--card); }
-    html.dark .image-pick.on, html.dark .image-pick:hover { background: #12343a; }
+    html.dark .image-pick { color: var(--ink); }
+    html.dark .image-pick span { color: #c5d5e4; }
+    html.dark .image-pick.on, html.dark .image-pick:hover { background: #12343a; color: var(--ink); }
     .sonar-card {
       background: white; border: 1px solid var(--line); border-radius: 12px;
       box-shadow: var(--shadow); padding: 12px 14px; margin-bottom: 12px;
@@ -601,6 +706,16 @@
     .sonar-metrics b { display: block; font-size: 22px; line-height: 1.2; }
     .sonar-metrics span, .sonar-metrics small { display: block; color: var(--muted); font-size: 12px; }
     .sonar-card .note { margin: 8px 0 0; }
+    html.dark .sonar-card {
+      background: var(--card);
+      color: var(--ink);
+      border-color: var(--line);
+    }
+    html.dark .sonar-metrics div { background: #152232; color: var(--ink); }
+    html.dark .sonar-metrics span,
+    html.dark .sonar-metrics small { color: #c5d5e4; }
+    html.dark #form-msg { color: #99f6e4; }
+    html.dark #form-msg.bad { color: #fda4af; }
     #form-msg { min-height: 1.1em; margin: 4px 2px 0; font-size: 13px; color: var(--teal-2); }
     #form-msg.bad { color: var(--critical); }
     .progress { height: 3px; margin-top: 8px; background: #e2e8f0; border-radius: 99px; overflow: hidden; }
@@ -630,6 +745,10 @@
       animation: badge-glow 1.8s ease-in-out infinite;
     }
     .badge.failed { background: #ffe4e6; color: #9f1239; }
+    html.dark .badge { background: #2c4258; color: var(--ink); }
+    html.dark .badge.done { background: #143528; color: #6ee7b7; }
+    html.dark .badge.running { background: #3a2c14; color: #fcd34d; }
+    html.dark .badge.failed { background: #3f1d24; color: #fda4af; }
 
     .summary {
       display: grid; grid-template-columns: 128px minmax(0, 1fr); gap: 8px;
@@ -652,6 +771,22 @@
     .stat.medium { --c: var(--medium); }
     .stat.low { --c: var(--low); }
     .stat.info { --c: var(--info); }
+    html.dark .summary {
+      background: var(--card);
+      border-color: var(--line);
+    }
+    html.dark .stat { background: #152232; color: var(--ink); }
+    html.dark .stat:hover { background: #243648; border-color: var(--line); }
+    html.dark .stat.on { background: #12343a; }
+    html.dark .stat .en,
+    html.dark .stat .fa { color: #c5d5e4; }
+    html.dark .stat.critical { --c: #f87171; }
+    html.dark .stat.high { --c: #fb923c; }
+    html.dark .stat.medium { --c: #fbbf24; }
+    html.dark .stat.low { --c: #86efac; }
+    html.dark .stat.info { --c: #7dd3fc; }
+    html.dark .donut text { fill: #c5d5e4; }
+    html.dark .donut text:first-of-type { fill: var(--ink); }
 
     .toolbar {
       display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
@@ -672,6 +807,37 @@
     .seg button.on { background: var(--navy); color: white; }
     .seg button.on em { background: rgba(255,255,255,.18); color: white; }
     .shown { color: var(--muted); font-size: 12px; }
+    html.dark .toolbar {
+      background: var(--card);
+      border-color: var(--line);
+      color: var(--ink);
+    }
+    html.dark .toolbar input {
+      background: var(--bg);
+      color: var(--ink);
+      border-color: var(--line);
+    }
+    html.dark .toolbar input::placeholder { color: #9aafc3; }
+    html.dark .toolbar input:focus {
+      border-color: #2dd4bf;
+      box-shadow: 0 0 0 3px rgba(45, 212, 191, .28);
+    }
+    html.dark .seg {
+      background: var(--bg);
+      border-color: var(--line);
+    }
+    html.dark .seg button { color: #c5d5e4; }
+    html.dark .seg button:hover { background: #243648; color: var(--ink); }
+    html.dark .seg button em { background: #2c4258; color: var(--ink); }
+    html.dark .seg button.on {
+      background: #12343a;
+      color: #ccfbf1;
+      box-shadow: inset 0 0 0 1px #2dd4bf;
+    }
+    html.dark .seg button.on:hover { background: #164850; color: #ccfbf1; }
+    html.dark .seg button.on em { background: rgba(45, 212, 191, .22); color: #ccfbf1; }
+    html.dark .seg button:focus-visible { outline: 2px solid #2dd4bf; outline-offset: 2px; }
+    html.dark .shown { color: #c5d5e4; }
 
     .card {
       background: white; border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); overflow: clip;
@@ -711,7 +877,11 @@
       cursor: pointer;
     }
     #findings thead button.sort:hover { color: var(--ink); background: rgba(15, 23, 42, .04); }
-    html.dark #findings thead button.sort:hover { color: var(--ink); background: rgba(255, 255, 255, .06); }
+    html.dark #findings thead button.sort:hover { color: var(--ink); background: #243648; }
+    html.dark #findings thead button.sort:focus-visible {
+      outline: 2px solid #2dd4bf;
+      outline-offset: -2px;
+    }
     #findings thead button.sort:focus-visible { outline: 2px solid var(--teal); outline-offset: -2px; }
     #findings thead button.sort .mark {
       min-width: 1em;
@@ -744,15 +914,35 @@
     .kids ul { list-style: none; margin: 0; padding: 0; }
     #findings table { direction: ltr; }
     .kids li { padding: 6px 0; border-top: 1px solid #e6edf4; display: flex; gap: 10px; justify-content: flex-start; align-items: baseline; }
+    html.dark #findings td,
+    html.dark #findings th { border-bottom-color: var(--line); color: var(--ink); }
+    html.dark tr.group:hover td { background: #243648; color: var(--ink); }
+    html.dark tr.group:focus-visible { outline: 2px solid #2dd4bf; outline-offset: -2px; }
+    html.dark .kids td { background: var(--bg); color: var(--ink); }
+    html.dark .kids li { border-top-color: var(--line); }
+    html.dark #findings .msg,
+    html.dark #findings .chev { color: #c5d5e4; }
     .mono { font-family: ui-monospace, monospace; font-size: 12px; direction: ltr; unicode-bidi: isolate; }
     .note {
       background: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; border-radius: 10px;
       padding: 10px 12px; margin-bottom: 12px; white-space: pre-wrap; font-size: 12.5px;
     }
+    html.dark .note,
+    html.dark .sonar-card .note {
+      background: #3a2c14;
+      color: #fde68a;
+      border: 1px solid #b45309;
+    }
     .empty {
       background: white; border: 1px dashed #c5d1de; border-radius: 12px; padding: 36px 20px; text-align: center; color: var(--muted);
     }
     .empty strong { display: block; color: var(--ink); font-size: 16px; margin-bottom: 6px; }
+    html.dark .empty {
+      background: var(--card);
+      border-color: var(--line);
+      color: var(--ink);
+    }
+    html.dark .empty strong { color: var(--ink); }
 
     .alert {
       background: white; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
@@ -770,6 +960,17 @@
       margin: 6px 0 0; direction: ltr; text-align: left; font-size: 12.5px; color: #243246;
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
     }
+    html.dark .alert {
+      background: var(--card);
+      color: var(--ink);
+      border-color: var(--line);
+    }
+    html.dark .alert:hover { background: #243648; }
+    html.dark .alert p,
+    html.dark .alert time,
+    html.dark .host { color: #c5d5e4; }
+    html.dark .alert-top strong { color: var(--ink); }
+    html.dark .falco-more li { border-top-color: var(--line); color: var(--ink); }
     .alert.open p { display: block; -webkit-line-clamp: unset; }
     .alert { cursor: pointer; }
     .falco-more { margin: 8px 0 0; padding: 0; list-style: none; }
@@ -806,6 +1007,32 @@
       background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 10px; padding: 10px 12px; margin: 0 0 12px;
     }
     .k-lesson .ghost { height: 36px; margin-top: 4px; }
+    html.dark .k-tree,
+    html.dark .k-lesson {
+      background: var(--card);
+      color: var(--ink);
+      border-color: var(--line);
+    }
+    html.dark .k-lesson h2,
+    html.dark .k-lesson p,
+    html.dark .k-lesson li { color: var(--ink); }
+    html.dark .k-tree input { background: var(--bg); color: var(--ink); border-color: var(--line); }
+    html.dark .k-note {
+      background: #12343a;
+      border-color: #2dd4bf;
+      color: #d7f7f3;
+    }
+    html.dark .tree ul,
+    html.dark .tree ul li::before { border-color: var(--line); }
+    html.dark .tree button { color: var(--ink); }
+    html.dark .tree button:hover { background: #243648; }
+    html.dark .tree .leaf.on { background: #12343a; color: #99f6e4; }
+    html.dark .ghost {
+      background: transparent;
+      border-color: #5eead4;
+      color: #99f6e4;
+    }
+    html.dark .ghost:hover { background: #12343a; border-color: #5eead4; color: #ccfbf1; }
 
     @keyframes pulse {
       70% { box-shadow: 0 0 0 6px rgba(251, 191, 36, 0); }
@@ -853,7 +1080,17 @@
         <span class="field-label">Password</span>
         <span class="pw-row">
           <input id="password" name="password" type="password" autocomplete="current-password" required maxlength="128" dir="ltr">
-          <button type="button" id="toggle-password">Show</button>
+          <button type="button" id="toggle-password" aria-label="Toggle password visibility" aria-pressed="false">
+            <svg class="eye-open" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+              <circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/>
+            </svg>
+            <svg class="eye-off" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 3.5 20.5 21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              <path d="M9.9 5.4A10.2 10.2 0 0 1 12 5c6 0 9.5 7 9.5 7a17 17 0 0 1-3.6 4.4M6.2 6.8C4 8.3 2.5 12 2.5 12S6 19 12 19c1.4 0 2.7-.3 3.8-.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M10.2 10.4a2.6 2.6 0 0 0 3.6 3.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+          </button>
         </span>
       </label>
       <button type="submit" id="login-submit">Sign in</button>
@@ -2409,9 +2646,10 @@
 
     document.querySelector("#toggle-password").addEventListener("click", () => {
       const input = document.querySelector("#password");
+      const button = document.querySelector("#toggle-password");
       const show = input.type === "password";
       input.type = show ? "text" : "password";
-      document.querySelector("#toggle-password").textContent = show ? "Hide" : "Show";
+      button.setAttribute("aria-pressed", show ? "true" : "false");
     });
 
     document.querySelector("#login-form").addEventListener("submit", async (event) => {

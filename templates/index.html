@@ -694,6 +694,31 @@
       color: var(--muted);
       box-shadow: inset 0 -1px 0 var(--line);
     }
+    #findings thead th { padding: 0; }
+    #findings thead button.sort {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 9px 12px;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      font-weight: 600;
+      text-align: left;
+      cursor: pointer;
+    }
+    #findings thead button.sort:hover { color: var(--ink); background: rgba(15, 23, 42, .04); }
+    html.dark #findings thead button.sort:hover { color: var(--ink); background: rgba(255, 255, 255, .06); }
+    #findings thead button.sort:focus-visible { outline: 2px solid var(--teal); outline-offset: -2px; }
+    #findings thead button.sort .mark {
+      min-width: 1em;
+      color: var(--teal);
+      font-size: 10px;
+      text-align: right;
+    }
     tr.group { cursor: pointer; }
     tr.group:hover td { background: #f8fafc; }
     tr.group:focus-visible { outline: 2px solid var(--teal); outline-offset: -2px; }
@@ -1143,6 +1168,7 @@
       open: new Set(),
       fopen: new Set(),
       groups: [],
+      sort: {key: "severity", dir: "asc"},
       falcoGroups: [],
       seenId: null,
       pendingMsg: null,
@@ -1959,11 +1985,7 @@
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key).push(row);
       });
-      const order = {critical: 0, high: 1, medium: 2, low: 3, info: 4};
-      state.groups = [...groups.values()].sort((a, b) => {
-        const diff = order[bucket(a[0].severity)] - order[bucket(b[0].severity)];
-        return diff || b.length - a.length;
-      });
+      state.groups = [...groups.values()].sort(compareGroups);
       document.querySelector("#shown").textContent = rows.length + " findings in " + state.groups.length + " rules";
       if (state.scan && state.scan.status === "running" && !rows.length) {
         const phase = state.scan.phase || "scan";
@@ -1988,7 +2010,38 @@
         const kids = instances.map((row) => '<li><span class="mono">' + esc(row.path) + (row.line ? ":" + esc(row.line) : "") + "</span>" + (messages.length > 1 ? '<span class="msg">' + esc(row.message) + "</span>" : "") + "</li>").join("");
         return '<tr class="group" data-action="toggle" data-i="' + index + '" tabindex="0"><td><span class="pill ' + level + '">' + label[2] + '</span></td><td><div class="check">' + esc(sample.check || "—") + "</div>" + parentMsg + '</td><td>' + esc(TOOL_LABEL[sample.tool] || sample.tool) + '</td><td class="num">' + instances.length + ' <span class="chev">' + (open ? "▾" : "▸") + '</span></td></tr>' + (open ? '<tr class="kids"><td colspan="4"><ul>' + kids + "</ul></td></tr>" : "");
       }).join("");
-      document.querySelector("#findings").innerHTML = '<table><thead><tr><th>Severity</th><th>Rule</th><th>Tool</th><th>Count</th></tr></thead><tbody>' + body + "</tbody></table>";
+      const head = ["severity", "Severity", "rule", "Rule", "tool", "Tool", "count", "Count"]
+        .reduce((html, label, index, list) => index % 2 ? html : html + sortHeader(label, list[index + 1]), "");
+      document.querySelector("#findings").innerHTML = '<table><thead><tr>' + head + '</tr></thead><tbody>' + body + "</tbody></table>";
+    }
+
+    function sortHeader(key, label) {
+      const active = state.sort.key === key;
+      const aria = active ? (state.sort.dir === "asc" ? "ascending" : "descending") : "none";
+      const mark = active ? (state.sort.dir === "asc" ? "▲" : "▼") : "";
+      return '<th aria-sort="' + aria + '"><button type="button" class="sort" data-action="sort" data-key="' + key + '"><span>' + label + '</span><span class="mark" aria-hidden="true">' + mark + "</span></button></th>";
+    }
+
+    function compareGroups(a, b) {
+      const dir = state.sort.dir === "desc" ? -1 : 1;
+      const left = sortValue(a, state.sort.key);
+      const right = sortValue(b, state.sort.key);
+      const primary = typeof left === "number" && typeof right === "number"
+        ? (left - right) * dir
+        : String(left).localeCompare(String(right), undefined, {sensitivity: "base"}) * dir;
+      if (primary !== 0 || state.sort.key !== "severity") return primary;
+      return b.length - a.length;
+    }
+
+    function sortValue(instances, key) {
+      const sample = instances[0] || {};
+      if (key === "severity") {
+        const rank = SEV.findIndex((item) => item[0] === bucket(sample.severity));
+        return rank < 0 ? SEV.length : rank;
+      }
+      if (key === "count") return instances.length;
+      if (key === "tool") return TOOL_LABEL[sample.tool] || sample.tool || "";
+      return sample.check || "";
     }
 
     function syncScan() {
@@ -2232,6 +2285,16 @@
         else state.fopen.add(key);
         falcoStamp = null;
         renderFalco();
+      }
+      if (action === "sort") {
+        const key = el.dataset.key;
+        if (!key) return;
+        if (state.sort.key === key) state.sort.dir = state.sort.dir === "asc" ? "desc" : "asc";
+        else {
+          state.sort.key = key;
+          state.sort.dir = "asc";
+        }
+        renderFindings();
       }
       if (action === "toggle") {
         const group = state.groups[Number(el.dataset.i)];

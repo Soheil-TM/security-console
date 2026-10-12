@@ -1,7 +1,12 @@
-# Single-host Docker. The same image is used by Swarm and Kubernetes.
-# Generate the secret files before `docker compose up` and do not commit them.
+# One host, one command: docker compose up -d --build
+# Generate the secret files before the first start and do not commit them.
 # The console process does not receive the Docker socket. The scanner service
 # is the only container that does, and it accepts only approved scan jobs.
+# SonarQube and its database start on this same machine.
+
+networks:
+  default:
+    name: security-console
 
 services:
   db:
@@ -14,11 +19,63 @@ services:
       - console_db_password
     volumes:
       - console_pg:/var/lib/postgresql/data
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U console -d security_console_db"]
       interval: 5s
       timeout: 3s
       retries: 12
+
+  sonar-db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: sonar
+      POSTGRES_DB: sonar
+      POSTGRES_PASSWORD_FILE: /run/secrets/sonar_db_password
+    secrets:
+      - sonar_db_password
+    volumes:
+      - sonar_pg:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sonar -d sonar"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  sonarqube:
+    image: sonarqube:26.9.0.129388-community
+    depends_on:
+      sonar-db:
+        condition: service_healthy
+    environment:
+      SONAR_JDBC_URL: jdbc:postgresql://sonar-db:5432/sonar
+      SONAR_JDBC_USERNAME: sonar
+      SONAR_WEB_CONTEXT: /sonar
+      # This node is the only Elasticsearch node, so a full disk cannot be
+      # solved by moving shards. Keep a hard stop before the disk fills.
+      SONAR_SEARCH_JAVAADDITIONALOPTS: "-Dcluster.routing.allocation.disk.watermark.low=93% -Dcluster.routing.allocation.disk.watermark.high=96% -Dcluster.routing.allocation.disk.watermark.flood_stage=98%"
+    env_file:
+      - ./secrets/sonar-db.env
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_extensions:/opt/sonarqube/extensions
+      - sonarqube_logs:/opt/sonarqube/logs
+    ulimits:
+      nofile:
+        soft: 131072
+        hard: 131072
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://127.0.0.1:9000/sonar/api/system/status | grep -q '\"status\":\"UP\"'",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 180s
+    restart: unless-stopped
 
   scanner:
     build: .
@@ -26,17 +83,21 @@ services:
     entrypoint: ["python", "-m", "security_console.worker"]
     environment:
       SCANNER_TOKEN_FILE: /run/secrets/scanner_token
-      SONAR_URL: ${SONAR_URL:-http://192.168.205.155:9000}
-      SONAR_PROJECT_KEY: ${SONAR_PROJECT_KEY:-alireza}
+      SONAR_TOKEN_FILE: /run/secrets/sonar_token
+      SONAR_URL: http://sonarqube:9000/sonar
+      SONAR_PROJECT_KEY: ${SONAR_PROJECT_KEY:-security-console}
+      SCANNER_NETWORK: security-console
       HOST_SCAN_DIR: /var/lib/security-scans
       SCAN_DIR: /scans
     secrets:
       - scanner_token
+      - sonar_token
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /var/lib/security-scans:/scans
     security_opt:
       - no-new-privileges:true
+    restart: unless-stopped
     healthcheck:
       test:
         [
@@ -68,8 +129,8 @@ services:
       SCANNER_TOKEN_FILE: /run/secrets/scanner_token
       COOKIE_SECURE: "0"
       DATA_DIR: /data
-      SONAR_URL: ${SONAR_URL:-http://192.168.205.155:9000}
-      SONAR_PROJECT_KEY: ${SONAR_PROJECT_KEY:-alireza}
+      SONAR_PUBLIC_URL: ${SONAR_PUBLIC_URL:-}
+      SONAR_PROJECT_KEY: ${SONAR_PROJECT_KEY:-security-console}
     secrets:
       - console_jwt_key
       - console_db_password
@@ -79,6 +140,7 @@ services:
       - console_data:/data
     security_opt:
       - no-new-privileges:true
+    restart: unless-stopped
 
 secrets:
   console_jwt_key:
@@ -89,7 +151,15 @@ secrets:
     file: ./secrets/falco_ingest_token.txt
   scanner_token:
     file: ./secrets/scanner_token.txt
+  sonar_token:
+    file: ./secrets/sonar_token.txt
+  sonar_db_password:
+    file: ./secrets/sonar_db_password.txt
 
 volumes:
   console_pg:
   console_data:
+  sonar_pg:
+  sonarqube_data:
+  sonarqube_extensions:
+  sonarqube_logs:

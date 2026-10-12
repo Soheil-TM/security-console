@@ -93,6 +93,7 @@ def _create_account(app: Flask) -> Reply:
             parsed["allow_checkov"],
             parsed["allow_sonar"],
             parsed["allow_trivy"],
+            allow_sonar_ui=parsed["allow_sonar_ui"],
         )
     except UniqueViolation:
         return jsonify({"error": "That username is already registered."}), 409
@@ -127,6 +128,7 @@ def _update_account(app: Flask, user_id: int) -> Reply:
             parsed["allow_sonar"],
             parsed["allow_trivy"],
             password_hash,
+            allow_sonar_ui=parsed["allow_sonar_ui"],
         )
     except UniqueViolation:
         return jsonify({"error": "That username is already registered."}), 409
@@ -217,8 +219,10 @@ def _account_body(
         tool: bool(access.get(tool))
         for tool in TOOLS
     }
+    sonar_ui = bool(access.get("sonar_ui"))
     if role == "admin":
         flags = {tool: True for tool in TOOLS}
+        sonar_ui = True
     return {
         "username": username.strip(),
         "email": email.strip().lower(),
@@ -229,6 +233,7 @@ def _account_body(
         "allow_checkov": flags["checkov"],
         "allow_sonar": flags["sonar"],
         "allow_trivy": flags["trivy"],
+        "allow_sonar_ui": sonar_ui,
     }
 
 

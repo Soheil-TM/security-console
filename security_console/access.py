@@ -12,8 +12,19 @@ def access_map(user: dict[str, Any]) -> dict[str, bool]:
     """Return the tools this account may see. Admins see every tool."""
 
     if user.get("role") == "admin":
-        return {tool: True for tool in TOOLS}
-    return {tool: bool(user.get(f"allow_{tool}")) for tool in TOOLS}
+        allowed = {tool: True for tool in TOOLS}
+    else:
+        allowed = {tool: bool(user.get(f"allow_{tool}")) for tool in TOOLS}
+    allowed["sonar_ui"] = can_open_sonar_ui(user)
+    return allowed
+
+
+def can_open_sonar_ui(user: dict[str, Any]) -> bool:
+    """Return whether this account may open the SonarQube site."""
+
+    if user.get("role") == "admin":
+        return True
+    return bool(user.get("allow_sonar_ui"))
 
 
 def can_start_scan(user: dict[str, Any], tools: list[str]) -> bool:

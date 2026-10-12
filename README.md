@@ -15,13 +15,21 @@ docker compose up -d --build
 
 The page opens on port 8091. This Compose file is local development: `CONSOLE_ENV=development` and plain HTTP. The first account is `admin` with password `admin`. The server rejects every user API call except reading the session, refreshing it, logging out, and changing the password until that password is replaced. The Falco ingest webhook is separate and still uses its own token. The new password must be at least 12 characters, typed twice. Do not expose port 8091 to an untrusted network before that change. Restarting the process or signing in again does not clear the requirement, and an existing database is never reset to password `admin`.
 
-The console container does not mount the Docker socket. A scanner service on the same machine does, and it only accepts approved scan jobs from the console. Semgrep, Checkov, Trivy, and SonarQube each start a short-lived container from that service. Point SonarQube at its server:
+The console container does not mount the Docker socket. A scanner service on the same machine does, and it only accepts approved scan jobs from the console. Semgrep, Checkov, Trivy, and the Sonar scanner each start a short-lived container from that service.
+
+SonarQube Community Build and its own Postgres start with the rest of the stack. The site is not published on port 9000. Open it from the console at `/sonar/` after an admin turns on SonarQube workspace for that account. SonarQube still has its own login. The first SonarQube account is `admin` / `admin`. Create a user token there, put that token in `secrets/sonar_token.txt`, and restart the scanner:
 
 ```bash
-SONAR_URL=https://sonar.example.com SONAR_PROJECT_KEY=my-project docker compose up -d --build
+docker compose up -d scanner
 ```
 
-Put the SonarQube token in `secrets/sonar_token.txt`. Without that file, the other scanners still run and SonarQube is skipped.
+Until that file has a token, the other scanners still run and SonarQube analysis is skipped. The host must allow Elasticsearch inside SonarQube:
+
+```bash
+sudo sysctl -w vm.max_map_count=262144
+```
+
+Add `vm.max_map_count=262144` to `/etc/sysctl.conf` so it survives a reboot. Leave a few gigabytes free on the disk. Elasticsearch inside SonarQube stops when the disk is nearly full. Set `SONAR_PROJECT_KEY` to change the project name.
 
 ## Secrets
 
@@ -31,12 +39,15 @@ Create these files and keep them out of git, or run `./scripts/init-secrets.sh`:
 - `secrets/console_jwt_key.txt` — at least 32 characters
 - `secrets/falco_ingest_token.txt`
 - `secrets/scanner_token.txt` — shared by the console and the scanner service
+- `secrets/sonar_db_password.txt` — SonarQube's Postgres password
+- `secrets/sonar-db.env` — the same password, for the SonarQube process
+- `secrets/sonar_token.txt` — empty until you create a token in SonarQube
 
 The account is created only when the user table is empty. Startup does not change the password of an account that already exists.
 
 ## Docker
 
-`docker compose up --build` starts Postgres, the scanner, and the console on port 8091. That command also loads `docker-compose.override.yml`, which is what publishes `8091:8080` for development. Rebuild the `security-console:17` image before deploying the stack so both services pick up the worker.
+`docker compose up --build` starts the console Postgres, SonarQube and its Postgres, the scanner, and the console on port 8091. That command also loads `docker-compose.override.yml`, which publishes `8091:8080`. SonarQube stays on the Compose network.
 
 Production is `docker-compose.yml` plus `docker-compose.production.yml`, and only those two files:
 
@@ -70,21 +81,7 @@ server {
 
 The `/api/falco` log format omits `$http_user_agent`, `$http_authorization`, and `$http_x_falco_token`. Falco 0.45 can only send the ingest token as the User-Agent. A sensor that can set headers should send `X-Falco-Token` or `Authorization: Bearer` instead. When either of those headers is present, the User-Agent is not accepted as the token. Failed ingest calls are limited to 5 per minute per address, and all ingest calls are limited to 120 per minute.
 
-Keep port 8080 inside the container unpublished except through that proxy. The Swarm file is the plain-HTTP lab deployment (`CONSOLE_ENV=development`). Use the production override, or the Kubernetes manifest, when the console is reached through TLS. The Kubernetes manifest sets production mode and secure cookies; its Service must stay off the public network and TLS must sit in front.
-
-## Docker Swarm
-
-The image `security-console:17` must be on work-01. Deploy it with:
-
-```bash
-docker stack deploy -c docker-stack.yml --resolve-image never console
-```
-
-On this cluster the user database is `security_console_db` on the Postgres instance that SonarQube already uses. The console connects as the `console` role, not as the SonarQube application role.
-
-## Kubernetes
-
-The manifest `deploy/kubernetes/console.yaml` starts the same image with its own Postgres. Replace every `CHANGE_ME` value. It runs as uid 10001, in production mode, without a Docker socket. Scans do not run until a scanner worker is added on a host that has one.
+Keep port 8080 inside the container unpublished except through that proxy. Put TLS on that proxy as well. SonarQube is reached through the console at `/sonar/`, so the proxy does not need a separate port 9000.
 
 ## Security
 

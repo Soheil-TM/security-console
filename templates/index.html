@@ -625,7 +625,10 @@
       background: #e2e8f0; color: #334155;
     }
     .badge.done { background: #d1fae5; color: #065f46; }
-    .badge.running { background: #fef3c7; color: #92400e; }
+    .badge.running {
+      background: #fef3c7; color: #92400e;
+      animation: badge-glow 1.8s ease-in-out infinite;
+    }
     .badge.failed { background: #ffe4e6; color: #9f1239; }
 
     .summary {
@@ -782,9 +785,16 @@
     @keyframes pulse {
       70% { box-shadow: 0 0 0 6px rgba(251, 191, 36, 0); }
     }
+    @keyframes badge-glow {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, .45); }
+      50% { box-shadow: 0 0 0 5px rgba(245, 158, 11, 0); }
+    }
     @keyframes slide {
       from { transform: translateX(140%); }
       to { transform: translateX(-240%); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .badge.running, .dot.running, .progress span { animation: none; }
     }
     @media (max-width: 980px) {
       .app { height: auto; }
@@ -899,7 +909,7 @@
         <button type="button" data-action="view" data-view="users" id="nav-users" hidden>Users</button>
         <button type="button" data-action="view" data-view="access" id="nav-access" hidden>Tool access</button>
         <button type="button" data-action="view" data-view="account">Settings</button>
-        <a href="{{ sonar_url }}" target="_blank" rel="noopener">SonarQube <span aria-hidden="true">↗</span></a>
+        <a id="sonar-link" href="{{ sonar_url }}" target="_blank" rel="noopener" hidden>SonarQube <span aria-hidden="true">↗</span></a>
       </nav>
       <div class="aside-foot">Semgrep · Checkov · Trivy · Falco · SonarQube</div>
     </aside>
@@ -930,7 +940,7 @@
             </label>
             <label class="scanner">
               <input type="checkbox" name="tool" value="sonar" checked>
-              <span><b>SonarQube</b><small>Quality Gate on project alireza</small></span>
+              <span><b>SonarQube</b><small>Quality Gate for this server</small></span>
             </label>
             <label class="scanner">
               <input type="checkbox" name="tool" value="trivy" checked>
@@ -1039,6 +1049,7 @@
               <label><input id="user-disabled" type="checkbox"> Disable account</label>
             </div>
             <div class="scanners" id="user-tools"></div>
+            <label class="scanner" style="margin-top:8px"><input id="user-sonar-ui" type="checkbox"><span><b>SonarQube workspace</b><small>Open the SonarQube site</small></span></label>
             <div style="display:flex;gap:8px;margin-top:12px">
               <button type="submit" id="user-save">Save</button>
               <button type="button" class="ghost" id="user-cancel">Cancel</button>
@@ -1049,7 +1060,7 @@
           <div class="page-head">
             <div>
               <h1>Tool access</h1>
-              <p class="meta">An admin always has every tool. For everyone else, reports and new scans stay on the tools that are on.</p>
+              <p class="meta">An admin always has every tool. For everyone else, reports and new scans stay on the tools that are on. SonarQube workspace opens the SonarQube site.</p>
             </div>
           </div>
           <div id="access-msg" class="meta"></div>
@@ -1098,6 +1109,27 @@
       ["info", "INFO", "Info", "#0288d1"]
     ];
     const STATUS = {running: "Running", done: "Done", failed: "Failed"};
+
+    function publicSonarUrl(value) {
+      if (!value) return "/sonar/";
+      try {
+        const url = new URL(value, window.location.origin);
+        const local = ["sonarqube", "localhost", "127.0.0.1"].includes(url.hostname);
+        let path = url.pathname || "/";
+        if (local && path !== "/sonar" && !path.startsWith("/sonar/")) {
+          path = "/sonar" + (path.startsWith("/") ? path : "/" + path);
+        }
+        if (local || url.origin === window.location.origin) {
+          return path + url.search + url.hash;
+        }
+        return url.toString();
+      } catch (err) {
+        return "/sonar/";
+      }
+    }
+
+    const sonarLink = document.querySelector("#sonar-link");
+    if (sonarLink) sonarLink.href = publicSonarUrl(sonarLink.getAttribute("href"));
     const state = {
       view: "scans",
       scans: [],
@@ -1204,6 +1236,8 @@
       document.body.classList.remove("must-change");
       document.querySelector("#nav-users").hidden = user.role !== "admin";
       document.querySelector("#nav-access").hidden = user.role !== "admin";
+      const sonarLink = document.querySelector("#sonar-link");
+      if (sonarLink) sonarLink.hidden = !(user.access && user.access.sonar_ui);
       if (user.role !== "admin" && (state.view === "users" || state.view === "access")) setView("scans");
       syncLaunch();
       syncThemeButton();
@@ -1559,7 +1593,7 @@
           {
             id: "sonar-use",
             title: "Use SonarQube",
-            html: "<ol><li>SonarQube is on by default, with Semgrep and Checkov. Uncheck it if this repository should not replace the current analysis.</li><li>Start the scan. Analysis takes longer than the other tools.</li><li>Read the SonarQube card, or click SonarQube in the result bar.</li><li>Open the code in SonarQube for each issue.</li></ol><p class=\"k-note\">Results are stored in the alireza project. A new scan replaces the previous analysis of that project.</p>"
+            html: "<ol><li>SonarQube is on by default, with Semgrep and Checkov. Uncheck it if this repository should not replace the current analysis.</li><li>Start the scan. Analysis takes longer than the other tools.</li><li>Read the SonarQube card, or click SonarQube in the result bar.</li><li>Open the code in SonarQube for each issue.</li></ol><p class=\"k-note\">Results are stored in the configured SonarQube project. A new scan replaces the previous analysis of that project.</p>"
           }
         ]
       },
@@ -1620,8 +1654,19 @@
       return String(item.repo || "").replace(/\.git$/i, "").replace(/\/+$/, "").toLowerCase();
     }
 
+    function scanErrorText(item) {
+      return String(item && item.error || "").split("\n").filter((line) => {
+        const text = line.trim();
+        return text && !text.includes("Could not refresh the Trivy");
+      }).join("\n").trim();
+    }
+
     function scanIsFailed(item) {
-      return item.status === "failed" || Boolean(String(item.error || "").trim());
+      if (!item || item.status === "running") return false;
+      const total = (item.findings || []).length || item.finding_count || 0;
+      if (total > 0) return false;
+      if (item.status === "failed") return true;
+      return Boolean(scanErrorText(item));
     }
 
     function historyName(item, total) {
@@ -1806,9 +1851,13 @@
       const names = TOOL_LABEL;
       const tools = (scan.tools || []).map((tool) => names[tool] || tool).join(" · ");
       const subtitle = isImageScan(scan) ? "Image" : scan.repo;
-      document.querySelector("#scan-head").innerHTML = '<div class="scan-head"><div><h1>' + esc(scanTitle(scan)) + '</h1><div class="repo">' + esc(subtitle) + '</div><div class="meta">' + esc(tools) + " · " + esc((scan.created_at || "").replace(" UTC", "")) + (scan.finished_at ? " to " + esc(scan.finished_at.replace(" UTC", "")) : "") + '</div></div><span class="badge ' + esc(scan.status) + '">' + esc(STATUS[scan.status] || scan.status) + "</span></div>";
+      const failed = scanIsFailed(scan);
+      const badge = failed ? "failed" : scan.status;
+      const label = failed ? "Failed" : (STATUS[scan.status] || scan.status);
+      document.querySelector("#scan-head").innerHTML = '<div class="scan-head"><div><h1>' + esc(scanTitle(scan)) + '</h1><div class="repo">' + esc(subtitle) + '</div><div class="meta">' + esc(tools) + " · " + esc((scan.created_at || "").replace(" UTC", "")) + (scan.finished_at ? " to " + esc(scan.finished_at.replace(" UTC", "")) : "") + '</div></div><span class="badge ' + esc(badge) + '">' + esc(label) + "</span></div>";
       const error = document.querySelector("#scan-error");
-      error.innerHTML = scan.error ? '<div class="note">' + esc(scan.error) + "</div>" : "";
+      const problem = failed ? String(scan.error || "").trim() : scanErrorText(scan);
+      error.innerHTML = problem ? '<div class="note">' + esc(problem) + "</div>" : "";
     }
 
     function gateBadge(status) {
@@ -1851,7 +1900,10 @@
         ["code_smells", "Code Smell", "Code smell"],
         ["security_hotspots", "Hotspot", "Hotspot"]
       ];
-      box.innerHTML = '<div class="sonar-card"><div class="sonar-top"><h2>SonarQube</h2><span class="badge ' + badge[0] + '">Quality Gate ' + badge[1] + '</span><a class="ghost" href="' + esc(sonar.url) + '" target="_blank" rel="noopener">Open in SonarQube</a></div><p class="meta">Project ' + esc(sonar.project_key) + '</p><div class="sonar-metrics">' + metrics.map((item) => '<div><b>' + esc(sonar[item[0]] ?? 0) + "</b><span>" + item[1] + "</span><small>" + item[2] + "</small></div>").join("") + "</div></div>";
+      const open = currentUser && currentUser.access && currentUser.access.sonar_ui
+        ? '<a class="ghost" href="' + esc(publicSonarUrl(sonar.url)) + '" target="_blank" rel="noopener">Open in SonarQube</a>'
+        : "";
+      box.innerHTML = '<div class="sonar-card"><div class="sonar-top"><h2>SonarQube</h2><span class="badge ' + badge[0] + '">Quality Gate ' + badge[1] + '</span>' + open + '</div><p class="meta">Project ' + esc(sonar.project_key) + '</p><div class="sonar-metrics">' + metrics.map((item) => '<div><b>' + esc(sonar[item[0]] ?? 0) + "</b><span>" + item[1] + "</span><small>" + item[2] + "</small></div>").join("") + "</div></div>";
     }
 
     function renderSummary() {
@@ -1970,8 +2022,9 @@
       }
       if (state.pendingMsg && scan && scan.id === state.pendingMsg && scan.status !== "running") {
         const msg = document.querySelector("#form-msg");
-        msg.className = scan.status === "failed" ? "bad" : "";
-        msg.textContent = scan.status === "done" ? "Scan finished." : "Scan failed.";
+        const failed = scanIsFailed(scan);
+        msg.className = failed ? "bad" : "";
+        msg.textContent = failed ? "Scan failed." : "Scan finished.";
         state.pendingMsg = null;
       }
     }
@@ -2414,6 +2467,11 @@
         const on = role === "admin" || (access && access[tool]);
         return '<label class="scanner"><input type="checkbox" name="user-tool" value="' + tool + '"' + (on ? " checked" : "") + (role === "admin" ? " disabled" : "") + '><span><b>' + TOOL_LABEL[tool] + '</b></span></label>';
       }).join("");
+      const ui = document.querySelector("#user-sonar-ui");
+      if (ui) {
+        ui.checked = role === "admin" || Boolean(access && access.sonar_ui);
+        ui.disabled = role === "admin";
+      }
     }
 
     function resetUserForm() {
@@ -2446,7 +2504,9 @@
           const on = user.role === "admin" || user.access[tool];
           return '<button type="button" class="scanner" data-action="access-tool" data-id="' + user.id + '" data-tool="' + tool + '"' + (user.role === "admin" ? " disabled" : "") + ' style="text-align:left"><b>' + TOOL_LABEL[tool] + '</b><small>' + (on ? "On" : "Off") + '</small></button>';
         }).join("");
-        return '<div class="card" style="padding:12px;margin-bottom:8px"><strong>' + esc(user.username) + '</strong><div class="meta">' + esc(ROLE_LABEL[user.role] || "") + (user.email ? " · " + esc(user.email) : "") + '</div><div class="scanners" style="margin-top:8px">' + tools + '</div></div>';
+        const uiOn = user.role === "admin" || (user.access && user.access.sonar_ui);
+        const workspace = '<button type="button" class="scanner" data-action="access-tool" data-id="' + user.id + '" data-tool="sonar_ui"' + (user.role === "admin" ? " disabled" : "") + ' style="text-align:left"><b>SonarQube workspace</b><small>' + (uiOn ? "On" : "Off") + '</small></button>';
+        return '<div class="card" style="padding:12px;margin-bottom:8px"><strong>' + esc(user.username) + '</strong><div class="meta">' + esc(ROLE_LABEL[user.role] || "") + (user.email ? " · " + esc(user.email) : "") + '</div><div class="scanners" style="margin-top:8px">' + tools + workspace + '</div></div>';
       }).join("");
     }
 
@@ -2480,6 +2540,7 @@
       document.querySelectorAll("input[name=user-tool]").forEach((input) => {
         access[input.value] = role === "admin" || input.checked;
       });
+      access.sonar_ui = role === "admin" || document.querySelector("#user-sonar-ui").checked;
       const payload = {
         username: document.querySelector("#user-name").value.trim(),
         email: document.querySelector("#user-email").value.trim(),

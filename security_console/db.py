@@ -24,6 +24,7 @@ SCHEMA = (
         allow_semgrep boolean NOT NULL DEFAULT true,
         allow_checkov boolean NOT NULL DEFAULT true,
         allow_sonar boolean NOT NULL DEFAULT false,
+        allow_sonar_ui boolean NOT NULL DEFAULT false,
         allow_trivy boolean NOT NULL DEFAULT true,
         must_change_password boolean NOT NULL DEFAULT false,
         session_version integer NOT NULL DEFAULT 0,
@@ -104,15 +105,15 @@ def load_settings() -> DbSettings:
     """Build connection settings from the environment or secret files."""
 
     return DbSettings(
-        app_host=os.environ.get("CONSOLE_DB_HOST", "sonarqube_db"),
+        app_host=os.environ.get("CONSOLE_DB_HOST", "db"),
         app_user=os.environ.get("CONSOLE_DB_USER", "console"),
         app_password=read_secret(
             "CONSOLE_DB_PASSWORD",
             "CONSOLE_DB_PASSWORD_FILE",
         ),
         app_name=os.environ.get("CONSOLE_DB_NAME", "security_console_db"),
-        bootstrap_host=os.environ.get("CONSOLE_DB_HOST", "sonarqube_db"),
-        bootstrap_user=os.environ.get("CONSOLE_DB_BOOTSTRAP_USER", "sonar"),
+        bootstrap_host=os.environ.get("CONSOLE_DB_HOST", "db"),
+        bootstrap_user=os.environ.get("CONSOLE_DB_BOOTSTRAP_USER", "console"),
         bootstrap_password=read_secret(
             "CONSOLE_DB_BOOTSTRAP_PASSWORD",
             "CONSOLE_DB_BOOTSTRAP_PASSWORD_FILE",
@@ -147,8 +148,8 @@ def connect() -> psycopg.Connection[dict[str, Any]]:
 def ensure_database() -> None:
     """Create the dedicated role and database when bootstrap credentials exist.
 
-    The SonarQube Postgres superuser is used only for this step. The running
-    console then connects as the limited ``console`` role.
+    Compose creates that role itself, so this step stays idle unless a
+    bootstrap password is set. The running console then connects as ``console``.
     """
 
     settings = load_settings()
@@ -291,6 +292,13 @@ MIGRATIONS = (
     """,
     """
     ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS allow_sonar_ui boolean NOT NULL DEFAULT false
+    """,
+    """
+    UPDATE users SET allow_sonar_ui = true WHERE role = 'admin'
+    """,
+    """
+    ALTER TABLE users
         ADD COLUMN IF NOT EXISTS idle_timeout_minutes integer
         NOT NULL DEFAULT 15
     """,
@@ -354,6 +362,7 @@ def insert_user(
     allow_sonar: bool = False,
     allow_trivy: bool = True,
     must_change_password: bool = False,
+    allow_sonar_ui: bool = False,
 ) -> int:
     """Insert one account and return its id."""
 
@@ -363,9 +372,9 @@ def insert_user(
             INSERT INTO users (
                 username, email, password_hash, role,
                 allow_semgrep, allow_checkov, allow_sonar, allow_trivy,
-                must_change_password
+                allow_sonar_ui, must_change_password
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
             (
@@ -377,6 +386,7 @@ def insert_user(
                 allow_checkov,
                 allow_sonar,
                 allow_trivy,
+                allow_sonar_ui,
                 must_change_password,
             ),
         ).fetchone()
@@ -394,7 +404,8 @@ def find_user(username: str) -> dict[str, Any] | None:
             """
             SELECT id, username, email, password_hash, role, disabled,
                    allow_semgrep, allow_checkov, allow_sonar, allow_trivy,
-                   must_change_password, session_version, idle_timeout_minutes
+                   allow_sonar_ui, must_change_password, session_version,
+                   idle_timeout_minutes
             FROM users
             WHERE username = %s
             """,
@@ -412,8 +423,8 @@ def find_user_by_id(user_id: int) -> dict[str, Any] | None:
             """
             SELECT id, username, email, role, disabled,
                    allow_semgrep, allow_checkov, allow_sonar,
-                   allow_trivy, must_change_password, session_version,
-                   idle_timeout_minutes, created_at
+                   allow_trivy, allow_sonar_ui, must_change_password,
+                   session_version, idle_timeout_minutes, created_at
             FROM users
             WHERE id = %s
             """,
@@ -431,7 +442,7 @@ def list_users() -> list[dict[str, Any]]:
             """
             SELECT id, username, email, role, disabled,
                    allow_semgrep, allow_checkov, allow_sonar,
-                   allow_trivy, created_at
+                   allow_trivy, allow_sonar_ui, created_at
             FROM users
             ORDER BY username
             """
@@ -469,6 +480,7 @@ def update_user(
     allow_sonar: bool,
     allow_trivy: bool,
     password_hash: str | None,
+    allow_sonar_ui: bool = False,
 ) -> None:
     """Replace the editable fields of one account."""
 
@@ -479,7 +491,8 @@ def update_user(
                 UPDATE users
                 SET username = %s, email = %s, role = %s, disabled = %s,
                     allow_semgrep = %s, allow_checkov = %s,
-                    allow_sonar = %s, allow_trivy = %s
+                    allow_sonar = %s, allow_trivy = %s,
+                    allow_sonar_ui = %s
                 WHERE id = %s
                 """,
                 (
@@ -491,6 +504,7 @@ def update_user(
                     allow_checkov,
                     allow_sonar,
                     allow_trivy,
+                    allow_sonar_ui,
                     user_id,
                 ),
             )
@@ -501,6 +515,7 @@ def update_user(
                 SET username = %s, email = %s, role = %s, disabled = %s,
                     allow_semgrep = %s, allow_checkov = %s,
                     allow_sonar = %s, allow_trivy = %s,
+                    allow_sonar_ui = %s,
                     password_hash = %s,
                     session_version = session_version + 1
                 WHERE id = %s
@@ -514,6 +529,7 @@ def update_user(
                     allow_checkov,
                     allow_sonar,
                     allow_trivy,
+                    allow_sonar_ui,
                     password_hash,
                     user_id,
                 ),

@@ -27,13 +27,13 @@ from security_console.dispatch import (
 )
 from security_console.images import valid_image_ref
 from security_console.repos import valid_repo
+from security_console.sonar_proxy import install_sonar_proxy
 
 View = Response | tuple[Response, int]
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 256 * 1024
 DATA = Path(os.environ.get("DATA_DIR", "/data"))
-SONAR_URL = os.environ.get("SONAR_URL", "http://192.168.205.155:9000")
 MAX_ALERTS = 300
 
 lock = threading.Lock()
@@ -111,7 +111,7 @@ def execute_scan(scan_id: str) -> None:
 @app.get("/")
 @app.get("/login")
 def index() -> str:
-    return render_template("index.html", sonar_url=SONAR_URL)
+    return render_template("index.html", sonar_url="/sonar/")
 
 
 @app.post("/api/scans")
@@ -240,6 +240,7 @@ def too_large(_exc: Exception) -> View:
 
 
 install_auth(app)
+install_sonar_proxy(app)
 
 
 def boot() -> None:

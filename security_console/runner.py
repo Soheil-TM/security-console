@@ -159,8 +159,14 @@ def _image_scan(job: dict[str, Any], phase: Phase) -> dict[str, Any]:
 
 
 def _run_sonar(client: Any, host_path: str, scan_id: str) -> dict[str, Any]:
-    token = _sonar_token()
-    key = _sonar_key()
+    key = ""
+    try:
+        key = _sonar_key()
+        token = _sonar_token()
+    except Exception as exc:
+        # Semgrep and Checkov already ran. A missing token must not discard them.
+        detail = str(exc).strip() or type(exc).__name__
+        return _empty_sonar(key, detail)
     try:
         token_file = _prepare_sonar_token(scan_id, token)
         spec = sonar_spec(
@@ -350,9 +356,20 @@ def _finish(
         "notes": notes,
         "sonar": sonar,
         "status": "done",
-        "error": "\n".join(note for note in notes if note)[:2000],
+        "error": _public_error(notes),
         "phase": "",
     }
+
+
+def _public_error(notes: list[str]) -> str:
+    """Notes the scan page can show. A stale database is not a failed scan."""
+
+    kept = [
+        note
+        for note in notes
+        if note and "Could not refresh the Trivy" not in note
+    ]
+    return "\n".join(kept)[:2000]
 
 
 def _failed(exc: Exception) -> dict[str, Any]:
@@ -456,13 +473,13 @@ def _image_limit() -> int:
 
 
 def _sonar_url() -> str:
-    return os.environ.get("SONAR_URL", "http://192.168.205.155:9000")
+    return os.environ.get("SONAR_URL", "http://sonarqube:9000/sonar").strip()
 
 
 def _sonar_key() -> str:
     import re
 
-    key = os.environ.get("SONAR_PROJECT_KEY", "alireza")
+    key = os.environ.get("SONAR_PROJECT_KEY", "security-console")
     if not re.fullmatch(r"[A-Za-z0-9_.:-]{1,200}", key):
         raise RuntimeError("The SonarQube project key is invalid.")
     return key

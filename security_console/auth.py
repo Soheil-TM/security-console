@@ -22,11 +22,11 @@ import jwt
 import psycopg
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHash, VerificationError, VerifyMismatchError
-from flask import Flask, Response, current_app, g, jsonify, request
+from flask import Flask, Response, current_app, g, jsonify, redirect, request
 from jwt import InvalidTokenError
 
 from security_console import db
-from security_console.access import access_map
+from security_console.access import access_map, can_open_sonar_ui
 from security_console.secrets import same_secret
 
 Reply = Response | tuple[Response, int]
@@ -116,6 +116,7 @@ def _insert_bootstrap_admin(username: str) -> None:
         allow_sonar=True,
         allow_trivy=True,
         must_change_password=True,
+        allow_sonar_ui=True,
     )
 
 
@@ -832,7 +833,33 @@ def _valid_username(username: str) -> bool:
     return all(ch.isalnum() or ch in "._-" for ch in username)
 
 
+def sonar_page_user() -> dict[str, Any] | Response:
+    """Return the account that may open SonarQube, or a response that refuses."""
+
+    user = _current_user()
+    if user is None:
+        if request.method == "GET":
+            return redirect("/login")
+        denied = jsonify({"error": "You are not signed in."})
+        denied.status_code = 401
+        return denied
+    g.user = user
+    expired = _reject_expired_session()
+    if expired is not None:
+        return expired
+    if user.get("must_change_password"):
+        return redirect("/")
+    if not can_open_sonar_ui(user):
+        return Response("You do not have permission.", status=403)
+    return user
+
+
 def _security_headers(response: Response) -> Response:
+    if request.path == "/sonar" or request.path.startswith("/sonar/"):
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "same-origin"
+        response.headers["Server"] = "security-console"
+        return response
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Cache-Control"] = "no-store"

@@ -17,19 +17,7 @@ The page opens on port 8091. This Compose file is local development: `CONSOLE_EN
 
 The console container does not mount the Docker socket. A scanner service on the same machine does, and it only accepts approved scan jobs from the console. Semgrep, Checkov, Trivy, and the Sonar scanner each start a short-lived container from that service.
 
-SonarQube Community Build and its own Postgres start with the rest of the stack. The site is not published on port 9000. Open it from the console at `/sonar/` after an admin turns on SonarQube workspace for that account. SonarQube still has its own login. The first SonarQube account is `admin` / `admin`. Create a user token there, put that token in `secrets/sonar_token.txt`, and restart the scanner:
-
-```bash
-docker compose up -d scanner
-```
-
-Until that file has a token, the other scanners still run and SonarQube analysis is skipped. The host must allow Elasticsearch inside SonarQube:
-
-```bash
-sudo sysctl -w vm.max_map_count=262144
-```
-
-Add `vm.max_map_count=262144` to `/etc/sysctl.conf` so it survives a reboot. Leave a few gigabytes free on the disk. Elasticsearch inside SonarQube stops when the disk is nearly full. Set `SONAR_PROJECT_KEY` to change the project name.
+SonarQube Community Build and its own Postgres start with the rest of the stack. The site is not published on port 9000. Open it from the console at `/sonar/` after an admin turns on SonarQube workspace for that account. SonarQube still has its own login. A one-shot `sonar-init` service changes the default `admin` password, or replaces an already changed one, writes a user token to `secrets/sonar_token.txt`, and creates the configured project. The replacement password stays in `secrets/sonar_admin_password.txt`. The scanner reads that file on every scan. The console and the scanner do not wait for this service, so Semgrep, Checkov, and Trivy still run when SonarQube setup needs attention. An admin reads that state under Sonar setup. Rotate the token there when the file is empty but SonarQube already has the token name, or when the saved token is rejected. Until the token exists, SonarQube analysis is skipped. `sonar-init` exits with an error only while SonarQube is still starting, and Docker starts it again. A finished setup stays stopped across a reboot. Elasticsearch inside SonarQube needs `vm.max_map_count` of at least 262144. The `host-setup` service sets that on the host when the current value is lower, and writes `/etc/sysctl.d/99-security-console.conf` so the next reboot keeps it. A higher value already set on the machine is left as it is. Leave a few gigabytes free on the disk. Elasticsearch stops when the disk is nearly full. Set `SONAR_PROJECT_KEY` to change the project name.
 
 ## Secrets
 
@@ -41,7 +29,9 @@ Create these files and keep them out of git, or run `./scripts/init-secrets.sh`:
 - `secrets/scanner_token.txt` — shared by the console and the scanner service
 - `secrets/sonar_db_password.txt` — SonarQube's Postgres password
 - `secrets/sonar-db.env` — the same password, for the SonarQube process
-- `secrets/sonar_token.txt` — empty until you create a token in SonarQube
+- `secrets/sonar_token.txt` — written by `sonar-init` after SonarQube is up
+- `secrets/sonar_admin_password.txt` — SonarQube admin password written by `sonar-init`
+- `secrets/sonar_init_status.json` — setup state for the admin page, with no secrets in it
 
 The account is created only when the user table is empty. Startup does not change the password of an account that already exists.
 
@@ -118,7 +108,7 @@ Persist the rules with the host's firewall tool (`iptables-persistent`, `nftable
 
 `sonar-scanner-cli` 12.2 reads `SONAR_TOKEN` from its process environment. It does not accept the token on stdin or from a token file of its own. Putting the value in Docker's `environment` field stores it in `docker inspect` (`Config.Env`). The worker therefore writes the token to a file in a mode `0700` directory, bind-mounts that file read-only at `/run/secrets/sonar_token` (mode `0444` so the image user can read it), and starts `/bin/sh` which exports `SONAR_TOKEN` only inside the container process. The value is not in `Config.Env` or in the process arguments. It is still in `/proc/<pid>/environ` for the life of the scan, and the file remains on the worker until the scan function returns and deletes it. Anyone who can `docker exec` into that container, or read the worker's scan directory as root while the scan is running, can read the token. That is the boundary the scanner's own configuration leaves.
 
-Command-line `-D` properties outrank `sonar-project.properties`. The scanner command pins `sonar.host.url`, clears `sonar.scanner.proxyHost`, `proxyPort`, `proxyUser`, and `proxyPassword`, sets `sonar.scanner.javaOpts` to the memory limit only, and clears `sonar.scanner.truststorePath`, `truststorePassword`, `keystorePath`, and `keystorePassword`. A repository file cannot replace those with another server, an HTTP proxy, a JVM proxy flag, or a private trust store. Other unpinned properties can still change. The token is not passed as `sonar.token` on the command line.
+Command-line `-D` properties outrank `sonar-project.properties`. The scanner command pins `sonar.host.url`, clears `sonar.scanner.proxyHost`, `proxyPort`, `proxyUser`, and `proxyPassword`, and sets `sonar.scanner.javaOpts` to the memory limit only. `truststorePath` is the image CA bundle copied to `/tmp/sonar-truststore`, and `keystorePath` is an empty keystore created in the same directory. A blank path is not used: the scanner treats it as the working directory and Java then fails with `Is a directory`. `sonar.working.directory` is `/tmp/.scannerwork`, and the repository mount is read-only. The scanner image user cannot create `.scannerwork` inside a root-owned clone. A repository file cannot replace those with another server, an HTTP proxy, a JVM proxy flag, or a private trust store. Other unpinned properties can still change. The token is not passed as `sonar.token` on the command line.
 
 ## Tests
 

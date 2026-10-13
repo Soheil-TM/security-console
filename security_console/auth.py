@@ -216,6 +216,8 @@ def _guard_request() -> Reply | None:
         request.path == "/api/users" or request.path.startswith("/api/users/")
     ) and user["role"] != "admin":
         return jsonify({"error": "You do not have permission."}), 403
+    if request.path == "/api/sonar/setup" and user["role"] != "admin":
+        return jsonify({"error": "You do not have permission."}), 403
     if request.path == "/api/scans" and request.method == "POST":
         body = request.get_json(silent=True) or {}
         requested = body.get("tools") if isinstance(body, dict) else []

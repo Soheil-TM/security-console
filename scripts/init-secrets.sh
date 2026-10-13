@@ -29,6 +29,18 @@ if [ ! -f secrets/sonar_token.txt ]; then
   echo "created empty secrets/sonar_token.txt"
 fi
 
+if [ ! -f secrets/sonar_admin_password.txt ]; then
+  : > secrets/sonar_admin_password.txt
+  chmod 600 secrets/sonar_admin_password.txt
+  echo "created empty secrets/sonar_admin_password.txt"
+fi
+
+if [ ! -s secrets/sonar_init_status.json ]; then
+  printf '%s\n' '{"status":"waiting","detail":"SonarQube setup has not finished.","expires_at":""}' > secrets/sonar_init_status.json
+  chmod 600 secrets/sonar_init_status.json
+  echo "created secrets/sonar_init_status.json"
+fi
+
 if [ ! -s secrets/sonar-db.env ]; then
   password=$(cat secrets/sonar_db_password.txt)
   printf 'SONAR_JDBC_PASSWORD=%s\n' "$password" > secrets/sonar-db.env
@@ -38,10 +50,10 @@ fi
 
 echo "First sign-in is username admin and password admin."
 echo "Change that password before exposing the console. It is not written to a log."
-echo "SonarQube first sign-in is admin / admin on port 9000."
-echo "Create a token there, write it to secrets/sonar_token.txt, then restart the scanner."
+echo "SonarQube setup writes its own admin password and scanner token."
+echo "Open Sonar setup in the console if that step needs attention."
 map_count=$(sysctl -n vm.max_map_count 2>/dev/null || echo 0)
 if [ "$map_count" -lt 262144 ]; then
   echo "SonarQube needs vm.max_map_count >= 262144. Current value is $map_count."
-  echo "Run: sudo sysctl -w vm.max_map_count=262144"
+  echo "docker compose up sets it with the host-setup service."
 fi

@@ -240,6 +240,82 @@ def _run_sonar(client: Any, host_path: str, scan_id: str) -> dict[str, Any]:
         _remove_sonar_token(scan_id)
 
 
+_SONAR_LIST_TEXT = 200
+_SONAR_FILE_TEXT = 500
+_SONAR_ISSUE_CAP = 500
+_SONAR_HOTSPOT_CAP = 200
+
+
+def _sonar_text(value: Any) -> str:
+    if not isinstance(value, str):
+        return ""
+    return value[:_SONAR_LIST_TEXT]
+
+
+def _sonar_file(value: Any, key: str) -> str:
+    if not isinstance(value, str):
+        return ""
+    return value.removeprefix(key + ":")[:_SONAR_FILE_TEXT]
+
+
+def _sonar_line(value: Any) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return value
+
+
+def _sonar_issue_list(payload: Any, key: str) -> list[dict[str, Any]]:
+    """Keep the open issues from one SonarQube search page."""
+
+    rows = payload.get("issues") if isinstance(payload, dict) else None
+    if not isinstance(rows, list):
+        return []
+    items: list[dict[str, Any]] = []
+    for item in rows:
+        if not isinstance(item, dict):
+            continue
+        items.append(
+            {
+                "file": _sonar_file(item.get("component"), key),
+                "line": _sonar_line(item.get("line")),
+                "rule": _sonar_text(item.get("rule")),
+                "type": _sonar_text(item.get("type")),
+                "severity": _sonar_text(item.get("severity")),
+                "message": _sonar_text(item.get("message")),
+            }
+        )
+        if len(items) >= _SONAR_ISSUE_CAP:
+            break
+    return items
+
+
+def _sonar_hotspot_list(payload: Any, key: str) -> list[dict[str, Any]]:
+    """Keep the hotspots still waiting for review."""
+
+    rows = payload.get("hotspots") if isinstance(payload, dict) else None
+    if not isinstance(rows, list):
+        return []
+    items: list[dict[str, Any]] = []
+    for item in rows:
+        if not isinstance(item, dict):
+            continue
+        items.append(
+            {
+                "file": _sonar_file(item.get("component"), key),
+                "line": _sonar_line(item.get("line")),
+                "rule": _sonar_text(item.get("ruleKey")),
+                "message": _sonar_text(item.get("message")),
+                "status": _sonar_text(item.get("status")),
+                "vulnerabilityProbability": _sonar_text(
+                    item.get("vulnerabilityProbability")
+                ),
+            }
+        )
+        if len(items) >= _SONAR_HOTSPOT_CAP:
+            break
+    return items
+
+
 def _fetch_sonar_summary(key: str, token: str) -> dict[str, Any]:
     import urllib.error
     import urllib.parse
@@ -281,6 +357,37 @@ def _fetch_sonar_summary(key: str, token: str) -> dict[str, Any]:
         except (TypeError, ValueError):
             return 0
 
+    # A failed list lookup must leave the quality gate and the four counts.
+    issues: list[dict[str, Any]] = []
+    try:
+        issues_data = sonar_api(
+            "/api/issues/search",
+            {
+                "componentKeys": key,
+                "resolved": "false",
+                "ps": "500",
+                "p": "1",
+            },
+        )
+        issues = _sonar_issue_list(issues_data, key)
+    except Exception:
+        issues = []
+
+    hotspots: list[dict[str, Any]] = []
+    try:
+        hotspots_data = sonar_api(
+            "/api/hotspots/search",
+            {
+                "projectKey": key,
+                "status": "TO_REVIEW",
+                "ps": "200",
+                "p": "1",
+            },
+        )
+        hotspots = _sonar_hotspot_list(hotspots_data, key)
+    except Exception:
+        hotspots = []
+
     return {
         "project_key": key,
         "quality_gate": (gate.get("projectStatus") or {}).get("status") or "",
@@ -288,6 +395,8 @@ def _fetch_sonar_summary(key: str, token: str) -> dict[str, Any]:
         "vulnerabilities": number("vulnerabilities"),
         "code_smells": number("code_smells"),
         "security_hotspots": number("security_hotspots"),
+        "issues": issues,
+        "hotspot_list": hotspots,
         "url": _sonar_url().rstrip("/")
         + "/dashboard?id="
         + urllib.parse.quote(key),
@@ -305,6 +414,8 @@ def _empty_sonar(key: str, error: str) -> dict[str, Any]:
         "vulnerabilities": 0,
         "code_smells": 0,
         "security_hotspots": 0,
+        "issues": [],
+        "hotspot_list": [],
         "url": _sonar_url().rstrip("/") + "/dashboard?id=" + urllib.parse.quote(key),
         "error": error[:1500],
     }

@@ -28,6 +28,7 @@ from security_console.dispatch import (
 from security_console.images import valid_image_ref
 from security_console.repos import normalize_commit_sha, valid_repo
 from security_console.sonar_proxy import install_sonar_proxy
+from security_console.sonar_setup import read_public_status, run_setup
 
 View = Response | tuple[Response, int]
 
@@ -243,6 +244,22 @@ def ingest_falco() -> Response:
 @app.get("/api/falco")
 def list_falco() -> Response:
     return jsonify(list(reversed(alerts[-100:])))
+
+
+@app.get("/api/sonar/setup")
+@app.post("/api/sonar/setup")
+def sonar_setup_route() -> View:
+    user = getattr(g, "user", None)
+    if not isinstance(user, dict) or user.get("role") != "admin":
+        return jsonify({"error": "You do not have permission."}), 403
+    if request.method == "POST":
+        body = request.get_json(silent=True) or {}
+        rotate = isinstance(body, dict) and body.get("rotate") is True
+        try:
+            run_setup(rotate=rotate)
+        except Exception:
+            app.logger.error("sonar setup failed")
+    return jsonify(read_public_status())
 
 
 @app.errorhandler(413)

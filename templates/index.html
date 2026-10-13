@@ -101,7 +101,10 @@
     nav button.active { background: #214057; color: white; box-shadow: inset 3px 0 0 #2dd4bf; }
     .nav-label { display: inline-flex; align-items: center; gap: 6px; }
     .nav-sub {
-      margin: 2px 8px 8px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      margin: 2px 0 8px 12px;
       padding-left: 8px;
       border-left: 1px solid #2c4258;
     }
@@ -113,26 +116,32 @@
       color: #8ea0b5;
       border: 0;
       border-radius: 8px;
-      padding: 8px 8px 4px;
+      padding: 8px 12px 2px;
       font-size: 11px;
       font-weight: 700;
       letter-spacing: .06em;
       text-transform: uppercase;
     }
-    .kind:hover { background: var(--navy-2); }
-    .kind-body, .reports-body { margin-left: 8px; }
-    .mode {
+    .kind:hover { background: transparent; color: #d5e0ec; }
+    .kind-body, .reports-body { margin: 0; display: flex; flex-direction: column; gap: 2px; }
+    .nav-sub .mode {
       width: 100%;
       text-align: left;
       background: transparent;
       color: #d5e0ec;
       border: 0;
       border-radius: 8px;
-      padding: 7px 8px;
+      padding: 9px 12px;
+      font-size: 14px;
       font-weight: 650;
     }
-    .mode:hover, .mode.on { background: var(--navy-2); color: white; }
-    .mode.on { box-shadow: inset 3px 0 0 #2dd4bf; }
+    .nav-sub .mode:hover { background: var(--navy-2); color: white; }
+    .nav-sub .mode.on,
+    .nav-sub button.active {
+      background: #214057;
+      color: white;
+      box-shadow: inset 3px 0 0 #2dd4bf;
+    }
     .report-tree {
       background: white;
       border: 1px solid var(--line);
@@ -1791,10 +1800,11 @@
       });
       syncLaunch();
       document.querySelectorAll("nav [data-view]").forEach((el) => {
-        const on = el.dataset.view === view || (el.dataset.view === "settings" && SETTINGS_VIEWS.includes(view));
+        const on = el.dataset.view === view && el.dataset.view !== "scans";
         el.classList.toggle("active", on);
       });
       paintSettings();
+      renderHistory();
       if (view === "users" || view === "access") loadAccounts();
       if (view === "sonar-setup") loadSonarSetup();
       if (view === "dashboard") renderDashboard();
@@ -2071,8 +2081,9 @@
 
     function kindMarkup(kind, label) {
       const open = kindOpen.has(kind);
-      const scanOn = state.pane === "scan" && state.target === kind ? " on" : "";
-      const reportsOn = (state.pane === "report" || state.pane === "overview") && state.target === kind ? " on" : "";
+      const inScans = state.view === "scans";
+      const scanOn = inScans && state.pane === "scan" && state.target === kind ? " on" : "";
+      const reportsOn = inScans && (state.pane === "report" || state.pane === "overview") && state.target === kind ? " on" : "";
       const body = open
         ? '<div class="kind-body"><button type="button" class="mode' + scanOn + '" data-action="mode-scan" data-kind="' + kind + '">Scan</button><button type="button" class="mode' + reportsOn + '" data-action="mode-reports" data-kind="' + kind + '">Reports</button></div>'
         : "";
@@ -2083,6 +2094,7 @@
       const stamp = [
         state.scans.map((item) => item.id + item.status + (item.findings || []).length).join(),
         [...kindOpen].join(),
+        state.view,
         state.pane,
         state.target,
         state.overviewKey,

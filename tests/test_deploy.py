@@ -72,3 +72,35 @@ def test_production_port_override_replaces_the_public_publish() -> None:
         ["docker-compose.yml", "docker-compose.production.yml"]
     )["services"]["scanner"]
     assert not scanner.get("ports")
+
+
+def _service(name: str) -> dict[str, Any]:
+    return _rendered(None)["services"][name]
+
+
+def test_sonar_init_does_not_gate_the_scanner() -> None:
+    scanner = _service("scanner")
+    console = _service("console")
+    setup = _service("sonar-init")
+
+    assert "sonar-init" not in (scanner.get("depends_on") or {})
+    assert "sonar-init" not in (console.get("depends_on") or {})
+    assert setup.get("restart") == "on-failure"
+    kernel = _service("host-setup")
+    sonar = _service("sonarqube")
+    assert kernel.get("privileged") is True
+    assert "host-setup" in (sonar.get("depends_on") or {})
+    assert "host-setup" not in (scanner.get("depends_on") or {})
+    assert "host-setup" not in (console.get("depends_on") or {})
+    token_mounts = [
+        item
+        for item in scanner.get("volumes") or []
+        if isinstance(item, dict) and item.get("target") == "/run/sonar/token"
+    ]
+    assert len(token_mounts) == 1
+    assert token_mounts[0].get("read_only") is True
+    assert not any(
+        str(item.get("source", "")).rstrip("/").endswith("/secrets")
+        for item in scanner.get("volumes") or []
+        if isinstance(item, dict)
+    )

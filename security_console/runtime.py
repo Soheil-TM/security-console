@@ -65,8 +65,8 @@ def _mem_limit(default: str) -> str:
 def _user_for(tool: str) -> str | None:
     """Run Semgrep and Checkov without root. Trivy and Sonar keep the image user.
 
-    Trivy writes a cache volume that is created as root. Sonar writes the
-    project directory as whatever user the scanner image uses. Setting
+    Trivy writes a cache volume that is created as root. Sonar keeps the
+    scanner image user and writes its work files under ``/tmp``. Setting
     ``SCANNER_FORCE_ROOT=1`` restores the image user for every tool.
     """
 
@@ -332,6 +332,18 @@ SONAR_TOKEN="$token"
 export SONAR_TOKEN
 unset SONAR_TOKEN_FILE
 unset token
+java_home=$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")
+trust_src="$java_home/lib/security/cacerts"
+test -f "$trust_src"
+cp "$trust_src" /tmp/sonar-truststore
+chmod 444 /tmp/sonar-truststore
+keytool -genkeypair -alias unused -keyalg RSA -keysize 2048 \
+  -validity 1 -dname CN=unused -storetype PKCS12 \
+  -keystore /tmp/sonar-client.p12 \
+  -storepass unused-store -keypass unused-store >/dev/null
+keytool -delete -alias unused \
+  -keystore /tmp/sonar-client.p12 -storepass unused-store >/dev/null
+mkdir -p /tmp/.scannerwork
 exec sonar-scanner "$@"
 """
 
@@ -365,14 +377,15 @@ def sonar_spec(
             "-Dsonar.scanner.proxyUser=",
             "-Dsonar.scanner.proxyPassword=",
             "-Dsonar.scanner.javaOpts=-Xmx384m",
-            "-Dsonar.scanner.truststorePath=",
-            "-Dsonar.scanner.truststorePassword=",
-            "-Dsonar.scanner.keystorePath=",
-            "-Dsonar.scanner.keystorePassword=",
+            "-Dsonar.scanner.truststorePath=/tmp/sonar-truststore",
+            "-Dsonar.scanner.truststorePassword=changeit",
+            "-Dsonar.scanner.keystorePath=/tmp/sonar-client.p12",
+            "-Dsonar.scanner.keystorePassword=unused-store",
+            "-Dsonar.working.directory=/tmp/.scannerwork",
         ],
         entrypoint=["/bin/sh", "-c", _SONAR_BOOT, "sonar-wrapper"],
         volumes={
-            host_path: {"bind": "/usr/src", "mode": "rw"},
+            host_path: {"bind": "/usr/src", "mode": "ro"},
             token_file: {"bind": "/run/secrets/sonar_token", "mode": "ro"},
         },
         environment={

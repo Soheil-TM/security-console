@@ -144,12 +144,17 @@ def test_sonar_receives_only_its_own_token(monkeypatch: pytest.MonkeyPatch) -> N
         "-Dsonar.scanner.proxyUser=",
         "-Dsonar.scanner.proxyPassword=",
         "-Dsonar.scanner.javaOpts=-Xmx384m",
-        "-Dsonar.scanner.truststorePath=",
-        "-Dsonar.scanner.truststorePassword=",
-        "-Dsonar.scanner.keystorePath=",
-        "-Dsonar.scanner.keystorePassword=",
+        "-Dsonar.scanner.truststorePath=/tmp/sonar-truststore",
+        "-Dsonar.scanner.truststorePassword=changeit",
+        "-Dsonar.scanner.keystorePath=/tmp/sonar-client.p12",
+        "-Dsonar.scanner.keystorePassword=unused-store",
+        "-Dsonar.working.directory=/tmp/.scannerwork",
     ):
         assert pinned in spec["command"]
+    assert spec["volumes"]["/var/lib/security-scans/abc123def456"]["mode"] == "ro"
+    assert "cp \"$trust_src\" /tmp/sonar-truststore" in spec["entrypoint"][2]
+    assert "-Dsonar.scanner.truststorePath=" not in spec["command"]
+    assert "-Dsonar.scanner.keystorePath=" not in spec["command"]
     assert "sonar.token" not in " ".join(spec["command"])
     assert spec["cap_drop"] == ["ALL"]
     assert uses_docker_socket(spec) is False

@@ -450,6 +450,8 @@ _SENSITIVE = (
     ("GET", "/api/images"),
     ("GET", "/api/falco"),
     ("GET", "/api/users"),
+    ("GET", "/api/sonar/setup"),
+    ("POST", "/api/sonar/setup"),
     ("POST", "/api/users"),
     ("PATCH", "/api/users/1"),
     ("DELETE", "/api/users/1"),

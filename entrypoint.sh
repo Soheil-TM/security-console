@@ -42,4 +42,20 @@ PY
   set +a
   rm -f /run/console-secret-env
 fi
+# Sonar setup files are bind-mounted from the host. The console user has to
+# read the status and replace the token when an admin rotates it.
+for file in /run/sonar/admin_password /run/sonar/token /run/sonar/status; do
+  if [ -f "$file" ]; then
+    chown 10001:10001 "$file"
+    chmod 600 "$file"
+  fi
+done
+if [ -f /run/sonar/db_password ]; then
+  mkdir -p /run/sonar-private
+  cp /run/sonar/db_password /run/sonar-private/db_password
+  chown 10001:10001 /run/sonar-private /run/sonar-private/db_password
+  chmod 700 /run/sonar-private
+  chmod 400 /run/sonar-private/db_password
+  export SONAR_DB_PASSWORD_FILE=/run/sonar-private/db_password
+fi
 exec setpriv --reuid=10001 --regid=10001 --clear-groups --inh-caps=-all python /app/app.py

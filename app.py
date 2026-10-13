@@ -26,7 +26,7 @@ from security_console.dispatch import (
     scanner_url,
 )
 from security_console.images import valid_image_ref
-from security_console.repos import valid_repo
+from security_console.repos import normalize_commit_sha, valid_repo
 from security_console.sonar_proxy import install_sonar_proxy
 
 View = Response | tuple[Response, int]
@@ -90,6 +90,7 @@ def execute_scan(scan_id: str) -> None:
                 "repo": item["repo"],
                 "image": item["image"],
                 "tools": item["tools"],
+                "requested_sha": item.get("requested_sha") or "",
             },
             on_phase,
         )
@@ -97,12 +98,19 @@ def execute_scan(scan_id: str) -> None:
         item["sonar"] = outcome.get("sonar")
         item["status"] = outcome.get("status") or "failed"
         item["error"] = outcome.get("error") or ""
+        item["commit_sha"] = outcome.get("commit_sha") or ""
+        item["failure_reason"] = outcome.get("failure_reason") or ""
+        item["requested_sha"] = (
+            outcome.get("requested_sha") or item.get("requested_sha") or ""
+        )
         item["phase"] = ""
         item["finished_at"] = utcnow()
     except Exception as exc:
         item["status"] = "failed"
         item["phase"] = ""
         item["error"] = str(exc)[-2000:]
+        item["commit_sha"] = item.get("commit_sha") or ""
+        item["failure_reason"] = item.get("failure_reason") or ""
         item["finished_at"] = utcnow()
     finally:
         save_scan(item)
@@ -130,6 +138,9 @@ def create_scan() -> View:
     ]
     image = ""
     repo = ""
+    requested_sha = normalize_commit_sha(body.get("requested_sha"))
+    if requested_sha is None:
+        return jsonify({"error": "Commit SHA is invalid."}), 400
     if target == "image":
         image = (body.get("image") or "").strip()
         if not valid_image_ref(image):
@@ -138,6 +149,8 @@ def create_scan() -> View:
             ), 400
         if tools != ["trivy"]:
             return jsonify({"error": "Image scans run with Trivy only."}), 400
+        if requested_sha:
+            return jsonify({"error": "Image scans do not take a commit."}), 400
     else:
         repo = (body.get("repo") or "").strip()
         if not valid_repo(repo):
@@ -166,6 +179,9 @@ def create_scan() -> View:
             "created_at": utcnow(),
             "finished_at": "",
             "owner": user.get("username") or "",
+            "requested_sha": requested_sha,
+            "commit_sha": "",
+            "failure_reason": "",
         }
         scans[scan_id] = item
         save_scan(item)

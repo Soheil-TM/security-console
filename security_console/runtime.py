@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import re
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
@@ -40,6 +41,9 @@ _TMPFS = {
     "/root": "rw,nosuid,nodev,size=64m",
     "/home": "rw,nosuid,nodev,size=64m",
 }
+# Image layers are unpacked while Trivy reads them. That working set is larger
+# than the shared 256m /tmp, so an image scan uses its own directory instead.
+TRIVY_IMAGE_TMP_BYTES = 2 * 1024 * 1024 * 1024
 
 
 def scanner_network() -> str:
@@ -171,6 +175,7 @@ def trivy_image_spec(
     image_ref: str,
     *,
     archive_host_path: str | None,
+    tmp_host_path: str,
 ) -> dict[str, Any]:
     """Scan an image with Trivy without giving Trivy the Docker socket.
 
@@ -196,6 +201,7 @@ def trivy_image_spec(
             image_ref,
         )
         volumes = {TRIVY_CACHE_VOLUME: {"bind": "/cache", "mode": "rw"}}
+    volumes[tmp_host_path] = _image_tmp_mount(tmp_host_path)
     spec = _base(
         image=TRIVY_IMAGE,
         command=command,
@@ -207,11 +213,30 @@ def trivy_image_spec(
         read_only=True,
         user=_user_for("trivy"),
     )
+    spec["tmpfs"] = {
+        "/root": "rw,nosuid,nodev,size=64m",
+        "/home": "rw,nosuid,nodev,size=64m",
+    }
     spec["labels"] = {
         "security-console.role": "scanner",
         "security-console.tool": "trivy",
     }
     return spec
+
+
+def _image_tmp_mount(path: str) -> dict[str, str]:
+    """Bind one scan's temporary directory. It must not be a parent or a socket."""
+
+    text = path.strip()
+    parts = Path(text).parts
+    if (
+        not text.startswith("/")
+        or ".." in parts
+        or text == "/"
+        or "docker.sock" in text
+    ):
+        raise RuntimeError("Image scan temporary directory is invalid.")
+    return {"bind": "/tmp", "mode": "rw"}
 
 
 def trivy_db_update_spec(kind: str, repository: str) -> dict[str, Any]:

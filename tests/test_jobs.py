@@ -28,6 +28,7 @@ def test_parse_job_drops_host_config() -> None:
         "repo": "https://github.com/org/repo.git",
         "image": "",
         "tools": ["semgrep", "trivy"],
+        "requested_sha": "",
     }
 
 
@@ -56,6 +57,41 @@ def test_parse_job_rejects_socket_paths_and_bad_images() -> None:
                 "id": "abc123def456",
                 "target": "image",
                 "image": "nginx:1.27",
+            "tools": ["semgrep"],
+        }
+    )
+
+
+def test_parse_job_accepts_only_a_full_sha() -> None:
+    sha = "a" * 40
+    job = parse_job(
+        {
+            "id": "abc123def456",
+            "target": "repo",
+            "repo": "https://github.com/org/repo.git",
+            "tools": ["semgrep"],
+            "requested_sha": sha.upper(),
+        }
+    )
+
+    assert job["requested_sha"] == sha
+    with pytest.raises(JobError):
+        parse_job(
+            {
+                "id": "abc123def456",
+                "target": "repo",
+                "repo": "https://github.com/org/repo.git",
                 "tools": ["semgrep"],
+                "requested_sha": "abc1234",
+            }
+        )
+    with pytest.raises(JobError):
+        parse_job(
+            {
+                "id": "abc123def456",
+                "target": "image",
+                "image": "nginx:1.27",
+                "tools": ["trivy"],
+                "requested_sha": sha,
             }
         )

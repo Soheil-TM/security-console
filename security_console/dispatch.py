@@ -88,6 +88,9 @@ def _remote_scan(job: dict[str, Any], on_phase: Phase) -> dict[str, Any]:
                 "status": payload.get("status"),
                 "error": _redact(str(payload.get("error") or "")),
                 "phase": "",
+                "requested_sha": str(payload.get("requested_sha") or ""),
+                "commit_sha": str(payload.get("commit_sha") or ""),
+                "failure_reason": str(payload.get("failure_reason") or ""),
             }
         time.sleep(2)
 
@@ -147,6 +150,9 @@ def _failed(message: str) -> dict[str, Any]:
         "status": "failed",
         "error": _redact(message)[-2000:],
         "phase": "",
+        "requested_sha": "",
+        "commit_sha": "",
+        "failure_reason": "",
     }
 
 

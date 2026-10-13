@@ -117,6 +117,9 @@ def _run(job: dict[str, Any]) -> None:
             "notes": outcome.get("notes") or [],
             "sonar": outcome.get("sonar"),
             "error": str(outcome.get("error") or "")[:2000],
+            "requested_sha": str(outcome.get("requested_sha") or ""),
+            "commit_sha": str(outcome.get("commit_sha") or ""),
+            "failure_reason": str(outcome.get("failure_reason") or ""),
         }
 
 

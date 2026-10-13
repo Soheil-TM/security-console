@@ -1950,7 +1950,8 @@
     function scanWhen(item) {
       const when = (item.created_at || "").replace(" UTC", "");
       const who = String(item.owner || "").trim();
-      return who ? when + " · " + who : when;
+      const sha = String(item.commit_sha || "").slice(0, 12);
+      return [when, who, sha].filter(Boolean).join(" · ");
     }
 
     function scanRow(item) {

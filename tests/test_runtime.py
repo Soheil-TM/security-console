@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -50,10 +51,15 @@ def test_repository_scanners_drop_privileges_and_hide_the_socket(
 
 
 def test_trivy_image_scan_never_mounts_the_docker_socket() -> None:
-    remote = trivy_image_spec("nginx:1.27", archive_host_path=None)
+    remote = trivy_image_spec(
+        "nginx:1.27",
+        archive_host_path=None,
+        tmp_host_path="/var/lib/security-scans/abc123def456/tmp",
+    )
     local = trivy_image_spec(
         "nginx:1.27",
         archive_host_path="/var/lib/security-scans/abc123def456/image.tar",
+        tmp_host_path="/var/lib/security-scans/abc123def456/tmp",
     )
 
     assert remote["image"] == TRIVY_IMAGE
@@ -73,6 +79,18 @@ def test_trivy_image_scan_never_mounts_the_docker_socket() -> None:
         assert "--skip-java-db-update" in spec["command"]
         assert spec["volumes"][TRIVY_CACHE_VOLUME] == {"bind": "/cache", "mode": "rw"}
         assert "--download-db-only" not in spec["command"]
+    tmp = "/var/lib/security-scans/abc123def456/tmp"
+    for spec in (remote, local):
+        assert spec["volumes"][tmp] == {"bind": "/tmp", "mode": "rw"}
+        assert "/tmp" not in spec["tmpfs"]
+        assert spec["tmpfs"]["/root"].startswith("rw,nosuid,nodev")
+    assert filesystem["tmpfs"]["/tmp"] == "rw,nosuid,nodev,size=256m"
+    with pytest.raises(RuntimeError, match="temporary directory"):
+        trivy_image_spec(
+            "nginx:1.27",
+            archive_host_path=None,
+            tmp_host_path="/var/lib/security-scans/abc/../../etc",
+        )
 
 
 def test_trivy_database_update_uses_only_official_mirrors() -> None:
@@ -156,6 +174,46 @@ def test_force_root_is_explicit(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert "user" not in spec
     assert spec["cap_drop"] == ["ALL"]
+
+
+def test_image_temp_directory_is_private_and_capped(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from security_console.runner import (
+        _directory_bytes,
+        _enforce_directory_limit,
+    )
+
+    monkeypatch.setenv("SCAN_DIR", str(tmp_path))
+    monkeypatch.setenv("HOST_SCAN_DIR", "/var/lib/security-scans")
+    directory = tmp_path / "abc123def456" / "tmp"
+    directory.mkdir(parents=True, mode=0o700)
+    os.chmod(directory, 0o700)
+    (directory / "layer").write_bytes(b"x" * 32)
+
+    assert directory.stat().st_mode & 0o777 == 0o700
+    assert _directory_bytes(directory) == 32
+
+    killed: list[str] = []
+
+    class _Container:
+        def kill(self) -> None:
+            killed.append("kill")
+
+    stop = threading.Event()
+    exceeded = threading.Event()
+    _enforce_directory_limit(
+        _Container(),
+        directory,
+        16,
+        stop,
+        exceeded,
+        interval=0.01,
+    )
+
+    assert exceeded.is_set()
+    assert killed == ["kill"]
 
 
 def test_sonar_token_file_is_private_and_removed(

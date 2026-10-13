@@ -4,17 +4,26 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
+import threading
 from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
 from typing import Any, cast
 
 from security_console.images import valid_image_ref
-from security_console.repos import clone_pins, git_clone_args, git_env
+from security_console.repos import (
+    clone_pins,
+    git_clone_args,
+    git_env,
+    git_fetch_sha_commands,
+    git_rev_parse_args,
+)
 from security_console.runtime import (
     TRIVY_DB_WAIT_SECONDS,
+    TRIVY_IMAGE_TMP_BYTES,
     filesystem_spec,
     sonar_spec,
     trivy_image_spec,
@@ -31,8 +40,18 @@ _MAX_REPO_BYTES = 1024 * 1024 * 1024
 Phase = Callable[[str], None]
 
 
+class CloneError(RuntimeError):
+    """The repository was not checked out at the requested commit."""
+
+    def __init__(self, message: str, reason: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
 def execute_job(job: dict[str, Any], on_phase: Phase | None = None) -> dict[str, Any]:
     """Run one scan and return findings. Docker errors become a failed result."""
+
+    requested = str(job.get("requested_sha") or "")
 
     def phase(name: str) -> None:
         if on_phase is not None:
@@ -40,10 +59,15 @@ def execute_job(job: dict[str, Any], on_phase: Phase | None = None) -> dict[str,
 
     try:
         if job["target"] == "image":
-            return _image_scan(job, phase)
-        return _repo_scan(job, phase)
+            result = _image_scan(job, phase)
+        else:
+            result = _repo_scan(job, phase)
+    except CloneError as exc:
+        result = _failed(exc, reason=exc.reason)
     except Exception as exc:
-        return _failed(exc)
+        result = _failed(exc)
+    result["requested_sha"] = requested
+    return result
 
 
 def list_images() -> list[dict[str, Any]]:
@@ -71,7 +95,11 @@ def _repo_scan(job: dict[str, Any], phase: Phase) -> dict[str, Any]:
     host_path = _host_path(job["id"])
     try:
         phase("clone")
-        _clone(job["repo"], local_path)
+        commit_sha = _clone(
+            job["repo"],
+            local_path,
+            str(job.get("requested_sha") or ""),
+        )
         _reject_huge_tree(local_path)
         client = _client()
         findings: list[dict[str, Any]] = []
@@ -108,7 +136,10 @@ def _repo_scan(job: dict[str, Any], phase: Phase) -> dict[str, Any]:
         if "sonar" in job["tools"]:
             phase("SonarQube")
             sonar = _run_sonar(client, host_path, job["id"])
-        return _finish(job["tools"], findings, notes, sonar)
+        result = _finish(job["tools"], findings, notes, sonar)
+        result["commit_sha"] = commit_sha
+        result["failure_reason"] = ""
+        return result
     finally:
         if local_path.exists():
             shutil.rmtree(local_path, ignore_errors=True)
@@ -120,6 +151,10 @@ def _image_scan(job: dict[str, Any], phase: Phase) -> dict[str, Any]:
         raise RuntimeError("Image name is invalid.")
     phase("Trivy")
     local_path = _scan_path(job["id"])
+    local_path.mkdir(parents=True, exist_ok=True)
+    tmp_dir = local_path / "tmp"
+    tmp_dir.mkdir(mode=0o700, exist_ok=True)
+    os.chmod(tmp_dir, 0o700)
     archive: Path | None = None
     try:
         client = _client()
@@ -149,10 +184,23 @@ def _image_scan(job: dict[str, Any], phase: Phase) -> dict[str, Any]:
         if db_error:
             notes.append(db_error)
         phase("Trivy")
-        spec = trivy_image_spec(image_ref, archive_host_path=archive_host)
-        code, stdout, stderr = _run(client, spec, IMAGE_SCAN_TIMEOUT)
+        spec = trivy_image_spec(
+            image_ref,
+            archive_host_path=archive_host,
+            tmp_host_path=_host_file(job["id"], "tmp"),
+        )
+        code, stdout, stderr = _run(
+            client,
+            spec,
+            IMAGE_SCAN_TIMEOUT,
+            limit_path=tmp_dir,
+            limit_bytes=TRIVY_IMAGE_TMP_BYTES,
+        )
         _record(findings, notes, "Trivy", _parse_trivy, code, stdout, stderr)
-        return _finish(job["tools"], findings, notes, None)
+        result = _finish(job["tools"], findings, notes, None)
+        result["commit_sha"] = ""
+        result["failure_reason"] = ""
+        return result
     finally:
         if local_path.exists():
             shutil.rmtree(local_path, ignore_errors=True)
@@ -262,24 +310,51 @@ def _empty_sonar(key: str, error: str) -> dict[str, Any]:
     }
 
 
-def _clone(repo: str, dest: Path) -> None:
+def _clone(repo: str, dest: Path, requested_sha: str) -> str:
     pins = clone_pins(repo)
     if not pins:
-        raise RuntimeError("Repository URL is not allowed.")
+        raise CloneError("Repository URL is not allowed.", "clone_failed")
     if dest.exists():
         shutil.rmtree(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
-    clone = subprocess.run(
-        git_clone_args(repo, str(dest), pins),
+    if requested_sha:
+        commands = git_fetch_sha_commands(repo, str(dest), requested_sha, pins)
+    else:
+        commands = [git_clone_args(repo, str(dest), pins)]
+    for command in commands:
+        timeout = 180 if "fetch" in command or "clone" in command else 30
+        try:
+            completed = _run_git(command, timeout)
+        except subprocess.TimeoutExpired:
+            raise CloneError("git timed out.", "clone_failed") from None
+        if completed.returncode != 0:
+            detail = (completed.stderr or completed.stdout or "git failed").strip()
+            raise CloneError(detail[-1500:] or "git clone failed", "clone_failed")
+    return _require_head(dest, requested_sha)
+
+
+def _run_git(command: list[str], timeout: int) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        command,
         capture_output=True,
         text=True,
-        timeout=180,
+        timeout=timeout,
         env=git_env(os.environ.get("PATH", "")),
         check=False,
     )
-    if clone.returncode != 0:
-        detail = (clone.stderr or clone.stdout or "git clone failed").strip()
-        raise RuntimeError(detail[-1500:] or "git clone failed")
+
+
+def _require_head(dest: Path, requested_sha: str) -> str:
+    completed = _run_git(git_rev_parse_args(str(dest)), 30)
+    head = completed.stdout.strip().lower() if completed.returncode == 0 else ""
+    if not re.fullmatch(r"[0-9a-f]{40}", head):
+        raise CloneError("The cloned revision could not be read.", "clone_failed")
+    if requested_sha and head != requested_sha:
+        raise CloneError(
+            f"SHA mismatch: requested={requested_sha} got={head}",
+            "sha_mismatch",
+        )
+    return head
 
 
 def _refresh_trivy_databases(client: Any) -> str:
@@ -291,7 +366,46 @@ def _refresh_trivy_databases(client: Any) -> str:
     return refresh_trivy_databases(run)
 
 
-def _run(client: Any, spec: dict[str, Any], timeout: int) -> tuple[int, str, str]:
+def _directory_bytes(path: Path) -> int:
+    """Byte size of one directory. Links are not followed."""
+
+    total = 0
+    for root, _dirs, files in os.walk(path, followlinks=False):
+        for name in files:
+            try:
+                total += os.lstat(os.path.join(root, name)).st_size
+            except OSError:
+                continue
+    return total
+
+
+def _enforce_directory_limit(
+    container: Any,
+    path: Path,
+    limit: int,
+    stop: threading.Event,
+    exceeded: threading.Event,
+    interval: float = 2,
+) -> None:
+    """Stop the container when its temporary directory grows past the cap."""
+
+    while not stop.wait(interval):
+        if _directory_bytes(path) <= limit:
+            continue
+        exceeded.set()
+        with suppress(Exception):
+            container.kill()
+        return
+
+
+def _run(
+    client: Any,
+    spec: dict[str, Any],
+    timeout: int,
+    *,
+    limit_path: Path | None = None,
+    limit_bytes: int = 0,
+) -> tuple[int, str, str]:
     unsafe = (
         uses_docker_socket(spec)
         or spec.get("privileged")
@@ -303,8 +417,22 @@ def _run(client: Any, spec: dict[str, Any], timeout: int) -> tuple[int, str, str
     kwargs = dict(spec)
     image = kwargs.pop("image")
     container = client.containers.run(image, **kwargs)
+    stop = threading.Event()
+    exceeded = threading.Event()
+    watcher = None
+    if limit_path is not None and limit_bytes > 0:
+        watcher = threading.Thread(
+            target=_enforce_directory_limit,
+            args=(container, limit_path, limit_bytes, stop, exceeded),
+            daemon=True,
+        )
+        watcher.start()
     try:
         result = container.wait(timeout=timeout)
+        if exceeded.is_set():
+            raise RuntimeError(
+                "Image scan temporary files exceeded the size limit."
+            )
         stdout = container.logs(stdout=True, stderr=False)
         stderr = container.logs(stdout=False, stderr=True)
         code = result.get("StatusCode", 1) if isinstance(result, dict) else 1
@@ -314,6 +442,9 @@ def _run(client: Any, spec: dict[str, Any], timeout: int) -> tuple[int, str, str
             stderr.decode("utf-8", "replace"),
         )
     finally:
+        stop.set()
+        if watcher is not None:
+            watcher.join(timeout=3)
         with suppress(Exception):
             container.remove(force=True)
 
@@ -372,7 +503,7 @@ def _public_error(notes: list[str]) -> str:
     return "\n".join(kept)[:2000]
 
 
-def _failed(exc: Exception) -> dict[str, Any]:
+def _failed(exc: Exception, *, reason: str = "") -> dict[str, Any]:
     text = str(exc).strip() or type(exc).__name__
     return {
         "findings": [],
@@ -381,6 +512,9 @@ def _failed(exc: Exception) -> dict[str, Any]:
         "status": "failed",
         "error": text[-2000:],
         "phase": "",
+        "requested_sha": "",
+        "commit_sha": "",
+        "failure_reason": reason,
     }
 
 

@@ -10,7 +10,7 @@ import re
 from typing import Any
 
 from security_console.images import valid_image_ref
-from security_console.repos import valid_repo
+from security_console.repos import normalize_commit_sha, valid_repo
 
 _ID = re.compile(r"^[a-f0-9]{12}$")
 TOOLS = frozenset({"semgrep", "checkov", "sonar", "trivy"})
@@ -43,20 +43,30 @@ def parse_job(body: Any) -> dict[str, Any]:
             raise JobError("Image name is invalid. Use a name like nginx:1.27.")
         if tools != ["trivy"]:
             raise JobError("Image scans run with Trivy only.")
+        image_sha = normalize_commit_sha(body.get("requested_sha"))
+        if image_sha is None:
+            raise JobError("Commit SHA is invalid.")
+        if image_sha:
+            raise JobError("Image scans do not take a commit.")
         return {
             "id": scan_id,
             "target": "image",
             "repo": "",
             "image": image.strip(),
             "tools": ["trivy"],
+            "requested_sha": "",
         }
     repo = body.get("repo")
     if not isinstance(repo, str) or not valid_repo(repo.strip()):
         raise JobError("Repository URL must start with http or https.")
+    requested_sha = normalize_commit_sha(body.get("requested_sha"))
+    if requested_sha is None:
+        raise JobError("Commit SHA is invalid.")
     return {
         "id": scan_id,
         "target": "repo",
         "repo": repo.strip(),
         "image": "",
         "tools": tools,
+        "requested_sha": requested_sha,
     }

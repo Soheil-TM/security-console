@@ -10,6 +10,7 @@ from security_console.repos import (
     clone_pins,
     git_clone_args,
     git_env,
+    git_fetch_sha_commands,
     ip_is_blocked,
     repo_targets_blocked_address,
     valid_repo,
@@ -77,6 +78,8 @@ def test_git_clone_does_not_inherit_console_secrets(
     assert env["GIT_CONFIG_NOSYSTEM"] == "1"
     assert "credential.helper=" in command
     assert "http.followRedirects=false" in command
+    assert "--branch" not in command
+    assert command[command.index("clone") + 1] == "--depth"
 
 
 def test_git_clone_pins_the_address_it_accepted(
@@ -103,3 +106,17 @@ def test_git_clone_pins_the_address_it_accepted(
     assert "http.curloptResolve=example.com:443:203.0.113.10" in command
     assert "http.curloptResolve=example.com:443:[2001:db8::10]" in command
     assert "http.followRedirects=false" in command
+    sha = "a" * 40
+    commands = git_fetch_sha_commands(
+        "https://example.com/app.git",
+        "/scans/abc",
+        sha,
+        pins,
+    )
+    fetch = next(item for item in commands if "fetch" in item)
+
+    assert all("http.followRedirects=false" in item for item in commands)
+    assert all("--branch" not in item for item in commands)
+    assert "clone" not in fetch
+    assert fetch[-1] == sha
+    assert "http.curloptResolve=example.com:443:203.0.113.10" in fetch

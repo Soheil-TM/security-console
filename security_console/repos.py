@@ -19,6 +19,7 @@ _BLOCKED_HOSTS = {
 _SHARED = ipaddress.ip_network("100.64.0.0/10")
 _METADATA_V6 = {ipaddress.ip_address("fd00:ec2::254")}
 _DOTTED = re.compile(r"^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$")
+_COMMIT_SHA = re.compile(r"^[0-9a-f]{40}$")
 
 
 def valid_repo(url: str) -> bool:
@@ -144,16 +145,26 @@ def repo_targets_blocked_address(url: str) -> bool:
     return clone_pins(url) is None
 
 
-def git_clone_args(
-    repo: str,
-    dest: str,
-    resolve: list[str] | None = None,
-) -> list[str]:
-    """Build a git clone command that does not read host credentials or hooks.
+def normalize_commit_sha(value: object) -> str | None:
+    """Return a full lowercase SHA, or an empty string when the field is absent.
 
-    HTTP redirects are disabled. ``resolve`` pins the addresses from
-    ``clone_pins`` for libcurl-based Git.
+    ``None`` means the value was sent and is not 40 hexadecimal characters.
     """
+
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        return None
+    text = value.strip().lower()
+    if not text:
+        return ""
+    if _COMMIT_SHA.fullmatch(text) is None:
+        return None
+    return text
+
+
+def _git_config(resolve: list[str] | None = None) -> list[str]:
+    """Git options that block hooks, credentials, redirects, and rebinding."""
 
     command = [
         "git",
@@ -168,8 +179,47 @@ def git_clone_args(
     ]
     for item in resolve or []:
         command.extend(["-c", f"http.curloptResolve={item}"])
+    return command
+
+
+def git_clone_args(
+    repo: str,
+    dest: str,
+    resolve: list[str] | None = None,
+) -> list[str]:
+    """Build a git clone command that does not read host credentials or hooks.
+
+    HTTP redirects are disabled. ``resolve`` pins the addresses from
+    ``clone_pins`` for libcurl-based Git. The remote HEAD is cloned; no
+    branch name is added.
+    """
+
+    command = _git_config(resolve)
     command.extend(["clone", "--depth", "1", "--", repo, dest])
     return command
+
+
+def git_fetch_sha_commands(
+    repo: str,
+    dest: str,
+    sha: str,
+    resolve: list[str] | None = None,
+) -> list[list[str]]:
+    """Fetch one commit. A failed fetch must not fall back to the default branch."""
+
+    prefix = _git_config(resolve)
+    return [
+        [*prefix, "init", dest],
+        [*prefix, "-C", dest, "remote", "add", "origin", repo],
+        [*prefix, "-C", dest, "fetch", "--depth", "1", "origin", sha],
+        [*prefix, "-C", dest, "checkout", "--detach", "FETCH_HEAD"],
+    ]
+
+
+def git_rev_parse_args(dest: str) -> list[str]:
+    """Read the checked-out commit without using repository hooks."""
+
+    return [*_git_config(), "-C", dest, "rev-parse", "HEAD"]
 
 
 def git_env(path: str) -> dict[str, str]:

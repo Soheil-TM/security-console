@@ -62,6 +62,7 @@ def test_remote_scan_sends_the_job_and_not_a_docker_spec(
         "repo": "",
         "image": "nginx:1.27",
         "tools": ["trivy"],
+        "requested_sha": "",
     }
     assert result["status"] == "done"
     assert phases == ["Trivy"]

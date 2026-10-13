@@ -706,6 +706,74 @@
     .sonar-metrics b { display: block; font-size: 22px; line-height: 1.2; }
     .sonar-metrics span, .sonar-metrics small { display: block; color: var(--muted); font-size: 12px; }
     .sonar-card .note { margin: 8px 0 0; }
+    .sonar-lists { margin-top: 12px; }
+    .sonar-lists h3 { margin: 10px 0 0; font-size: 13px; }
+    .sonar-lists h3 em { font-style: normal; color: var(--muted); font-weight: 600; }
+    .sonar-lists ul { list-style: none; margin: 0; padding: 0; }
+    .sonar-lists li {
+      padding: 8px 0; border-top: 1px solid var(--line);
+      direction: ltr; text-align: left;
+    }
+    .sonar-lists p { margin: 4px 0 0; font-size: 13px; }
+    .sonar-lists code, .sonar-lists .rule { color: var(--muted); font-size: 12px; }
+    .sonar-lists code { margin: 0 8px; }
+    .dash-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 4px; }
+    .dash-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0 0 14px; }
+    .dash-stat, .dash-admin, .dash-panel {
+      background: white; border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow);
+    }
+    .dash-stat {
+      display: flex; flex-direction: column; gap: 8px;
+      padding: 16px 16px 14px; border-top: 3px solid var(--teal); min-width: 0;
+    }
+    .dash-stat.images { border-top-color: var(--info); }
+    .dash-stat.urgent { border-top-color: var(--high); }
+    .dash-stat.gate { border-top-color: var(--low); }
+    .dash-stat.gate.has-fail { border-top-color: var(--critical); }
+    .dash-stat strong { display: block; font-size: 28px; line-height: 1; letter-spacing: -0.03em; }
+    .dash-stat strong.dash-pair { display: flex; font-size: inherit; letter-spacing: 0; }
+    .dash-stat em { font-style: normal; color: var(--muted); font-size: 12px; letter-spacing: .01em; }
+    .dash-pair { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 14px; }
+    .dash-pair b { font-size: 28px; line-height: 1; font-weight: 700; }
+    .dash-pair span { color: var(--muted); font-size: 13px; font-weight: 600; }
+    .dash-pair .ok { color: var(--low); }
+    .dash-pair .bad { color: var(--critical); }
+    .dash-admin { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; padding: 12px 14px; margin-bottom: 14px; }
+    .dash-chip {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 12px; border-radius: 999px; background: #f4f7fb; color: var(--ink); font-size: 13px;
+    }
+    .dash-chip b { font-size: 15px; line-height: 1; }
+    .dash-chip.ok { background: #e8f6ef; color: #146c43; }
+    .dash-chip.bad { background: #fde8e8; color: #9f1239; }
+    .dash-panel { padding: 14px 16px 8px; margin-bottom: 14px; }
+    .dash-panel h2 { margin: 0 0 12px; font-size: 15px; }
+    .dash-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .dash-table th { text-align: left; color: var(--muted); font-size: 11px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; padding: 0 12px 8px; }
+    .dash-table td { text-align: left; padding: 12px; border-top: 1px solid var(--line); vertical-align: middle; }
+    .dash-table tr[data-action] { cursor: pointer; }
+    .dash-table tr[data-action]:hover td { background: #f4fbfa; }
+    .dash-table tr.bad td:first-child { box-shadow: inset 3px 0 0 var(--critical); }
+    .dash-table tr.hot td:first-child { box-shadow: inset 3px 0 0 var(--high); }
+    .dash-table .n { display: inline-block; min-width: 1.2em; margin-right: 4px; font-weight: 700; }
+    .dash-table .n.critical { color: var(--critical); }
+    .dash-table .n.high { color: var(--high); }
+    .dash-status { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 999px; font-size: 12px; font-weight: 650; background: #eef2f6; }
+    .dash-status.done { background: #e8f6ef; color: #146c43; }
+    .dash-status.failed { background: #fde8e8; color: #9f1239; }
+    .dash-status.running { background: #e0f2fe; color: #075985; }
+    .dash-table .pass { color: #146c43; font-weight: 700; }
+    .dash-table .fail { color: var(--critical); font-weight: 700; }
+    html.dark .dash-stat, html.dark .dash-admin, html.dark .dash-panel { background: #1b2c3d; color: var(--ink); border-color: #31475f; }
+    html.dark .dash-chip { background: #243648; color: #d5e4f0; }
+    html.dark .dash-chip.ok { background: #12382c; color: #86efac; }
+    html.dark .dash-chip.bad { background: #3f1d28; color: #fda4af; }
+    html.dark .dash-table tr[data-action]:hover td { background: #22364a; }
+    html.dark .dash-status { background: #243648; color: #d5e4f0; }
+    html.dark .dash-status.done { background: #12382c; color: #86efac; }
+    html.dark .dash-status.failed { background: #3f1d28; color: #fda4af; }
+    html.dark .dash-status.running { background: #153246; color: #7dd3fc; }
+    html.dark .dash-table .pass { color: #86efac; }
     html.dark .sonar-card {
       background: var(--card);
       color: var(--ink);
@@ -1061,7 +1129,7 @@
       .k-layout { grid-template-columns: 1fr; }
       .k-tree { position: static; }
       .summary { grid-template-columns: 1fr; }
-      .stats, .sonar-metrics { width: 100%; display: grid; grid-template-columns: repeat(2, 1fr); }
+      .stats, .sonar-metrics, .dash-metrics { width: 100%; display: grid; grid-template-columns: repeat(2, 1fr); }
       .main { min-height: 100vh; }
     }
   </style>
@@ -1070,7 +1138,7 @@
   <div class="login-screen" id="login-screen">
     <form class="login-card" id="login-form">
       <h1>Sign in</h1>
-      <p>Sign in to start a scan and see Falco alerts.</p>
+      <p>Sign in to start a scan and read the reports.</p>
       <div id="login-error" class="login-error" hidden></div>
       <label>
         <span class="field-label">Username</span>
@@ -1164,16 +1232,20 @@
     <div class="workspace">
     <aside>
       <nav>
-        <button type="button" data-action="view" data-view="scans" class="active"><span class="nav-label"><span id="scans-chev">▾</span> Scans</span> <span class="count" id="scan-count">0</span></button>
+        <button type="button" data-action="view" data-view="dashboard" class="active">Dashboard</button>
+        <button type="button" data-action="view" data-view="scans"><span class="nav-label"><span id="scans-chev">▾</span> Scans</span> <span class="count" id="scan-count">0</span></button>
         <div class="nav-sub" id="history-wrap"></div>
-        <button type="button" data-action="view" data-view="falco">Live alerts <span class="count" id="falco-count">0</span></button>
         <button type="button" data-action="view" data-view="knowledge">Knowledge</button>
-        <button type="button" data-action="view" data-view="users" id="nav-users" hidden>Users</button>
-        <button type="button" data-action="view" data-view="access" id="nav-access" hidden>Tool access</button>
-        <button type="button" data-action="view" data-view="account">Settings</button>
+        <button type="button" data-action="view" data-view="settings"><span class="nav-label"><span id="settings-chev">▸</span> Settings</span></button>
+        <div class="nav-sub" id="settings-wrap" hidden>
+          <button type="button" class="mode" data-action="view" data-view="account">Account</button>
+          <button type="button" class="mode" data-action="view" data-view="users" id="nav-users" hidden>Users</button>
+          <button type="button" class="mode" data-action="view" data-view="access" id="nav-access" hidden>Tool access</button>
+          <button type="button" class="mode" data-action="view" data-view="sonar-setup" id="nav-sonar-setup" hidden>Sonar setup</button>
+        </div>
         <a id="sonar-link" href="{{ sonar_url }}" target="_blank" rel="noopener" hidden>SonarQube <span aria-hidden="true">↗</span></a>
       </nav>
-      <div class="aside-foot">Semgrep · Checkov · Trivy · Falco · SonarQube</div>
+      <div class="aside-foot">Semgrep · Checkov · Trivy · SonarQube</div>
     </aside>
     <div class="main">
       <div class="launch-wrap">
@@ -1214,7 +1286,23 @@
         </form>
       </div>
       <div class="content">
-        <section id="view-scans">
+        <section id="view-dashboard">
+          <div class="page-head dash-head">
+            <div>
+              <h1>Dashboard</h1>
+              <p class="meta">Each project uses its latest scan. Older scans are not added in.</p>
+            </div>
+            <div class="seg" id="dash-scope">
+              <button type="button" data-action="dash-scope" data-scope="mine">Mine</button>
+              <button type="button" data-action="dash-scope" data-scope="all">Everything I can see</button>
+            </div>
+          </div>
+          <div id="dash-admin" class="dash-admin" hidden></div>
+          <div id="dash-metrics" class="dash-metrics"></div>
+          <div id="dash-queue"></div>
+          <div id="dash-recent"></div>
+        </section>
+        <section id="view-scans" hidden>
           <div id="reports-nav" hidden>
             <div class="report-tree" id="report-tree"></div>
           </div>
@@ -1241,19 +1329,6 @@
             <div id="sonar-card"></div>
             <div class="card" id="findings"></div>
           </div>
-        </section>
-        <section id="view-falco" hidden>
-          <div class="page-head">
-            <div>
-              <h1>Live alerts</h1>
-              <p class="meta">Falco watches the host on all three workers and sends new alerts here.</p>
-            </div>
-          </div>
-          <div id="falco-summary"></div>
-          <div class="filters">
-            <input id="fq" type="search" placeholder="Search rule or alert text" dir="ltr">
-          </div>
-          <div id="falco-list"></div>
         </section>
         <section id="view-knowledge" hidden>
           <div class="page-head">
@@ -1328,6 +1403,23 @@
           <div id="access-msg" class="meta"></div>
           <div id="access-list"></div>
         </section>
+        <section id="view-sonar-setup" hidden>
+          <div class="page-head">
+            <div>
+              <h1>Sonar setup</h1>
+              <p class="meta">The scanner token and project are created when SonarQube starts. This page shows that state.</p>
+            </div>
+          </div>
+          <div class="card" style="padding:14px">
+            <p class="meta" id="sonar-setup-text">SonarQube setup has not finished.</p>
+            <p class="meta" id="sonar-setup-expiry" hidden></p>
+            <div style="display:flex;gap:8px;margin-top:12px">
+              <button type="button" id="sonar-setup-retry" hidden>Try again</button>
+              <button type="button" id="sonar-setup-rotate" hidden>Rotate token</button>
+            </div>
+            <p class="meta" id="sonar-setup-msg"></p>
+          </div>
+        </section>
         <section id="view-account" hidden>
           <div class="page-head">
             <div>
@@ -1393,20 +1485,16 @@
     const sonarLink = document.querySelector("#sonar-link");
     if (sonarLink) sonarLink.href = publicSonarUrl(sonarLink.getAttribute("href"));
     const state = {
-      view: "scans",
+      view: "dashboard",
+      dashScope: "",
       scans: [],
       scan: null,
-      alerts: [],
       sev: "",
       tool: "all",
       q: "",
-      fsev: "",
-      fq: "",
       open: new Set(),
-      fopen: new Set(),
       groups: [],
       sort: {key: "severity", dir: "asc"},
-      falcoGroups: [],
       seenId: null,
       pendingMsg: null,
       target: "repo",
@@ -1416,7 +1504,6 @@
     let scanStamp = null;
     let histStamp = null;
     let reportStamp = null;
-    let falcoStamp = null;
     let currentUser = null;
     const IDLE_CHOICES = [5, 15, 30, 60];
     const IDLE_WARN_MS = 60 * 1000;
@@ -1433,6 +1520,8 @@
     const kindOpen = new Set();
     const reportsOpen = new Set();
     let scansMenuOpen = true;
+    let settingsMenuOpen = false;
+    const SETTINGS_VIEWS = ["account", "users", "access", "sonar-setup"];
     function csrfToken() {
       const match = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/);
       return match ? decodeURIComponent(match[1]) : "";
@@ -1472,6 +1561,7 @@
       stopIdleWatch();
       closeProfileMenu();
       document.body.classList.remove("authed", "must-change");
+      state.dashScope = "";
     }
 
     function showIdleEnded(message) {
@@ -1497,11 +1587,13 @@
         return;
       }
       document.body.classList.remove("must-change");
+      if (!state.dashScope) state.dashScope = user.role === "admin" ? "all" : "mine";
       document.querySelector("#nav-users").hidden = user.role !== "admin";
       document.querySelector("#nav-access").hidden = user.role !== "admin";
+      document.querySelector("#nav-sonar-setup").hidden = user.role !== "admin";
       const sonarLink = document.querySelector("#sonar-link");
       if (sonarLink) sonarLink.hidden = !(user.access && user.access.sonar_ui);
-      if (user.role !== "admin" && (state.view === "users" || state.view === "access")) setView("scans");
+      if (user.role !== "admin" && (state.view === "users" || state.view === "access" || state.view === "sonar-setup")) setView("scans");
       syncLaunch();
       syncThemeButton();
     }
@@ -1687,14 +1779,25 @@
     let accountUsers = [];
     let editingUser = null;
 
+    function paintSettings() {
+      document.querySelector("#settings-chev").textContent = settingsMenuOpen ? "▾" : "▸";
+      document.querySelector("#settings-wrap").hidden = !settingsMenuOpen;
+    }
+
     function setView(view) {
       state.view = view;
-      ["scans", "falco", "knowledge", "users", "access", "account"].forEach((name) => {
+      ["dashboard", "scans", "knowledge", "users", "access", "sonar-setup", "account"].forEach((name) => {
         document.querySelector("#view-" + name).hidden = view !== name;
       });
       syncLaunch();
-      document.querySelectorAll("nav [data-view]").forEach((el) => el.classList.toggle("active", el.dataset.view === view));
+      document.querySelectorAll("nav [data-view]").forEach((el) => {
+        const on = el.dataset.view === view || (el.dataset.view === "settings" && SETTINGS_VIEWS.includes(view));
+        el.classList.toggle("active", on);
+      });
+      paintSettings();
       if (view === "users" || view === "access") loadAccounts();
+      if (view === "sonar-setup") loadSonarSetup();
+      if (view === "dashboard") renderDashboard();
     }
 
     let localImages = [];
@@ -1787,12 +1890,12 @@
           {
             id: "how",
             title: "Start a scan",
-            html: "<p>Open Image or Repository in the left menu. Each one has Scan and Reports.</p><ol><li>Scan under Image runs Trivy only. Pick an image on work-01, or type a name to pull it.</li><li>Scan under Repository runs Semgrep, Checkov, and SonarQube. Enter an http or https Git URL.</li><li>Reports opens on the right. Projects are a dropdown there. Open one to see its scans.</li><li>Overview, the last item under a project, charts every scan of that project.</li></ol><p class=\"k-note\">Falco is not one of these checkboxes. It watches the hosts, not a repository.</p><button type=\"button\" class=\"ghost\" data-action=\"view\" data-view=\"scans\">Go to scans</button>"
+            html: "<p>Open Image or Repository in the left menu. Each one has Scan and Reports.</p><ol><li>Scan under Image runs Trivy only. Pick an image on work-01, or type a name to pull it.</li><li>Scan under Repository runs Semgrep, Checkov, and SonarQube. Enter an http or https Git URL.</li><li>Reports opens on the right. Projects are a dropdown there. Open one to see its scans.</li><li>Overview, the last item under a project, charts every scan of that project.</li></ol><button type=\"button\" class=\"ghost\" data-action=\"view\" data-view=\"scans\">Go to scans</button>"
           },
           {
             id: "read",
             title: "Read a result",
-            html: "<p>The chart counts Semgrep, Checkov, and Trivy findings: Critical, High, Medium, Low, and Info. Click a color to keep only that severity. Click it again to clear the filter.</p><ul><li>The bar under the chart splits the result by tool. The number is that tool's count.</li><li>Search matches the rule name, file path, and message.</li><li>Open a row to see the file and line.</li><li>SonarQube is not line-by-line in this table. Its filter shows the Quality Gate card.</li></ul>"
+            html: "<p>A repository report counts Semgrep and Checkov. An image report counts Trivy. Severities are Critical, High, Medium, Low, and Info. Click a color to keep only that severity. Click it again to clear the filter.</p><ul><li>The bar under the chart splits the result by tool. The number is that tool's count.</li><li>Search matches the rule name, file path, and message.</li><li>Open a row to see the file and line.</li><li>SonarQube is not line-by-line in this table. Its filter shows the Quality Gate card. Image reports do not include it.</li></ul>"
           }
         ]
       },
@@ -1851,28 +1954,12 @@
           {
             id: "sonar-what",
             title: "What SonarQube does",
-            html: "<p>SonarQube scores code quality and security on its own server. This console shows the summary.</p><ul><li>Quality Gate: passed or failed.</li><li>Bug: a defect that breaks behavior.</li><li>Vulnerability: a security issue.</li><li>Code Smell: code that is hard to maintain.</li><li>Hotspot: a spot a person should review.</li></ul><p>Those four numbers are not added into the Semgrep and Checkov chart.</p>"
+            html: "<p>SonarQube scores code quality and security on its own server. This console saves the summary and the open issues with that scan.</p><ul><li>Quality Gate: passed or failed.</li><li>Bug: a defect that breaks behavior.</li><li>Vulnerability: a security issue.</li><li>Code Smell: code that is hard to maintain.</li><li>Hotspot: a spot a person should review.</li></ul><p>Those four numbers are not added into the Semgrep and Checkov chart. The issue rows stay on the SonarQube card.</p>"
           },
           {
             id: "sonar-use",
             title: "Use SonarQube",
-            html: "<ol><li>SonarQube is on by default, with Semgrep and Checkov. Uncheck it if this repository should not replace the current analysis.</li><li>Start the scan. Analysis takes longer than the other tools.</li><li>Read the SonarQube card, or click SonarQube in the result bar.</li><li>Open the code in SonarQube for each issue.</li></ol><p class=\"k-note\">Results are stored in the configured SonarQube project. A new scan replaces the previous analysis of that project.</p>"
-          }
-        ]
-      },
-      {
-        id: "falco",
-        title: "Falco",
-        lessons: [
-          {
-            id: "falco-what",
-            title: "What Falco does",
-            html: "<p>Falco does not scan a Git repository. On each worker it watches live behavior: a program starting, or a sensitive file opening.</p><p>Alerts collect under Live alerts. Alerts for one rule share a card, and the number is the event count.</p>"
-          },
-          {
-            id: "falco-use",
-            title: "Use Falco",
-            html: "<ol><li>Open Live alerts in the left menu. Falco is not a checkbox on the scan bar.</li><li>Click a severity to keep, for example, only Critical.</li><li>Search by rule name or alert text.</li><li>Open a card to see the latest events and their times.</li></ol><p>Falco runs on its own. New alerts still arrive when no scan is running.</p><button type=\"button\" class=\"ghost\" data-action=\"view\" data-view=\"falco\">Go to live alerts</button>"
+            html: "<ol><li>SonarQube is on by default, with Semgrep and Checkov. Uncheck it if this repository should not replace the current analysis.</li><li>Start the scan. Analysis takes longer than the other tools.</li><li>Read the SonarQube card, or click SonarQube in the result bar.</li><li>Each issue on that card shows the file, line, rule, and message saved for this scan.</li></ol><p class=\"k-note\">Results are stored in the configured SonarQube project. A new scan replaces the previous analysis of that project. This report keeps the list from the scan that produced it.</p>"
           }
         ]
       }
@@ -2061,7 +2148,8 @@
     }
 
     function scanTally(item) {
-      if (item.findings && item.findings.length) return counts(item.findings, (row) => row.severity);
+      const rows = reportFindings(item);
+      if (rows.length || (item.findings && item.findings.length)) return counts(rows, (row) => row.severity);
       const saved = item.severity || {};
       return {
         critical: saved.critical || 0,
@@ -2111,6 +2199,208 @@
       return groups;
     }
 
+    const DASH_STALE_DAYS = 14;
+    let dashStamp = null;
+
+    function dashCode(item) {
+      const tally = {critical: 0, high: 0};
+      (item.findings || []).forEach((row) => {
+        if (!["semgrep", "checkov", "trivy"].includes(row.tool)) return;
+        const name = String(row.severity || "").toUpperCase();
+        if (name === "CRITICAL" || name === "ERROR") tally.critical += 1;
+        else if (name === "HIGH") tally.high += 1;
+      });
+      return tally;
+    }
+
+    function dashSonar(item) {
+      const sonar = item && item.sonar;
+      if (!sonar) return null;
+      if (sonar.error && !sonar.quality_gate) return {unavailable: true, vulnerabilities: 0, hotspots: 0, gate: ""};
+      return {
+        unavailable: false,
+        vulnerabilities: Number(sonar.vulnerabilities) || 0,
+        hotspots: Number(sonar.security_hotspots) || 0,
+        gate: sonar.quality_gate || ""
+      };
+    }
+
+    function dashTrust(item) {
+      if (!item || item.status === "running") return "running";
+      if (item.status === "failed") return "failed";
+      if (item.failure_reason === "clone_failed" || item.failure_reason === "sha_mismatch") return "failed";
+      const sonar = dashSonar(item);
+      const gate = sonar && !sonar.unavailable && sonar.gate;
+      if (scanErrorText(item) && !(item.findings || []).length && !gate) return "failed";
+      return "ok";
+    }
+
+    function dashAgeDays(item) {
+      const raw = String(item.created_at || "").replace(" UTC", "Z").replace(" ", "T");
+      const then = Date.parse(raw);
+      if (!Number.isFinite(then)) return null;
+      return (Date.now() - then) / 86400000;
+    }
+
+    function dashFailText(item) {
+      if (item.failure_reason === "sha_mismatch") return "SHA mismatch. No trustworthy result.";
+      if (item.failure_reason === "clone_failed") return "Clone failed. No trustworthy result.";
+      return "No trustworthy result.";
+    }
+
+    function dashSigned(value) {
+      const number = Number(value) || 0;
+      if (!number) return "";
+      return (number > 0 ? "+" : "−") + Math.abs(number);
+    }
+
+    function dashProjects() {
+      const mine = state.dashScope !== "all";
+      const who = currentUser && currentUser.username;
+      return collectGroups().map((group) => {
+        const items = group.items.slice().sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
+        const scoped = mine ? items.filter((item) => item.owner === who) : items;
+        if (!scoped.length) return null;
+        const latest = scoped[0];
+        const previous = scoped.slice(1).find((item) => dashTrust(item) === "ok") || null;
+        const trust = dashTrust(latest);
+        const code = dashCode(latest);
+        const sonar = dashSonar(latest);
+        let delta = null;
+        if (trust === "ok" && previous) {
+          const before = dashCode(previous);
+          const beforeSonar = dashSonar(previous);
+          delta = {critical: code.critical - before.critical, high: code.high - before.high};
+          if (sonar && beforeSonar && !sonar.unavailable && !beforeSonar.unavailable) {
+            delta.vulnerabilities = sonar.vulnerabilities - beforeSonar.vulnerabilities;
+            delta.hotspots = sonar.hotspots - beforeSonar.hotspots;
+          }
+        }
+        const good = scoped.find((item) => dashTrust(item) === "ok");
+        const age = good ? dashAgeDays(good) : null;
+        const stale = trust !== "running" && (!good || (age != null && age > DASH_STALE_DAYS));
+        return {key: group.key, name: group.name, image: group.image, latest, previous, trust, code, sonar, delta, stale, first: !previous && trust === "ok"};
+      }).filter(Boolean);
+    }
+
+    function dashRank(row) {
+      if (row.trust === "failed") return 0;
+      const addedCritical = row.delta ? Math.max(0, row.delta.critical) : row.code.critical;
+      if (row.trust === "ok" && addedCritical > 0) return 1;
+      if (row.sonar && row.sonar.gate === "ERROR") return 2;
+      const addedHigh = row.delta ? Math.max(0, row.delta.high) : row.code.high;
+      if (row.trust === "ok" && addedHigh > 0) return 3;
+      if (row.sonar && !row.sonar.unavailable && row.sonar.hotspots > 0) return 4;
+      if (row.stale) return 5;
+      if (row.trust === "running") return 6;
+      return 7;
+    }
+
+    function dashChange(row) {
+      if (row.trust === "running") return "Scan in progress";
+      if (row.trust !== "ok") return "";
+      const parts = [];
+      if (row.stale) parts.push("Last success is older than " + DASH_STALE_DAYS + " days");
+      if (row.first) parts.push("First scan");
+      else if (row.delta) {
+        const critical = dashSigned(row.delta.critical);
+        const high = dashSigned(row.delta.high);
+        if (critical) parts.push(critical + " critical");
+        if (high) parts.push(high + " high");
+        if (row.delta.vulnerabilities) parts.push(dashSigned(row.delta.vulnerabilities) + " vulnerabilities");
+        if (row.delta.hotspots) parts.push(dashSigned(row.delta.hotspots) + " hotspots");
+        if (!parts.length) parts.push("No change");
+      }
+      return parts.join(" · ");
+    }
+
+    function dashGate(row) {
+      if (!row.sonar) return "—";
+      if (row.sonar.unavailable) return "Unavailable";
+      if (row.sonar.gate === "OK") return "Pass";
+      if (row.sonar.gate === "ERROR") return "Fail";
+      if (row.sonar.gate === "WARN") return "Warning";
+      return "—";
+    }
+
+    function renderDashboard() {
+      const metrics = document.querySelector("#dash-metrics");
+      const queue = document.querySelector("#dash-queue");
+      const recent = document.querySelector("#dash-recent");
+      const admin = document.querySelector("#dash-admin");
+      if (!metrics || state.view !== "dashboard") return;
+      const mine = state.dashScope !== "all";
+      document.querySelectorAll("#dash-scope button").forEach((button) => {
+        button.classList.toggle("on", button.dataset.scope === (mine ? "mine" : "all"));
+      });
+      const rows = dashProjects().sort((a, b) => dashRank(a) - dashRank(b) || String(b.latest.created_at || "").localeCompare(String(a.latest.created_at || "")));
+      const setup = state.sonarSetup || {};
+      const stamp = [
+        state.dashScope,
+        currentUser && currentUser.role,
+        setup.status,
+        setup.detail,
+        rows.map((row) => [row.key, row.trust, row.code.critical, row.code.high, dashGate(row), dashChange(row)].join(":")).join("|")
+      ].join("~");
+      if (stamp === dashStamp) return;
+      dashStamp = stamp;
+      if (currentUser && currentUser.role === "admin") {
+        const running = state.scans.filter((item) => item.status === "running").length;
+        const broken = state.scans.filter((item) => dashTrust(item) === "failed").length;
+        const ready = setup.status === "ready";
+        const setupText = setup.status ? (ready ? "Sonar setup ready" : (setup.detail || "Sonar setup needs attention")) : "Checking Sonar setup";
+        admin.hidden = false;
+        const setupClass = ready ? "ok" : (setup.status ? "bad" : "");
+        admin.innerHTML = '<span class="dash-chip ' + setupClass + '">' + esc(setupText) + '</span><span class="dash-chip"><b>' + running + '</b><span>running</span></span><span class="dash-chip' + (broken ? " bad" : "") + '"><b>' + broken + '</b><span>recent scan failures</span></span><button type="button" class="ghost" data-action="view" data-view="sonar-setup">Sonar setup</button>';
+      } else {
+        admin.hidden = true;
+        admin.innerHTML = "";
+      }
+      const trusted = rows.filter((row) => row.trust === "ok");
+      const repos = trusted.filter((row) => !row.image).length;
+      const images = trusted.filter((row) => row.image).length;
+      const urgent = trusted.reduce((sum, row) => sum + row.code.critical + row.code.high, 0);
+      const passed = trusted.filter((row) => row.sonar && row.sonar.gate === "OK").length;
+      const failedGate = trusted.filter((row) => row.sonar && row.sonar.gate === "ERROR").length;
+      metrics.innerHTML = '<article class="dash-stat repos"><strong>' + repos + '</strong><em>Repositories</em></article>'
+        + '<article class="dash-stat images"><strong>' + images + '</strong><em>Images</em></article>'
+        + '<article class="dash-stat urgent"><strong>' + urgent + '</strong><em>Critical and High</em></article>'
+        + '<article class="dash-stat gate' + (failedGate ? " has-fail" : "") + '"><strong class="dash-pair"><b class="ok">' + passed + '</b><span>pass</span><b class="' + (failedGate ? "bad" : "ok") + '">' + failedGate + '</b><span>fail</span></strong><em>Quality Gate</em></article>';
+      if (!rows.length) {
+        const start = currentUser && currentUser.role !== "viewer"
+          ? '<button type="button" class="ghost" data-action="mode-scan" data-kind="repo">Start a repository scan</button>'
+          : "";
+        queue.className = "";
+        queue.innerHTML = '<div class="empty"><strong>' + (mine ? "No scans of yours yet" : "No scans yet") + "</strong>" + (mine ? "Switch to everything you can see, or start a scan." : "A scan result will show up here.") + start + "</div>";
+        recent.className = "";
+        recent.innerHTML = "";
+        return;
+      }
+      const body = rows.map((row) => {
+        const code = row.trust === "ok"
+          ? '<b class="n critical">' + row.code.critical + '</b> critical · <b class="n high">' + row.code.high + "</b> high"
+          : esc(row.trust === "running" ? "Running" : dashFailText(row.latest));
+        const sonar = !row.sonar ? "—" : (row.sonar.unavailable ? "Unavailable" : '<b class="n">' + row.sonar.vulnerabilities + '</b> vulnerabilities · <b class="n">' + row.sonar.hotspots + "</b> hotspots");
+        const gate = dashGate(row);
+        const gateClass = gate === "Fail" ? "fail" : (gate === "Pass" ? "pass" : "");
+        const tone = row.trust === "failed" ? "bad" : (dashRank(row) > 0 && dashRank(row) < 5 ? "hot" : "");
+        const when = (row.latest.created_at || "").replace(" UTC", "");
+        return '<tr class="' + tone + '" data-action="open" data-id="' + esc(row.latest.id) + '"><td><b>' + esc(row.name) + "</b></td><td>" + esc(when) + "</td><td>" + code + "</td><td>" + sonar + '</td><td class="' + gateClass + '">' + esc(gate) + "</td><td>" + esc(dashChange(row)) + "</td></tr>";
+      }).join("");
+      queue.className = "dash-panel";
+      queue.innerHTML = '<h2>Needs a look</h2><table class="dash-table"><thead><tr><th>Project</th><th>Latest scan</th><th>Code</th><th>SonarQube</th><th>Gate</th><th>Since previous</th></tr></thead><tbody>' + body + "</tbody></table>";
+      const scoped = (mine ? state.scans.filter((item) => item.owner === (currentUser && currentUser.username)) : state.scans.slice())
+        .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))
+        .slice(0, 8);
+      recent.className = "dash-panel";
+      recent.innerHTML = '<h2>Latest scans</h2><table class="dash-table"><thead><tr><th>When</th><th>Project</th><th>Status</th></tr></thead><tbody>' + scoped.map((item) => {
+        const failed = dashTrust(item) === "failed";
+        const label = item.status === "running" ? "Running" : (failed ? "Failed" : "Finished");
+        const kind = item.status === "running" ? "running" : (failed ? "failed" : "done");
+        return '<tr data-action="open" data-id="' + esc(item.id) + '"><td>' + esc((item.created_at || "").replace(" UTC", "")) + "</td><td>" + esc(scanTitle(item)) + '</td><td><span class="dash-status ' + kind + '">' + esc(label) + "</span></td></tr>";
+      }).join("") + "</tbody></table>";
+    }
+
     function renderScanHead() {
       showPanes();
       if (state.pane === "overview") renderOverview();
@@ -2133,6 +2423,38 @@
       if (status === "ERROR") return ["failed", "Failed"];
       if (status === "WARN") return ["running", "Warning"];
       return ["", "Unknown"];
+    }
+
+    function sonarRank(value) {
+      const text = String(value || "").toUpperCase();
+      if (text === "BLOCKER" || text === "CRITICAL") return "critical";
+      if (text === "HIGH" || text === "MAJOR") return "high";
+      if (text === "MEDIUM" || text === "MINOR") return "medium";
+      if (text === "LOW") return "low";
+      return "info";
+    }
+
+    function sonarList(title, rows, badgeKey) {
+      const items = rows.map((row) => {
+        const badge = row[badgeKey] || "";
+        const pill = badge ? '<span class="pill ' + sonarRank(badge) + '">' + esc(badge) + "</span>" : "";
+        const line = row.line ? ":" + esc(row.line) : "";
+        return "<li>" + pill + " <code>" + esc(row.file || "") + line + '</code> <span class="rule">' + esc(row.rule || "") + "</span><p>" + esc(row.message || "") + "</p></li>";
+      }).join("");
+      return "<section><h3>" + esc(title) + " <em>" + rows.length + "</em></h3><ul>" + items + "</ul></section>";
+    }
+
+    function sonarLists(sonar) {
+      const issues = Array.isArray(sonar.issues) ? sonar.issues : null;
+      const hotspots = Array.isArray(sonar.hotspot_list) ? sonar.hotspot_list : null;
+      if (issues === null && hotspots === null) return "";
+      const parts = [];
+      if (issues && issues.length) parts.push(sonarList("Issues", issues, "severity"));
+      if (hotspots && hotspots.length) parts.push(sonarList("Hotspots", hotspots, "vulnerabilityProbability"));
+      if (parts.length) return '<div class="sonar-lists">' + parts.join("") + "</div>";
+      const counted = ["bugs", "vulnerabilities", "code_smells", "security_hotspots"].reduce((sum, key) => sum + (Number(sonar[key]) || 0), 0);
+      if (!counted) return "";
+      return '<p class="note">SonarQube did not return issue details for this scan.</p>';
     }
 
     function renderSonar() {
@@ -2163,19 +2485,30 @@
       }
       const badge = gateBadge(sonar.quality_gate);
       const metrics = [
-        ["bugs", "Bug", "Bug"],
-        ["vulnerabilities", "Vulnerability", "Vulnerability"],
-        ["code_smells", "Code Smell", "Code smell"],
-        ["security_hotspots", "Hotspot", "Hotspot"]
+        ["bugs", "Bug"],
+        ["vulnerabilities", "Vulnerability"],
+        ["code_smells", "Code Smell"],
+        ["security_hotspots", "Hotspot"]
       ];
       const open = currentUser && currentUser.access && currentUser.access.sonar_ui
         ? '<a class="ghost" href="' + esc(publicSonarUrl(sonar.url)) + '" target="_blank" rel="noopener">Open in SonarQube</a>'
         : "";
-      box.innerHTML = '<div class="sonar-card"><div class="sonar-top"><h2>SonarQube</h2><span class="badge ' + badge[0] + '">Quality Gate ' + badge[1] + '</span>' + open + '</div><p class="meta">Project ' + esc(sonar.project_key) + '</p><div class="sonar-metrics">' + metrics.map((item) => '<div><b>' + esc(sonar[item[0]] ?? 0) + "</b><span>" + item[1] + "</span><small>" + item[2] + "</small></div>").join("") + "</div></div>";
+      box.innerHTML = '<div class="sonar-card"><div class="sonar-top"><h2>SonarQube</h2><span class="badge ' + badge[0] + '">Quality Gate ' + badge[1] + '</span>' + open + '</div><p class="meta">Project ' + esc(sonar.project_key) + '</p><div class="sonar-metrics">' + metrics.map((item) => '<div><b>' + esc(sonar[item[0]] ?? 0) + "</b><span>" + item[1] + "</span></div>").join("") + "</div>" + sonarLists(sonar) + "</div>";
+    }
+
+    function reportFindings(scan) {
+      const rows = (scan && scan.findings) || [];
+      if (scan && isImageScan(scan)) return rows.filter((row) => row.tool === "trivy");
+      return rows.filter((row) => row.tool !== "trivy");
+    }
+
+    function alignReportTool() {
+      if (state.scan && isImageScan(state.scan)) state.tool = "trivy";
+      else if (state.tool === "trivy") state.tool = "all";
     }
 
     function renderSummary() {
-      const rows = (state.scan && state.scan.findings) || [];
+      const rows = reportFindings(state.scan);
       const tally = counts(rows, (row) => row.severity);
       document.querySelector("#summary").innerHTML = '<div class="summary">' + donut(tally) + stats(tally, "sev") + "</div>";
     }
@@ -2188,25 +2521,29 @@
     }
 
     function paintFilters() {
-      const findings = (state.scan && state.scan.findings) || [];
+      alignReportTool();
+      const image = state.scan && isImageScan(state.scan);
+      const findings = reportFindings(state.scan);
       const countsByTool = {
         all: findings.length,
         semgrep: findings.filter((row) => row.tool === "semgrep").length,
         checkov: findings.filter((row) => row.tool === "checkov").length,
         trivy: findings.filter((row) => row.tool === "trivy").length,
-        sonar: sonarTotal(state.scan)
+        sonar: image ? 0 : sonarTotal(state.scan)
       };
       document.querySelectorAll("#tool-seg button").forEach((el) => {
-        el.classList.toggle("on", el.dataset.tool === state.tool);
+        const tool = el.dataset.tool;
+        el.hidden = image ? tool !== "trivy" : tool === "trivy";
+        el.classList.toggle("on", tool === state.tool);
         const badge = el.querySelector("em");
-        if (badge) badge.textContent = String(countsByTool[el.dataset.tool] || 0);
+        if (badge) badge.textContent = String(countsByTool[tool] || 0);
       });
       document.querySelector("#q").hidden = state.tool === "sonar";
     }
 
     function filteredFindings() {
       const q = state.q.trim().toLowerCase();
-      return ((state.scan && state.scan.findings) || []).filter((row) => {
+      return reportFindings(state.scan).filter((row) => {
         if (state.sev && bucket(row.severity) !== state.sev) return false;
         if (state.tool !== "all" && row.tool !== state.tool) return false;
         if (!q) return true;
@@ -2289,7 +2626,7 @@
     function syncScan() {
       const scan = state.scan;
       const sonar = (scan && scan.sonar) || {};
-      const stamp = scan ? [scan.id, scan.status, (scan.findings || []).length, scan.finished_at, scan.error, scan.phase || "", sonar.quality_gate || "", sonar.error || ""].join("|") : "";
+      const stamp = scan ? [scan.id, scan.status, (scan.findings || []).length, scan.finished_at, scan.error, scan.phase || "", sonar.quality_gate || "", sonar.error || "", (sonar.issues || []).length, (sonar.hotspot_list || []).length].join("|") : "";
       const running = state.scans.some((item) => item.status === "running");
       document.querySelector("#go").disabled = running;
       document.querySelector("#progress").hidden = !running;
@@ -2303,6 +2640,7 @@
         document.querySelector("#q").value = "";
       }
       scanStamp = stamp;
+      alignReportTool();
       renderScanHead();
       if (scan) {
         renderSonar();
@@ -2324,70 +2662,37 @@
       }
     }
 
-    function renderFalco() {
-      const hot = state.alerts.filter((item) => ["critical", "high"].includes(bucket(item.priority))).length;
-      const badge = document.querySelector("#falco-count");
-      badge.textContent = String(state.alerts.length);
-      badge.classList.toggle("hot", hot > 0);
-      const stamp = [state.fsev, state.fq, state.alerts.length, state.alerts[0] && state.alerts[0].time, state.alerts[0] && state.alerts[0].rule].join("|");
-      if (stamp === falcoStamp) return;
-      falcoStamp = stamp;
-      const tally = counts(state.alerts, (row) => row.priority);
-      document.querySelector("#falco-summary").innerHTML = '<div class="summary">' + donut(tally) + stats(tally, "fsev") + "</div>";
-      const q = state.fq.trim().toLowerCase();
-      const rows = state.alerts.filter((item) => {
-        if (state.fsev && bucket(item.priority) !== state.fsev) return false;
-        if (!q) return true;
-        return (item.rule + " " + item.output + " " + item.source + " " + item.priority).toLowerCase().includes(q);
-      });
-      const list = document.querySelector("#falco-list");
-      if (!state.alerts.length) {
-        list.innerHTML = '<div class="empty"><strong>No alerts yet</strong>This list fills when a worker reports an event.</div>';
-        return;
-      }
-      if (!rows.length) {
-        list.innerHTML = '<div class="empty"><strong>Nothing matches this filter</strong></div>';
-        return;
-      }
-      const grouped = new Map();
-      rows.forEach((item) => {
-        const key = bucket(item.priority) + "\0" + (item.rule || "");
-        if (!grouped.has(key)) grouped.set(key, []);
-        grouped.get(key).push(item);
-      });
-      const order = {critical: 0, high: 1, medium: 2, low: 3, info: 4};
-      state.falcoGroups = [...grouped.values()].sort((a, b) => {
-        const diff = order[bucket(a[0].priority)] - order[bucket(b[0].priority)];
-        return diff || b.length - a.length;
-      });
-      list.innerHTML = state.falcoGroups.map((items, index) => {
-        const item = items[0];
-        const level = bucket(item.priority);
-        const label = SEV.find((sev) => sev[0] === level);
-        const key = level + "\0" + (item.rule || "");
-        const open = state.fopen.has(key);
-        const extra = open ? '<ul class="falco-more">' + items.slice(0, 8).map((row) => '<li><b>' + esc(row.time || "") + "</b> " + esc(row.output || "") + "</li>").join("") + "</ul>" : "";
-        return '<article class="alert ' + level + (open ? " open" : "") + '" data-action="falco-toggle" data-i="' + index + '"><div class="alert-top"><span class="pill ' + level + '">' + label[2] + '</span><strong>' + esc(item.rule || item.priority) + '</strong><span class="num">' + items.length + '</span><time>' + esc(item.time || "") + "</time></div><p>" + esc(item.output || "") + "</p>" + extra + "</article>";
-      }).join("");
-    }
-
     document.addEventListener("click", (event) => {
       const el = event.target.closest("[data-action]");
       if (!el) return;
       const action = el.dataset.action;
       if (action === "view") {
-        if (el.dataset.view === "scans" && state.view === "scans") {
+        const next = el.dataset.view;
+        if (next === "scans" && state.view === "scans") {
           scansMenuOpen = !scansMenuOpen;
           histStamp = null;
           renderHistory();
+        } else if (next === "settings") {
+          if (SETTINGS_VIEWS.includes(state.view)) settingsMenuOpen = !settingsMenuOpen;
+          else {
+            settingsMenuOpen = true;
+            setView("account");
+          }
+          paintSettings();
         } else {
-          if (el.dataset.view === "scans") scansMenuOpen = true;
-          setView(el.dataset.view);
-          if (el.dataset.view === "scans") {
+          if (next === "scans") scansMenuOpen = true;
+          if (SETTINGS_VIEWS.includes(next)) settingsMenuOpen = true;
+          setView(next);
+          if (next === "scans") {
             histStamp = null;
             renderHistory();
           }
         }
+      }
+      if (action === "dash-scope") {
+        state.dashScope = el.dataset.scope === "all" ? "all" : "mine";
+        dashStamp = null;
+        renderDashboard();
       }
       if (action === "k-branch") {
         if (kOpen.has(el.dataset.id)) kOpen.delete(el.dataset.id);
@@ -2502,11 +2807,6 @@
         renderSummary();
         renderFindings();
       }
-      if (action === "fsev") {
-        state.fsev = state.fsev === el.dataset.sev ? "" : el.dataset.sev;
-        falcoStamp = null;
-        renderFalco();
-      }
       if (action === "target") setTarget(el.dataset.target);
       if (action === "pick-image") {
         document.querySelector("#image-ref").value = el.dataset.ref || "";
@@ -2517,16 +2817,6 @@
         paintFilters();
         renderSonar();
         renderFindings();
-      }
-      if (action === "falco-toggle") {
-        const group = state.falcoGroups[Number(el.dataset.i)];
-        if (!group) return;
-        const sample = group[0];
-        const key = bucket(sample.priority) + "\0" + (sample.rule || "");
-        if (state.fopen.has(key)) state.fopen.delete(key);
-        else state.fopen.add(key);
-        falcoStamp = null;
-        renderFalco();
       }
       if (action === "sort") {
         const key = el.dataset.key;
@@ -2561,12 +2851,6 @@
     });
     document.querySelector("#k-q").addEventListener("input", () => renderKnowledge());
     renderKnowledge();
-
-    document.querySelector("#fq").addEventListener("input", (event) => {
-      state.fq = event.target.value;
-      falcoStamp = null;
-      renderFalco();
-    });
 
     document.querySelector("#image-ref").addEventListener("input", () => {
       if (imagesLoaded) renderImageList();
@@ -2619,19 +2903,14 @@
     async function tick() {
       if (!currentUser) return;
       try {
-        const [scanResponse, alertResponse] = await Promise.all([
-          api("/api/scans"),
-          api("/api/falco")
-        ]);
+        const scanResponse = await api("/api/scans");
         if (!currentUser) return;
-        if (!scanResponse.ok || !alertResponse.ok) {
-          if (scanResponse.status === 401 || alertResponse.status === 401) showLogin();
+        if (!scanResponse.ok) {
+          if (scanResponse.status === 401) showLogin();
           return;
         }
         const scans = await scanResponse.json();
-        const alerts = await alertResponse.json();
         state.scans = Array.isArray(scans) ? scans : [];
-        state.alerts = Array.isArray(alerts) ? alerts : [];
         if (!state.scan && state.scans[0]) {
           state.scan = state.scans[0];
           state.target = isImageScan(state.scan) ? "image" : "repo";
@@ -2641,7 +2920,11 @@
         if (fresh) state.scan = fresh;
         renderHistory();
         syncScan();
-        renderFalco();
+        if (state.view === "dashboard" && currentUser.role === "admin") {
+          const setupResponse = await api("/api/sonar/setup");
+          if (currentUser && setupResponse.ok) state.sonarSetup = await setupResponse.json();
+        }
+        renderDashboard();
       } catch (err) {
         if (currentUser) document.querySelector("#form-msg").textContent = "Lost contact with the console.";
       }
@@ -3029,11 +3312,52 @@
       }
     });
 
+    async function loadSonarSetup() {
+      const text = document.querySelector("#sonar-setup-text");
+      const response = await api("/api/sonar/setup");
+      if (!response.ok) {
+        text.textContent = "SonarQube setup status is unavailable.";
+        document.querySelector("#sonar-setup-retry").hidden = true;
+        document.querySelector("#sonar-setup-rotate").hidden = true;
+        return;
+      }
+      const body = await response.json();
+      text.textContent = body.detail || "SonarQube setup has not finished.";
+      const expiry = document.querySelector("#sonar-setup-expiry");
+      expiry.hidden = !body.expires_at;
+      expiry.textContent = body.expires_at ? "Token expiration " + body.expires_at : "";
+      document.querySelector("#sonar-setup-retry").hidden = body.status !== "waiting";
+      const rotate = body.status === "token_name_taken" || body.status === "token_rejected";
+      document.querySelector("#sonar-setup-rotate").hidden = !rotate;
+      document.querySelector("#sonar-setup-msg").textContent = "";
+    }
+
+    async function postSonarSetup(rotate) {
+      const message = document.querySelector("#sonar-setup-msg");
+      message.textContent = "Working...";
+      const response = await api("/api/sonar/setup", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({rotate: rotate})
+      });
+      if (!response.ok) {
+        message.textContent = "SonarQube setup could not run.";
+        return;
+      }
+      await loadSonarSetup();
+    }
+
+    document.querySelector("#sonar-setup-retry").addEventListener("click", () => {
+      postSonarSetup(false);
+    });
+    document.querySelector("#sonar-setup-rotate").addEventListener("click", () => {
+      postSonarSetup(true);
+    });
+
     document.querySelector("#logout").addEventListener("click", async () => {
       closeProfileMenu();
       await api("/api/auth/logout", {method: "POST"});
       state.scans = [];
-      state.alerts = [];
       state.scan = null;
       showLogin();
       document.querySelector("#login-error").hidden = true;
@@ -3078,6 +3402,7 @@
         showLogin();
       }
     }
+    setView("dashboard");
     boot();
   </script>
 </body>

@@ -43,10 +43,61 @@ services:
       timeout: 3s
       retries: 12
 
+  # Elasticsearch refuses to start below this host limit. The value is not
+  # namespaced, so a new machine and a reboot both need it set on the host.
+  # A higher existing value is left alone.
+  host-setup:
+    image: busybox:1.36.1
+    privileged: true
+    restart: unless-stopped
+    volumes:
+      - /etc/sysctl.d:/host-sysctl.d
+    command:
+      - sh
+      - -c
+      - |
+        set -eu
+        floor=262144
+        apply() {
+          current=$(sysctl -n vm.max_map_count 2>/dev/null || echo 0)
+          if [ "$$current" -lt "$$floor" ]; then
+            sysctl -w vm.max_map_count=$$floor
+          fi
+        }
+        persist() {
+          file=/host-sysctl.d/99-security-console.conf
+          if [ ! -d /host-sysctl.d ] || [ -f "$$file" ]; then
+            return 0
+          fi
+          current=$(sysctl -n vm.max_map_count 2>/dev/null || echo 0)
+          if [ "$$current" -ge "$$floor" ]; then
+            return 0
+          fi
+          printf '%s\n' "vm.max_map_count=$$floor" > "$$file"
+        }
+        apply
+        persist
+        while true; do
+          apply
+          sleep 60
+        done
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "test $(sysctl -n vm.max_map_count) -ge 262144",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+      start_period: 5s
+
   sonarqube:
     image: sonarqube:26.9.0.129388-community
     depends_on:
       sonar-db:
+        condition: service_healthy
+      host-setup:
         condition: service_healthy
     environment:
       SONAR_JDBC_URL: jdbc:postgresql://sonar-db:5432/sonar
@@ -77,13 +128,42 @@ services:
       start_period: 180s
     restart: unless-stopped
 
+  # Writes the scanner token after SonarQube is up. Scanner and console do
+  # not wait for it, so a Sonar password problem cannot block the other tools.
+  sonar-init:
+    build: .
+    image: security-console:17
+    entrypoint: ["python", "-m", "security_console.sonar_setup"]
+    user: "0:0"
+    depends_on:
+      sonarqube:
+        condition: service_healthy
+    environment:
+      SONAR_URL: http://sonarqube:9000/sonar
+      SONAR_PROJECT_KEY: ${SONAR_PROJECT_KEY:-security-console}
+      SONAR_ADMIN_PASSWORD_FILE: /run/sonar/admin_password
+      SONAR_TOKEN_FILE: /run/sonar/token
+      SONAR_INIT_STATUS_FILE: /run/sonar/status
+      SONAR_DB_HOST: sonar-db
+      SONAR_DB_PASSWORD_FILE: /run/sonar/db_password
+      SONAR_SETUP_UID: "10001"
+      SONAR_SETUP_GID: "10001"
+    volumes:
+      - ./secrets/sonar_admin_password.txt:/run/sonar/admin_password
+      - ./secrets/sonar_token.txt:/run/sonar/token
+      - ./secrets/sonar_init_status.json:/run/sonar/status
+      - ./secrets/sonar_db_password.txt:/run/sonar/db_password:ro
+    security_opt:
+      - no-new-privileges:true
+    restart: on-failure
+
   scanner:
     build: .
     image: security-console:17
     entrypoint: ["python", "-m", "security_console.worker"]
     environment:
       SCANNER_TOKEN_FILE: /run/secrets/scanner_token
-      SONAR_TOKEN_FILE: /run/secrets/sonar_token
+      SONAR_TOKEN_FILE: /run/sonar/token
       SONAR_URL: http://sonarqube:9000/sonar
       SONAR_PROJECT_KEY: ${SONAR_PROJECT_KEY:-security-console}
       SCANNER_NETWORK: security-console
@@ -91,10 +171,10 @@ services:
       SCAN_DIR: /scans
     secrets:
       - scanner_token
-      - sonar_token
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /var/lib/security-scans:/scans
+      - ./secrets/sonar_token.txt:/run/sonar/token:ro
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
@@ -131,6 +211,12 @@ services:
       DATA_DIR: /data
       SONAR_PUBLIC_URL: ${SONAR_PUBLIC_URL:-}
       SONAR_PROJECT_KEY: ${SONAR_PROJECT_KEY:-security-console}
+      SONAR_URL: http://sonarqube:9000/sonar
+      SONAR_ADMIN_PASSWORD_FILE: /run/sonar/admin_password
+      SONAR_TOKEN_FILE: /run/sonar/token
+      SONAR_INIT_STATUS_FILE: /run/sonar/status
+      SONAR_DB_HOST: sonar-db
+      SONAR_DB_PASSWORD_FILE: /run/sonar/db_password
     secrets:
       - console_jwt_key
       - console_db_password
@@ -138,6 +224,10 @@ services:
       - scanner_token
     volumes:
       - console_data:/data
+      - ./secrets/sonar_admin_password.txt:/run/sonar/admin_password
+      - ./secrets/sonar_token.txt:/run/sonar/token
+      - ./secrets/sonar_init_status.json:/run/sonar/status
+      - ./secrets/sonar_db_password.txt:/run/sonar/db_password:ro
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
@@ -151,8 +241,6 @@ secrets:
     file: ./secrets/falco_ingest_token.txt
   scanner_token:
     file: ./secrets/scanner_token.txt
-  sonar_token:
-    file: ./secrets/sonar_token.txt
   sonar_db_password:
     file: ./secrets/sonar_db_password.txt
 

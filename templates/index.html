@@ -2357,13 +2357,13 @@
       if (stamp === dashStamp) return;
       dashStamp = stamp;
       if (currentUser && currentUser.role === "admin") {
-        const running = state.scans.filter((item) => item.status === "running").length;
-        const broken = state.scans.filter((item) => dashTrust(item) === "failed").length;
+        const running = rows.filter((row) => row.trust === "running").length;
+        const broken = rows.filter((row) => row.trust === "failed").length;
         const ready = setup.status === "ready";
         const setupText = setup.status ? (ready ? "Sonar setup ready" : (setup.detail || "Sonar setup needs attention")) : "Checking Sonar setup";
         admin.hidden = false;
         const setupClass = ready ? "ok" : (setup.status ? "bad" : "");
-        admin.innerHTML = '<span class="dash-chip ' + setupClass + '">' + esc(setupText) + '</span><span class="dash-chip"><b>' + running + '</b><span>running</span></span><span class="dash-chip' + (broken ? " bad" : "") + '"><b>' + broken + '</b><span>recent scan failures</span></span><button type="button" class="ghost" data-action="view" data-view="sonar-setup">Sonar setup</button>';
+        admin.innerHTML = '<span class="dash-chip ' + setupClass + '">' + esc(setupText) + '</span><span class="dash-chip"><b>' + running + '</b><span>running</span></span><span class="dash-chip' + (broken ? " bad" : "") + '"><b>' + broken + '</b><span>failed projects</span></span><button type="button" class="ghost" data-action="view" data-view="sonar-setup">Sonar setup</button>';
       } else {
         admin.hidden = true;
         admin.innerHTML = "";

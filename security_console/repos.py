@@ -163,7 +163,10 @@ def normalize_commit_sha(value: object) -> str | None:
     return text
 
 
-def _git_config(resolve: list[str] | None = None) -> list[str]:
+def _git_config(
+    resolve: list[str] | None = None,
+    auth_config: str | None = None,
+) -> list[str]:
     """Git options that block hooks, credentials, redirects, and rebinding."""
 
     command = [
@@ -179,6 +182,8 @@ def _git_config(resolve: list[str] | None = None) -> list[str]:
     ]
     for item in resolve or []:
         command.extend(["-c", f"http.curloptResolve={item}"])
+    if auth_config:
+        command.extend(["-c", "include.path=" + auth_config])
     return command
 
 
@@ -186,6 +191,7 @@ def git_clone_args(
     repo: str,
     dest: str,
     resolve: list[str] | None = None,
+    auth_config: str | None = None,
 ) -> list[str]:
     """Build a git clone command that does not read host credentials or hooks.
 
@@ -194,7 +200,7 @@ def git_clone_args(
     branch name is added.
     """
 
-    command = _git_config(resolve)
+    command = _git_config(resolve, auth_config)
     command.extend(["clone", "--depth", "1", "--", repo, dest])
     return command
 
@@ -204,10 +210,11 @@ def git_fetch_sha_commands(
     dest: str,
     sha: str,
     resolve: list[str] | None = None,
+    auth_config: str | None = None,
 ) -> list[list[str]]:
     """Fetch one commit. A failed fetch must not fall back to the default branch."""
 
-    prefix = _git_config(resolve)
+    prefix = _git_config(resolve, auth_config)
     return [
         [*prefix, "init", dest],
         [*prefix, "-C", dest, "remote", "add", "origin", repo],

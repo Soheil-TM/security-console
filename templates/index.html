@@ -606,6 +606,8 @@
     .launch-row { display: flex; gap: 10px; align-items: end; }
     .grow { flex: 1; min-width: 0; }
     .field-label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 12px; font-weight: 600; }
+    .req { color: #e11d48; margin-left: 3px; }
+    html.dark .req { color: #fda4af; }
     input[type="url"], input[type="search"], input[type="text"], input[type="password"], input[type="email"], select.field {
       width: 100%;
       height: 42px;
@@ -666,7 +668,7 @@
     .scanner:has(input:focus-visible) { outline: 2px solid var(--teal); outline-offset: 2px; }
     .scanner b { display: block; font-size: 14px; }
     .scanner small { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; line-height: 1.45; }
-    #go, #user-save, #pw-save, #idle-stay, .ghost {
+    #go, #user-new, #user-save, #connection-save, #group-save, #pw-save, #idle-stay, .ghost {
       height: 42px;
       border-radius: 8px;
       padding: 0 16px;
@@ -676,8 +678,8 @@
       justify-content: center;
       white-space: nowrap;
     }
-    #go, #user-save, #pw-save, #idle-stay { background: var(--teal); color: white; border: 0; }
-    #go:hover, #user-save:hover, #pw-save:hover, #idle-stay:hover { background: var(--teal-2); }
+    #go, #user-new, #user-save, #connection-save, #group-save, #pw-save, #idle-stay { background: var(--teal); color: white; border: 0; }
+    #go:hover, #user-new:hover, #user-save:hover, #connection-save:hover, #group-save:hover, #pw-save:hover, #idle-stay:hover { background: var(--teal-2); }
     #go:disabled, #user-save:disabled, #pw-save:disabled, #idle-stay:disabled { background: #94a3b8; }
     #go:disabled { cursor: progress; }
     #user-save:disabled, #pw-save:disabled { cursor: not-allowed; }
@@ -842,6 +844,19 @@
     html.dark .badge.done { background: #143528; color: #6ee7b7; }
     html.dark .badge.running { background: #3a2c14; color: #fcd34d; }
     html.dark .badge.failed { background: #3f1d24; color: #fda4af; }
+    .scan-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+    button.retry {
+      height: 32px;
+      border: 0;
+      border-radius: 8px;
+      padding: 0 12px;
+      background: var(--teal);
+      color: #fff;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    button.retry:hover { background: var(--teal-2); }
+    button.retry:disabled { background: #94a3b8; cursor: not-allowed; }
 
     .summary {
       display: grid; grid-template-columns: 128px minmax(0, 1fr); gap: 8px;
@@ -1267,6 +1282,7 @@
           <button type="button" class="mode" data-action="view" data-view="users" id="nav-users" hidden>Users</button>
           <button type="button" class="mode" data-action="view" data-view="access" id="nav-access" hidden>Tool access</button>
           <button type="button" class="mode" data-action="view" data-view="groups" id="nav-groups">Groups</button>
+          <button type="button" class="mode" data-action="view" data-view="connections" id="nav-connections" hidden>Connections</button>
           <button type="button" class="mode" data-action="view" data-view="sonar-setup" id="nav-sonar-setup" hidden>Sonar setup</button>
         </div>
         <a id="sonar-link" href="{{ sonar_url }}" target="_blank" rel="noopener" hidden>SonarQube <span aria-hidden="true">↗</span></a>
@@ -1277,9 +1293,21 @@
       <div class="launch-wrap">
         <form class="launch" id="scan-form">
           <div class="launch-row">
+            <label class="grow" id="repo-source-field" hidden>
+              <span class="field-label">Source</span>
+              <select id="repo-source" class="field"><option value="">Public address</option></select>
+            </label>
             <label class="grow" id="repo-field">
               <span class="field-label">Repository</span>
               <input id="repo" type="url" required dir="ltr" placeholder="https://github.com/org/repo.git" value="https://github.com/TaghikhaniAlireza/Mace-eBPF.git">
+            </label>
+            <label class="grow" id="repo-project-field" hidden>
+              <span class="field-label">GitLab project</span>
+              <select id="repo-project" class="field"></select>
+            </label>
+            <label class="grow" id="image-source-field" hidden>
+              <span class="field-label">Source</span>
+              <select id="image-source" class="field"><option value="">This server</option></select>
             </label>
             <label class="grow" id="image-field" hidden>
               <span class="field-label">Image</span>
@@ -1377,6 +1405,7 @@
               <h1>Users</h1>
               <p class="meta">Search, filter, edit, and delete. Roles: Admin, Developer, Viewer.</p>
             </div>
+            <button type="button" id="user-new">Create a new user</button>
           </div>
           <div id="user-error" class="login-error" hidden></div>
           <div class="filters">
@@ -1396,19 +1425,30 @@
               <tbody id="user-rows"></tbody>
             </table>
           </div>
-          <form class="launch" id="user-form" style="margin-top:12px">
+          <form class="launch" id="user-form" hidden style="margin-top:12px">
             <h2 id="user-form-title" style="margin:0 0 12px;font-size:16px">New user</h2>
             <div class="account-grid">
-              <label><span class="field-label">First name</span><input id="user-first" required maxlength="80" autocomplete="off"></label>
-              <label><span class="field-label">Last name</span><input id="user-last" required maxlength="80" autocomplete="off"></label>
-              <label><span class="field-label">Username</span><input id="user-name" required maxlength="64" dir="ltr" autocomplete="off"></label>
-              <label><span class="field-label">Email</span><input id="user-email" type="email" required maxlength="254" dir="ltr" autocomplete="off"></label>
+              <label><span class="field-label">First name<span class="req" aria-hidden="true">*</span></span><input id="user-first" required maxlength="80" autocomplete="off"></label>
+              <label><span class="field-label">Last name<span class="req" aria-hidden="true">*</span></span><input id="user-last" required maxlength="80" autocomplete="off"></label>
+              <label><span class="field-label">Username<span class="req" aria-hidden="true">*</span></span><input id="user-name" required maxlength="64" dir="ltr" autocomplete="off"></label>
+              <label><span class="field-label">Email</span><input id="user-email" type="email" maxlength="254" dir="ltr" autocomplete="off"></label>
             </div>
             <div class="account-grid" id="user-passwords">
-              <label><span class="field-label">Password</span><span class="pw-row"><input id="user-pass" type="password" minlength="12" maxlength="128" dir="ltr" autocomplete="new-password"><button type="button" class="pw-toggle" data-target="user-pass" aria-label="Toggle password visibility" aria-pressed="false"><svg class="eye-open" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg><svg class="eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3.5 20.5 21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M9.9 5.4A10.2 10.2 0 0 1 12 5c6 0 9.5 7 9.5 7a17 17 0 0 1-3.6 4.4M6.2 6.8C4 8.3 2.5 12 2.5 12S6 19 12 19c1.4 0 2.7-.3 3.8-.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M10.2 10.4a2.6 2.6 0 0 0 3.6 3.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></span></label>
-              <label><span class="field-label">Confirm password</span><span class="pw-row"><input id="user-pass-again" type="password" minlength="12" maxlength="128" dir="ltr" autocomplete="new-password"><button type="button" class="pw-toggle" data-target="user-pass-again" aria-label="Toggle password visibility" aria-pressed="false"><svg class="eye-open" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg><svg class="eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3.5 20.5 21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M9.9 5.4A10.2 10.2 0 0 1 12 5c6 0 9.5 7 9.5 7a17 17 0 0 1-3.6 4.4M6.2 6.8C4 8.3 2.5 12 2.5 12S6 19 12 19c1.4 0 2.7-.3 3.8-.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M10.2 10.4a2.6 2.6 0 0 0 3.6 3.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></span></label>
+              <label><span class="field-label">Password<span class="req" aria-hidden="true">*</span></span><span class="pw-row"><input id="user-pass" type="password" minlength="12" maxlength="128" dir="ltr" autocomplete="new-password"><button type="button" class="pw-toggle" data-target="user-pass" aria-label="Toggle password visibility" aria-pressed="false"><svg class="eye-open" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg><svg class="eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3.5 20.5 21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M9.9 5.4A10.2 10.2 0 0 1 12 5c6 0 9.5 7 9.5 7a17 17 0 0 1-3.6 4.4M6.2 6.8C4 8.3 2.5 12 2.5 12S6 19 12 19c1.4 0 2.7-.3 3.8-.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M10.2 10.4a2.6 2.6 0 0 0 3.6 3.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></span></label>
+              <label><span class="field-label">Confirm password<span class="req" aria-hidden="true">*</span></span><span class="pw-row"><input id="user-pass-again" type="password" minlength="12" maxlength="128" dir="ltr" autocomplete="new-password"><button type="button" class="pw-toggle" data-target="user-pass-again" aria-label="Toggle password visibility" aria-pressed="false"><svg class="eye-open" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg><svg class="eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3.5 20.5 21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M9.9 5.4A10.2 10.2 0 0 1 12 5c6 0 9.5 7 9.5 7a17 17 0 0 1-3.6 4.4M6.2 6.8C4 8.3 2.5 12 2.5 12S6 19 12 19c1.4 0 2.7-.3 3.8-.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M10.2 10.4a2.6 2.6 0 0 0 3.6 3.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></span></label>
               <p id="user-pass-ok" class="pw-ok" hidden>Passwords match.</p>
               <p id="user-pass-bad" class="pw-bad" hidden>Passwords do not match.</p>
+              <label><input id="user-must-change" type="checkbox" checked> Require a new password at first sign-in</label>
+            </div>
+            <div id="user-reset" hidden>
+              <p class="hint">Leave blank to keep the current password. Saving a new one signs that person out.</p>
+              <div class="account-grid">
+                <label><span class="field-label">New password</span><span class="pw-row"><input id="user-reset-pass" type="password" minlength="12" maxlength="128" dir="ltr" autocomplete="new-password"><button type="button" class="pw-toggle" data-target="user-reset-pass" aria-label="Toggle password visibility" aria-pressed="false"><svg class="eye-open" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg><svg class="eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3.5 20.5 21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M9.9 5.4A10.2 10.2 0 0 1 12 5c6 0 9.5 7 9.5 7a17 17 0 0 1-3.6 4.4M6.2 6.8C4 8.3 2.5 12 2.5 12S6 19 12 19c1.4 0 2.7-.3 3.8-.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M10.2 10.4a2.6 2.6 0 0 0 3.6 3.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></span></label>
+                <label><span class="field-label">Confirm password</span><span class="pw-row"><input id="user-reset-again" type="password" minlength="12" maxlength="128" dir="ltr" autocomplete="new-password"><button type="button" class="pw-toggle" data-target="user-reset-again" aria-label="Toggle password visibility" aria-pressed="false"><svg class="eye-open" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg><svg class="eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3.5 20.5 21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M9.9 5.4A10.2 10.2 0 0 1 12 5c6 0 9.5 7 9.5 7a17 17 0 0 1-3.6 4.4M6.2 6.8C4 8.3 2.5 12 2.5 12S6 19 12 19c1.4 0 2.7-.3 3.8-.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M10.2 10.4a2.6 2.6 0 0 0 3.6 3.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></span></label>
+                <p id="user-reset-ok" class="pw-ok" hidden>Passwords match.</p>
+                <p id="user-reset-bad" class="pw-bad" hidden>Passwords do not match.</p>
+                <label><input id="user-reset-must" type="checkbox" checked> Require a new password at the next sign-in</label>
+              </div>
             </div>
             <div class="account-grid">
               <label><span class="field-label">Role</span>
@@ -1437,6 +1477,39 @@
           </div>
           <div id="access-msg" class="meta"></div>
           <div id="access-list"></div>
+        </section>
+        <section id="view-connections" hidden>
+          <div class="page-head">
+            <div>
+              <h1>Connections</h1>
+              <p class="meta">Save the internal GitLab and the private registry once. A token stays on the server. Scans then offer those projects, and a lead can attach them to a group.</p>
+            </div>
+          </div>
+          <div id="connection-error" class="login-error" hidden></div>
+          <p class="meta" id="connection-msg"></p>
+          <div id="connection-list"></div>
+          <form class="launch" id="connection-form" style="margin-top:12px">
+            <h2 id="connection-form-title" style="margin:0 0 12px;font-size:16px">New connection</h2>
+            <div class="account-grid">
+              <label><span class="field-label">Type</span>
+                <select id="connection-kind" class="field">
+                  <option value="gitlab">GitLab</option>
+                  <option value="registry">Private registry</option>
+                </select>
+              </label>
+              <label><span class="field-label">Name</span><input id="connection-name" required maxlength="80"></label>
+              <label><span class="field-label">Address</span><input id="connection-url" required maxlength="300" dir="ltr" placeholder="https://gitlab.example.com" autocomplete="off"></label>
+              <label id="connection-user-field"><span class="field-label">Username</span><input id="connection-user" maxlength="128" dir="ltr" autocomplete="off"></label>
+              <label><span class="field-label">Token</span><input id="connection-secret" type="password" maxlength="256" dir="ltr" autocomplete="new-password"></label>
+              <label><span class="field-label">CA certificate, optional</span><textarea id="connection-ca" rows="4" dir="ltr" spellcheck="false"></textarea></label>
+              <label id="connection-clear-field" hidden><input id="connection-clear-ca" type="checkbox"> Remove saved certificate</label>
+            </div>
+            <p class="meta">Leave the token blank when editing to keep the saved one. Docker on this server must already trust a registry certificate before a pull works.</p>
+            <div style="display:flex;gap:8px;margin-top:12px">
+              <button type="submit" id="connection-save">Save</button>
+              <button type="button" class="ghost" id="connection-cancel">Cancel</button>
+            </div>
+          </form>
         </section>
         <section id="view-sonar-setup" hidden>
           <div class="page-head">
@@ -1472,7 +1545,15 @@
               <label><span class="field-label">Description</span><input id="group-description" maxlength="500"></label>
             </div>
             <label><span class="field-label">Repositories, one https URL per line</span><textarea id="group-repos" rows="3" dir="ltr"></textarea></label>
+            <div id="group-repo-pick" hidden style="display:flex;gap:8px;margin-top:8px">
+              <select id="group-repo-choice" class="field" style="flex:1"></select>
+              <button type="button" class="ghost" id="group-repo-add">Add</button>
+            </div>
             <label><span class="field-label">Images, one name per line</span><textarea id="group-images" rows="2" dir="ltr"></textarea></label>
+            <div id="group-image-pick" hidden style="display:flex;gap:8px;margin-top:8px">
+              <select id="group-image-choice" class="field" style="flex:1"></select>
+              <button type="button" class="ghost" id="group-image-add">Add</button>
+            </div>
             <label><span class="field-label">Members, one username per line</span><textarea id="group-members" rows="3" dir="ltr"></textarea></label>
             <label><span class="field-label">Leads, one username per line</span><textarea id="group-leads" rows="2" dir="ltr"></textarea></label>
             <div style="display:flex;gap:8px;margin-top:12px">
@@ -1585,7 +1666,7 @@
     const reportsOpen = new Set();
     let scansMenuOpen = true;
     let settingsMenuOpen = false;
-    const SETTINGS_VIEWS = ["account", "users", "access", "groups", "sonar-setup"];
+    const SETTINGS_VIEWS = ["account", "users", "access", "groups", "connections", "sonar-setup"];
     function csrfToken() {
       const match = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/);
       return match ? decodeURIComponent(match[1]) : "";
@@ -1655,10 +1736,12 @@
       document.querySelector("#nav-users").hidden = user.role !== "admin";
       document.querySelector("#nav-access").hidden = user.role !== "admin";
       document.querySelector("#nav-sonar-setup").hidden = user.role !== "admin";
+      document.querySelector("#nav-connections").hidden = user.role !== "admin";
       document.querySelector("#group-new").hidden = user.role === "viewer";
       const sonarLink = document.querySelector("#sonar-link");
       if (sonarLink) sonarLink.hidden = !(user.access && user.access.sonar_ui);
-      if (user.role !== "admin" && (state.view === "users" || state.view === "access" || state.view === "sonar-setup")) setView("scans");
+      if (user.role !== "admin" && (state.view === "users" || state.view === "access" || state.view === "sonar-setup" || state.view === "connections")) setView("scans");
+      loadConnections();
       syncLaunch();
       syncThemeButton();
     }
@@ -1857,7 +1940,7 @@
 
     function setView(view) {
       state.view = view;
-      ["dashboard", "scans", "knowledge", "users", "access", "groups", "sonar-setup", "account"].forEach((name) => {
+      ["dashboard", "scans", "knowledge", "users", "access", "groups", "connections", "sonar-setup", "account"].forEach((name) => {
         document.querySelector("#view-" + name).hidden = view !== name;
       });
       syncLaunch();
@@ -1869,12 +1952,15 @@
       renderHistory();
       if (view === "users" || view === "access") loadAccounts();
       if (view === "sonar-setup") loadSonarSetup();
+      if (view === "connections") loadConnections();
       if (view === "groups") loadGroups();
       if (view === "dashboard") renderDashboard();
     }
 
     let localImages = [];
     let imagesLoaded = false;
+    let connections = [];
+    let editingConnection = null;
     const repoChecks = {semgrep: true, checkov: true, sonar: true, trivy: true};
 
     function sizeText(bytes) {
@@ -1921,13 +2007,19 @@
       const starter = currentUser && currentUser.role !== "viewer";
       const showingImage = state.target === "image";
       document.querySelector(".launch-wrap").hidden = !starter || state.view !== "scans" || state.pane !== "scan";
-      document.querySelector("#repo-field").hidden = showingImage;
+      const gitlabSource = !showingImage && document.querySelector("#repo-source").value;
+      const registrySource = showingImage && document.querySelector("#image-source").value;
+      document.querySelector("#repo-source-field").hidden = showingImage || !connections.some((item) => item.kind === "gitlab");
+      document.querySelector("#repo-field").hidden = showingImage || Boolean(gitlabSource);
+      document.querySelector("#repo-project-field").hidden = !gitlabSource;
+      document.querySelector("#image-source-field").hidden = !showingImage || !connections.some((item) => item.kind === "registry");
       document.querySelector("#image-field").hidden = !showingImage;
-      document.querySelector("#image-list").hidden = !showingImage;
-      document.querySelector("#repo").required = !showingImage && state.pane === "scan";
+      document.querySelector("#image-list").hidden = !showingImage || Boolean(registrySource);
+      document.querySelector("#repo").required = !showingImage && !gitlabSource && state.pane === "scan";
+      document.querySelector("#image-ref").placeholder = registrySource ? "team/app:1.0" : "nginx:1.27";
       document.querySelector("#target-hint").textContent = showingImage
-        ? "Image scans use Trivy. Pick an image on work-01, or type a name to pull it."
-        : "Repository scans use Semgrep, Checkov, and SonarQube.";
+        ? (registrySource ? "Trivy scans an image pulled from the private registry." : "Image scans use Trivy. Pick an image on work-01, or type a name to pull it.")
+        : (gitlabSource ? "Choose a GitLab project from your groups." : "Repository scans use Semgrep, Checkov, and SonarQube.");
       document.querySelectorAll("input[name=tool]").forEach((input) => {
         const allowed = !currentUser || (currentUser.access && currentUser.access[input.value]);
         const belongs = showingImage ? input.value === "trivy" : input.value !== "trivy";
@@ -1936,7 +2028,7 @@
         if (showingImage) input.checked = allowed && input.value === "trivy";
         else input.checked = Boolean(allowed && belongs && repoChecks[input.value]);
       });
-      if (showingImage && starter && state.pane === "scan") loadImages(false);
+      if (showingImage && !registrySource && starter && state.pane === "scan") loadImages(false);
     }
 
     function setTarget(next) {
@@ -2090,6 +2182,28 @@
       if (total > 0) return false;
       if (item.status === "failed") return true;
       return Boolean(scanErrorText(item));
+    }
+
+    function canRetry(scan) {
+      if (!scan || scan.status === "running") return false;
+      if (!currentUser || currentUser.role === "viewer") return false;
+      const failed = scan.status === "failed"
+        || scan.failure_reason === "clone_failed"
+        || scan.failure_reason === "sha_mismatch"
+        || scanIsFailed(scan);
+      if (!failed) return false;
+      const tools = isImageScan(scan) ? ["trivy"] : (scan.tools || []);
+      if (!tools.length) return false;
+      if (isImageScan(scan)) return Boolean(String(scan.image || "").trim());
+      if (!String(scan.repo || "").trim()) return false;
+      if (currentUser.role === "admin") return true;
+      const access = currentUser.access || {};
+      return tools.every((tool) => access[tool]);
+    }
+
+    function retryButton(scan) {
+      if (!canRetry(scan)) return "";
+      return '<button type="button" class="retry" data-action="retry" data-id="' + esc(scan.id) + '">Retry</button>';
     }
 
     function historyName(item, total) {
@@ -2460,7 +2574,7 @@
         const gateClass = gate === "Fail" ? "fail" : (gate === "Pass" ? "pass" : "");
         const tone = row.trust === "failed" ? "bad" : (dashRank(row) > 0 && dashRank(row) < 5 ? "hot" : "");
         const when = (row.latest.created_at || "").replace(" UTC", "");
-        return '<tr class="' + tone + '" data-action="open" data-id="' + esc(row.latest.id) + '"><td><b>' + esc(row.name) + "</b></td><td>" + esc(when) + "</td><td>" + code + "</td><td>" + sonar + '</td><td class="' + gateClass + '">' + esc(gate) + "</td><td>" + esc(dashChange(row)) + "</td></tr>";
+        return '<tr class="' + tone + '" data-action="open" data-id="' + esc(row.latest.id) + '"><td><b>' + esc(row.name) + "</b></td><td>" + esc(when) + "</td><td>" + code + "</td><td>" + sonar + '</td><td class="' + gateClass + '">' + esc(gate) + "</td><td>" + esc(dashChange(row)) + " " + retryButton(row.latest) + "</td></tr>";
       }).join("");
       queue.className = "dash-panel";
       queue.innerHTML = '<h2>Needs a look</h2><table class="dash-table"><thead><tr><th>Project</th><th>Latest scan</th><th>Code</th><th>SonarQube</th><th>Gate</th><th>Since previous</th></tr></thead><tbody>' + body + "</tbody></table>";
@@ -2472,7 +2586,7 @@
         const failed = dashTrust(item) === "failed";
         const label = item.status === "running" ? "Running" : (failed ? "Failed" : "Finished");
         const kind = item.status === "running" ? "running" : (failed ? "failed" : "done");
-        return '<tr data-action="open" data-id="' + esc(item.id) + '"><td>' + esc((item.created_at || "").replace(" UTC", "")) + "</td><td>" + esc(scanTitle(item)) + '</td><td><span class="dash-status ' + kind + '">' + esc(label) + "</span></td></tr>";
+        return '<tr data-action="open" data-id="' + esc(item.id) + '"><td>' + esc((item.created_at || "").replace(" UTC", "")) + "</td><td>" + esc(scanTitle(item)) + '</td><td><span class="dash-status ' + kind + '">' + esc(label) + "</span> " + (failed ? retryButton(item) : "") + "</td></tr>";
       }).join("") + "</tbody></table>";
     }
 
@@ -2487,7 +2601,7 @@
       const failed = scanIsFailed(scan);
       const badge = failed ? "failed" : scan.status;
       const label = failed ? "Failed" : (STATUS[scan.status] || scan.status);
-      document.querySelector("#scan-head").innerHTML = '<div class="scan-head"><div><h1>' + esc(scanTitle(scan)) + '</h1><div class="repo">' + esc(subtitle) + '</div><div class="meta">' + esc(tools) + " · " + esc((scan.created_at || "").replace(" UTC", "")) + (scan.finished_at ? " to " + esc(scan.finished_at.replace(" UTC", "")) : "") + '</div></div><span class="badge ' + esc(badge) + '">' + esc(label) + "</span></div>";
+      document.querySelector("#scan-head").innerHTML = '<div class="scan-head"><div><h1>' + esc(scanTitle(scan)) + '</h1><div class="repo">' + esc(subtitle) + '</div><div class="meta">' + esc(tools) + " · " + esc((scan.created_at || "").replace(" UTC", "")) + (scan.finished_at ? " to " + esc(scan.finished_at.replace(" UTC", "")) : "") + '</div></div><div class="scan-actions"><span class="badge ' + esc(badge) + '">' + esc(label) + "</span>" + retryButton(scan) + "</div></div>";
       const error = document.querySelector("#scan-error");
       const problem = failed ? String(scan.error || "").trim() : scanErrorText(scan);
       error.innerHTML = problem ? '<div class="note">' + esc(problem) + "</div>" : "";
@@ -2884,6 +2998,10 @@
         syncScan();
         renderHistory();
       }
+      if (action === "retry") {
+        const scan = state.scans.find((item) => item.id === el.dataset.id) || (state.scan && state.scan.id === el.dataset.id ? state.scan : null);
+        retryScan(scan, el);
+      }
       if (action === "open") {
         state.pane = "report";
         state.overviewKey = "";
@@ -2950,6 +3068,196 @@
     document.querySelector("#k-q").addEventListener("input", () => renderKnowledge());
     renderKnowledge();
 
+    function registryPrefix(base) {
+      return String(base || "").replace(/\/+$/, "").replace(/^https?:\/\//, "");
+    }
+
+    function renderConnectionChoices() {
+      const gitlab = connections.filter((item) => item.kind === "gitlab");
+      const registries = connections.filter((item) => item.kind === "registry");
+      const repo = document.querySelector("#repo-source");
+      const image = document.querySelector("#image-source");
+      const repoValue = repo.value;
+      const imageValue = image.value;
+      repo.innerHTML = '<option value="">Public address</option>' + gitlab.map((item) => '<option value="' + item.id + '">' + esc(item.name) + "</option>").join("");
+      image.innerHTML = '<option value="">This server</option>' + registries.map((item) => '<option value="' + item.id + '">' + esc(item.name) + "</option>").join("");
+      if ([...repo.options].some((option) => option.value === repoValue)) repo.value = repoValue;
+      if ([...image.options].some((option) => option.value === imageValue)) image.value = imageValue;
+      syncLaunch();
+    }
+
+    async function loadConnections() {
+      const response = await api("/api/integrations");
+      if (!response.ok) return;
+      const body = await response.json().catch(() => []);
+      connections = Array.isArray(body) ? body : [];
+      renderConnectionChoices();
+      renderConnections();
+    }
+
+    function renderConnections() {
+      const box = document.querySelector("#connection-list");
+      if (!box) return;
+      box.innerHTML = connections.map((item) => {
+        const kind = item.kind === "gitlab" ? "GitLab" : "Registry";
+        return '<div class="card" style="padding:12px;margin-bottom:8px"><strong>' + esc(item.name) + '</strong><div class="meta">' + kind + " · " + esc(item.base_url) + '</div><div class="row-actions" style="margin-top:8px"><button type="button" class="ghost" data-action="test-connection" data-id="' + item.id + '">Test</button><button type="button" class="ghost" data-action="edit-connection" data-id="' + item.id + '">Edit</button><button type="button" class="ghost" data-action="delete-connection" data-id="' + item.id + '">Delete</button></div></div>';
+      }).join("") || '<p class="meta">No connections yet.</p>';
+    }
+
+    function syncConnectionKind() {
+      const registry = document.querySelector("#connection-kind").value === "registry";
+      document.querySelector("#connection-user-field").hidden = !registry;
+      document.querySelector("#connection-url").placeholder = registry ? "192.168.1.20:5000" : "https://gitlab.example.com";
+      document.querySelector("#connection-user").required = registry;
+      document.querySelector("#connection-secret").required = !editingConnection;
+    }
+
+    function resetConnectionForm() {
+      editingConnection = null;
+      document.querySelector("#connection-form-title").textContent = "New connection";
+      document.querySelector("#connection-kind").value = "gitlab";
+      document.querySelector("#connection-name").value = "";
+      document.querySelector("#connection-url").value = "";
+      document.querySelector("#connection-user").value = "";
+      document.querySelector("#connection-secret").value = "";
+      document.querySelector("#connection-ca").value = "";
+      document.querySelector("#connection-clear-ca").checked = false;
+      document.querySelector("#connection-clear-field").hidden = true;
+      syncConnectionKind();
+    }
+
+    async function loadSourceProjects(id, select, purpose) {
+      select.innerHTML = "";
+      if (!id) return;
+      const response = await api("/api/integrations/" + id + "/projects?purpose=" + purpose);
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        select.innerHTML = '<option value="">' + esc(body.error || "Could not load projects.") + "</option>";
+        return;
+      }
+      const rows = Array.isArray(body) ? body : [];
+      select.innerHTML = rows.map((item) => '<option value="' + esc(item.url) + '">' + esc(item.path) + "</option>").join("");
+    }
+
+    async function fillPicker(kind, select, wrap) {
+      const sources = connections.filter((item) => item.kind === kind);
+      wrap.hidden = sources.length === 0;
+      select.innerHTML = "";
+      for (const source of sources) {
+        const response = await api("/api/integrations/" + source.id + "/projects?purpose=edit");
+        const body = await response.json().catch(() => ({}));
+        const rows = Array.isArray(body) ? body : [];
+        select.insertAdjacentHTML("beforeend", rows.map((item) => '<option value="' + esc(item.url) + '">' + esc(source.name + " / " + item.path) + "</option>").join(""));
+      }
+    }
+
+    function fillGroupPickers() {
+      fillPicker("gitlab", document.querySelector("#group-repo-choice"), document.querySelector("#group-repo-pick"));
+      fillPicker("registry", document.querySelector("#group-image-choice"), document.querySelector("#group-image-pick"));
+    }
+
+    function appendLine(selector, value) {
+      if (!value) return;
+      const box = document.querySelector(selector);
+      const lines = box.value.split("\n").map((line) => line.trim()).filter(Boolean);
+      if (!lines.includes(value)) lines.push(value);
+      box.value = lines.join("\n");
+    }
+
+    document.querySelector("#repo-source").addEventListener("change", (event) => {
+      syncLaunch();
+      if (event.target.value) loadSourceProjects(event.target.value, document.querySelector("#repo-project"), "scan");
+    });
+    document.querySelector("#image-source").addEventListener("change", () => syncLaunch());
+    document.querySelector("#connection-kind").addEventListener("change", syncConnectionKind);
+    document.querySelector("#connection-cancel").addEventListener("click", resetConnectionForm);
+    document.querySelector("#group-repo-add").addEventListener("click", () => {
+      appendLine("#group-repos", document.querySelector("#group-repo-choice").value);
+    });
+    document.querySelector("#group-image-add").addEventListener("click", () => {
+      appendLine("#group-images", document.querySelector("#group-image-choice").value);
+    });
+    resetConnectionForm();
+
+    document.querySelector("#connection-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const payload = {
+        kind: document.querySelector("#connection-kind").value,
+        name: document.querySelector("#connection-name").value,
+        base_url: document.querySelector("#connection-url").value,
+        username: document.querySelector("#connection-user").value,
+        secret: document.querySelector("#connection-secret").value,
+        ca_cert: document.querySelector("#connection-ca").value,
+        clear_ca: document.querySelector("#connection-clear-ca").checked
+      };
+      const response = await api(editingConnection ? "/api/integrations/" + editingConnection.id : "/api/integrations", {
+        method: editingConnection ? "PATCH" : "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(payload)
+      });
+      const body = await response.json().catch(() => ({}));
+      const box = document.querySelector("#connection-error");
+      if (!response.ok) {
+        box.hidden = false;
+        box.textContent = body.error || "Could not save.";
+        return;
+      }
+      box.hidden = true;
+      document.querySelector("#connection-msg").textContent = "Connection saved.";
+      resetConnectionForm();
+      await loadConnections();
+    });
+
+    document.querySelector("#connection-list").addEventListener("click", async (event) => {
+      const button = event.target.closest("[data-action]");
+      if (!button) return;
+      const item = connections.find((row) => String(row.id) === button.dataset.id);
+      if (!item) return;
+      const box = document.querySelector("#connection-error");
+      const msg = document.querySelector("#connection-msg");
+      if (button.dataset.action === "edit-connection") {
+        editingConnection = item;
+        document.querySelector("#connection-form-title").textContent = "Edit " + item.name;
+        document.querySelector("#connection-kind").value = item.kind;
+        document.querySelector("#connection-name").value = item.name;
+        document.querySelector("#connection-url").value = item.base_url;
+        document.querySelector("#connection-user").value = item.username || "";
+        document.querySelector("#connection-secret").value = "";
+        document.querySelector("#connection-ca").value = "";
+        document.querySelector("#connection-clear-ca").checked = false;
+        document.querySelector("#connection-clear-field").hidden = !item.has_ca;
+        syncConnectionKind();
+        box.hidden = true;
+        msg.textContent = "";
+      }
+      if (button.dataset.action === "delete-connection") {
+        if (!window.confirm("Delete connection " + item.name + "?")) return;
+        const response = await api("/api/integrations/" + item.id, {method: "DELETE"});
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          box.hidden = false;
+          box.textContent = body.error || "Could not delete.";
+          return;
+        }
+        msg.textContent = "Connection deleted.";
+        resetConnectionForm();
+        await loadConnections();
+      }
+      if (button.dataset.action === "test-connection") {
+        msg.textContent = "Testing...";
+        box.hidden = true;
+        const response = await api("/api/integrations/" + item.id + "/test", {method: "POST"});
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          msg.textContent = "";
+          box.hidden = false;
+          box.textContent = body.error || "The connection failed.";
+          return;
+        }
+        msg.textContent = body.detail || "Connection accepted.";
+      }
+    });
+
     document.querySelector("#image-ref").addEventListener("input", () => {
       if (imagesLoaded) renderImageList();
     });
@@ -2958,29 +3266,8 @@
       if (event.target.name === "tool" && state.target !== "image") repoChecks[event.target.value] = event.target.checked;
     });
 
-    document.querySelector("#scan-form").addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const imageMode = state.target === "image";
-      const tools = imageMode
-        ? ["trivy"]
-        : [...document.querySelectorAll("input[name=tool]:checked")].map((el) => el.value);
-      const msg = document.querySelector("#form-msg");
-      msg.className = "";
-      msg.textContent = "Scan queued.";
-      const payload = imageMode
-        ? {target: "image", image: document.querySelector("#image-ref").value.trim(), tools}
-        : {target: "repo", repo: document.querySelector("#repo").value, tools};
-      const response = await api("/api/scans", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify(payload)
-      });
-      const body = await response.json();
-      if (!response.ok) {
-        msg.className = "bad";
-        msg.textContent = body.error || "Could not start.";
-        return;
-      }
+    function showQueuedScan(body) {
+      const imageMode = isImageScan(body);
       state.pendingMsg = body.id;
       state.pane = "report";
       state.overviewKey = "";
@@ -2993,9 +3280,92 @@
       setView("scans");
       scanStamp = null;
       histStamp = null;
+      dashStamp = null;
       syncScan();
       renderHistory();
+      const msg = document.querySelector("#form-msg");
+      msg.className = "";
       msg.textContent = imageMode ? "Scanning image..." : "Cloning and scanning...";
+    }
+
+    let retryBusy = false;
+
+    async function retryScan(scan, button) {
+      if (!canRetry(scan) || retryBusy) return;
+      retryBusy = true;
+      if (button) {
+        button.disabled = true;
+        button.textContent = "Retrying";
+      }
+      const imageMode = isImageScan(scan);
+      const payload = imageMode
+        ? {target: "image", image: scan.image, tools: ["trivy"]}
+        : {target: "repo", repo: scan.repo, tools: scan.tools, requested_sha: scan.requested_sha || ""};
+      try {
+        const response = await api("/api/scans", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(payload)
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          if (button) {
+            button.disabled = false;
+            button.textContent = "Retry";
+          }
+          const text = body.error || "Could not retry.";
+          const error = document.querySelector("#scan-error");
+          if (state.view === "scans" && state.scan && state.scan.id === scan.id && error) {
+            error.innerHTML = '<div class="note">' + esc(text) + "</div>";
+          } else if (button) {
+            button.insertAdjacentHTML("afterend", ' <span class="meta">' + esc(text) + "</span>");
+          }
+          return;
+        }
+        showQueuedScan(body);
+      } finally {
+        retryBusy = false;
+      }
+    }
+
+    document.querySelector("#scan-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const imageMode = state.target === "image";
+      const tools = imageMode
+        ? ["trivy"]
+        : [...document.querySelectorAll("input[name=tool]:checked")].map((el) => el.value);
+      const msg = document.querySelector("#form-msg");
+      msg.className = "";
+      msg.textContent = "Scan queued.";
+      let imageName = document.querySelector("#image-ref").value.trim();
+      const registryId = document.querySelector("#image-source").value;
+      if (imageMode && registryId) {
+        const source = connections.find((item) => String(item.id) === registryId);
+        const prefix = registryPrefix(source ? source.base_url : "");
+        if (prefix && !imageName.startsWith(prefix + "/")) imageName = prefix + "/" + imageName.replace(/^\/+/, "");
+      }
+      const gitlabId = document.querySelector("#repo-source").value;
+      const repoUrl = gitlabId ? document.querySelector("#repo-project").value : document.querySelector("#repo").value;
+      if (!imageMode && gitlabId && !repoUrl) {
+        msg.className = "bad";
+        msg.textContent = "Choose a GitLab project.";
+        return;
+      }
+      const payload = imageMode
+        ? {target: "image", image: imageName, tools}
+        : {target: "repo", repo: repoUrl, tools};
+      const response = await api("/api/scans", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(payload)
+      });
+      const body = await response.json();
+      if (!response.ok) {
+        msg.className = "bad";
+        msg.textContent = body.error || "Could not start.";
+        return;
+      }
+      showQueuedScan(body);
     });
 
     function groupLines(value) {
@@ -3058,7 +3428,7 @@
           const before = dashCode(previous);
           row.delta = {critical: tally.critical - before.critical, high: tally.high - before.high};
         }
-        return '<tr data-action="open" data-id="' + esc(latest.id) + '"><td><b>' + esc(project.target) + "</b></td><td>" + esc((latest.created_at || "").replace(" UTC", "")) + "</td><td>" + esc(latest.owner || "") + "</td><td>" + code + "</td><td>" + esc(sonarText) + "</td><td>" + esc(dashGate(row)) + "</td><td>" + esc(dashChange(row)) + "</td></tr>";
+        return '<tr data-action="open" data-id="' + esc(latest.id) + '"><td><b>' + esc(project.target) + "</b></td><td>" + esc((latest.created_at || "").replace(" UTC", "")) + "</td><td>" + esc(latest.owner || "") + "</td><td>" + code + "</td><td>" + esc(sonarText) + "</td><td>" + esc(dashGate(row)) + "</td><td>" + esc(dashChange(row)) + " " + retryButton(latest) + "</td></tr>";
       }).join("");
       const events = (group.events || []).map((event) => "<li>" + esc((event.created_at || "").replace("T", " ").slice(0, 16)) + " · " + esc(event.actor) + " " + esc(event.action) + (event.detail ? " · " + esc(event.detail) : "") + "</li>").join("");
       return '<div class="dash-panel"><h2>' + esc(group.name) + '</h2><p class="meta">' + esc(group.description || "Latest scan of each project in this group.") + '</p><table class="dash-table"><thead><tr><th>Project</th><th>Latest scan</th><th>Who ran it</th><th>Code</th><th>SonarQube</th><th>Gate</th><th>Since previous</th></tr></thead><tbody>' + rows + "</tbody></table>" + (events ? "<h2>Recent changes</h2><ul>" + events + "</ul>" : "") + "</div>";
@@ -3077,6 +3447,7 @@
       const selfName = currentUser && currentUser.role === "developer" ? currentUser.username : "";
       document.querySelector("#group-members").value = group ? members.map((item) => item.username).join("\n") : selfName;
       document.querySelector("#group-leads").value = group ? members.filter((item) => item.lead).map((item) => item.username).join("\n") : selfName;
+      fillGroupPickers();
     }
 
     document.querySelector("#group-new").addEventListener("click", () => showGroupForm(null));
@@ -3279,6 +3650,13 @@
       }
     }
 
+    function canResetPassword(user) {
+      if (!currentUser || currentUser.role !== "admin" || !user) return false;
+      if (user.id === currentUser.id) return false;
+      if (user.role === "admin" && currentUser.username !== "admin") return false;
+      return true;
+    }
+
     function openUserEditor(user) {
       editingUser = user;
       document.querySelector("#user-form-title").textContent = "Edit " + displayName(user);
@@ -3289,10 +3667,15 @@
       document.querySelector("#user-pass").value = "";
       document.querySelector("#user-pass-again").value = "";
       document.querySelector("#user-passwords").hidden = true;
+      document.querySelector("#user-reset").hidden = !canResetPassword(user);
+      document.querySelector("#user-reset-pass").value = "";
+      document.querySelector("#user-reset-again").value = "";
+      document.querySelector("#user-reset-must").checked = true;
       document.querySelector("#user-form-role").value = user.role;
       document.querySelector("#user-disabled").checked = user.disabled;
       userFormTools(user.access, user.role);
       syncUserPassword();
+      document.querySelector("#user-form").hidden = false;
     }
 
     function resetUserForm() {
@@ -3305,23 +3688,45 @@
       document.querySelector("#user-pass").value = "";
       document.querySelector("#user-pass-again").value = "";
       document.querySelector("#user-passwords").hidden = false;
+      document.querySelector("#user-reset").hidden = true;
+      document.querySelector("#user-reset-pass").value = "";
+      document.querySelector("#user-reset-again").value = "";
+      document.querySelector("#user-must-change").checked = true;
       document.querySelector("#user-form-role").value = "viewer";
       document.querySelector("#user-disabled").checked = false;
       userFormTools({semgrep: true, checkov: true, sonar: false, trivy: true}, "viewer");
       syncUserPassword();
+      document.querySelector("#user-form").hidden = true;
+    }
+
+    function showNewUser() {
+      resetUserForm();
+      const form = document.querySelector("#user-form");
+      form.hidden = false;
+      form.scrollIntoView({block: "nearest"});
+      document.querySelector("#user-first").focus();
     }
 
     function syncUserPassword() {
       const creating = !editingUser;
-      const password = creating ? document.querySelector("#user-pass").value : "";
-      const again = creating ? document.querySelector("#user-pass-again").value : "";
-      const mismatch = (password.length > 0 || again.length > 0) && password !== again;
+      const resetOn = Boolean(editingUser) && !document.querySelector("#user-reset").hidden;
+      const password = creating
+        ? document.querySelector("#user-pass").value
+        : (resetOn ? document.querySelector("#user-reset-pass").value : "");
+      const again = creating
+        ? document.querySelector("#user-pass-again").value
+        : (resetOn ? document.querySelector("#user-reset-again").value : "");
+      const started = password.length > 0 || again.length > 0;
       const matched = password.length >= 12 && password === again;
-      document.querySelector("#user-pass-ok").hidden = !matched;
-      document.querySelector("#user-pass-bad").hidden = !mismatch;
+      const mismatch = started && password !== again;
+      document.querySelector("#user-pass-ok").hidden = !(creating && matched);
+      document.querySelector("#user-pass-bad").hidden = !(creating && mismatch);
+      document.querySelector("#user-reset-ok").hidden = !(resetOn && matched);
+      document.querySelector("#user-reset-bad").hidden = !(resetOn && mismatch);
       document.querySelector("#user-pass").required = creating;
       document.querySelector("#user-pass-again").required = creating;
-      document.querySelector("#user-save").disabled = creating && !matched;
+      const blocked = creating ? !matched : resetOn && started && !matched;
+      document.querySelector("#user-save").disabled = blocked;
     }
 
     function renderUsers() {
@@ -3344,7 +3749,10 @@
         }).join("");
         const uiOn = user.role === "admin" || (user.access && user.access.sonar_ui);
         const workspace = '<button type="button" class="scanner" data-action="access-tool" data-id="' + user.id + '" data-tool="sonar_ui"' + (user.role === "admin" ? " disabled" : "") + ' style="text-align:left"><b>SonarQube workspace</b><small>' + (uiOn ? "On" : "Off") + '</small></button>';
-        return '<div class="card" style="padding:12px;margin-bottom:8px"><strong>' + esc(user.username) + '</strong><div class="meta">' + esc(ROLE_LABEL[user.role] || "") + (user.email ? " · " + esc(user.email) : "") + '</div><div class="scanners" style="margin-top:8px">' + tools + workspace + '</div></div>';
+        const name = displayName(user);
+        const named = name !== user.username;
+        const meta = (named ? user.username + " · " : "") + (ROLE_LABEL[user.role] || "") + (user.email ? " · " + user.email : "");
+        return '<div class="card" style="padding:12px;margin-bottom:8px"><strong>' + esc(named ? name : user.username) + '</strong><div class="meta">' + esc(meta) + '</div><div class="scanners" style="margin-top:8px">' + tools + workspace + '</div></div>';
       }).join("");
     }
 
@@ -3368,8 +3776,9 @@
     document.querySelector("#user-form-role").addEventListener("change", (event) => {
       userFormTools(editingUser ? editingUser.access : {semgrep: true, checkov: false, sonar: false, trivy: true}, event.target.value);
     });
+    document.querySelector("#user-new").addEventListener("click", showNewUser);
     document.querySelector("#user-cancel").addEventListener("click", resetUserForm);
-    ["#user-pass", "#user-pass-again"].forEach((selector) => {
+    ["#user-pass", "#user-pass-again", "#user-reset-pass", "#user-reset-again"].forEach((selector) => {
       document.querySelector(selector).addEventListener("input", syncUserPassword);
     });
     resetUserForm();
@@ -3385,6 +3794,10 @@
       const password = editingUser ? "" : document.querySelector("#user-pass").value;
       const again = editingUser ? "" : document.querySelector("#user-pass-again").value;
       if (password !== again) return;
+      const resetOn = Boolean(editingUser) && !document.querySelector("#user-reset").hidden;
+      const resetPassword = resetOn ? document.querySelector("#user-reset-pass").value : "";
+      const resetAgain = resetOn ? document.querySelector("#user-reset-again").value : "";
+      if (resetOn && (resetPassword || resetAgain) && (resetPassword !== resetAgain || resetPassword.length < 12)) return;
       const payload = {
         first_name: document.querySelector("#user-first").value.trim(),
         last_name: document.querySelector("#user-last").value.trim(),
@@ -3394,7 +3807,13 @@
         disabled: document.querySelector("#user-disabled").checked,
         access
       };
-      if (password) payload.password = password;
+      if (!editingUser) {
+        payload.password = password;
+        payload.must_change_password = document.querySelector("#user-must-change").checked;
+      } else if (resetPassword) {
+        payload.password = resetPassword;
+        payload.must_change_password = document.querySelector("#user-reset-must").checked;
+      }
       const response = await api(editingUser ? "/api/users/" + editingUser.id : "/api/users", {
         method: editingUser ? "PATCH" : "POST",
         headers: {"Content-Type": "application/json"},

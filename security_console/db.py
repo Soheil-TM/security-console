@@ -124,6 +124,19 @@ SCHEMA = (
         created_at timestamptz NOT NULL DEFAULT now()
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS integrations (
+        id bigserial PRIMARY KEY,
+        kind text NOT NULL CHECK (kind IN ('gitlab', 'registry')),
+        name text NOT NULL UNIQUE,
+        base_url text NOT NULL,
+        username text NOT NULL DEFAULT '',
+        secret text NOT NULL DEFAULT '',
+        ca_cert text NOT NULL DEFAULT '',
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+    )
+    """,
 )
 
 
@@ -542,6 +555,7 @@ def update_user(
     allow_sonar_ui: bool = False,
     first_name: str = "",
     last_name: str = "",
+    must_change_password: bool = False,
 ) -> None:
     """Replace the editable fields of one account."""
 
@@ -582,6 +596,7 @@ def update_user(
                     allow_sonar_ui = %s,
                     first_name = %s, last_name = %s,
                     password_hash = %s,
+                    must_change_password = %s,
                     session_version = session_version + 1
                 WHERE id = %s
                 """,
@@ -598,6 +613,7 @@ def update_user(
                     first_name,
                     last_name,
                     password_hash,
+                    must_change_password,
                     user_id,
                 ),
             )
@@ -1185,6 +1201,158 @@ def _write_group_event(
         """,
         (group_id, actor, action, detail[:500]),
     )
+
+
+def list_integrations() -> list[dict[str, Any]]:
+    """Return saved connections without tokens or certificates."""
+
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, kind, name, base_url, username,
+                   secret <> '' AS has_secret,
+                   ca_cert <> '' AS has_ca
+            FROM integrations
+            ORDER BY name
+            """
+        ).fetchall()
+        conn.commit()
+    return [dict(row) for row in rows]
+
+
+def integration_secrets() -> list[dict[str, Any]]:
+    """Return connection secrets for the scanner. Callers must not log them."""
+
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, kind, base_url, username, secret, ca_cert
+            FROM integrations
+            """
+        ).fetchall()
+        conn.commit()
+    return [dict(row) for row in rows]
+
+
+def get_integration(integration_id: int) -> dict[str, Any] | None:
+    """Return one connection, including its secret."""
+
+    with connect() as conn:
+        row = conn.execute(
+            """
+            SELECT id, kind, name, base_url, username, secret, ca_cert
+            FROM integrations
+            WHERE id = %s
+            """,
+            (integration_id,),
+        ).fetchone()
+        conn.commit()
+    return dict(row) if row else None
+
+
+def count_integrations() -> int:
+    """Return how many connections are saved."""
+
+    with connect() as conn:
+        row = conn.execute("SELECT count(*) AS n FROM integrations").fetchone()
+        conn.commit()
+    if row is None:
+        return 0
+    return int(row["n"])
+
+
+def insert_integration(
+    kind: str,
+    name: str,
+    base_url: str,
+    username: str,
+    secret: str,
+    ca_cert: str,
+) -> int:
+    """Insert one connection and return its id."""
+
+    with connect() as conn:
+        row = conn.execute(
+            """
+            INSERT INTO integrations (
+                kind, name, base_url, username, secret, ca_cert
+            )
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (kind, name, base_url, username, secret, ca_cert),
+        ).fetchone()
+        conn.commit()
+    if row is None:
+        raise RuntimeError("integration insert did not return an id")
+    return int(row["id"])
+
+
+def update_integration(
+    integration_id: int,
+    kind: str,
+    name: str,
+    base_url: str,
+    username: str,
+    secret: str | None,
+    ca_cert: str | None,
+) -> None:
+    """Replace one connection. A null secret or certificate is left as saved."""
+
+    with connect() as conn:
+        current = conn.execute(
+            "SELECT secret, ca_cert FROM integrations WHERE id = %s",
+            (integration_id,),
+        ).fetchone()
+        if current is None:
+            conn.commit()
+            return
+        conn.execute(
+            """
+            UPDATE integrations
+            SET kind = %s, name = %s, base_url = %s, username = %s,
+                secret = %s, ca_cert = %s, updated_at = now()
+            WHERE id = %s
+            """,
+            (
+                kind,
+                name,
+                base_url,
+                username,
+                current["secret"] if secret is None else secret,
+                current["ca_cert"] if ca_cert is None else ca_cert,
+                integration_id,
+            ),
+        )
+        conn.commit()
+
+
+def delete_integration(integration_id: int) -> None:
+    """Delete one connection."""
+
+    with connect() as conn:
+        conn.execute(
+            "DELETE FROM integrations WHERE id = %s",
+            (integration_id,),
+        )
+        conn.commit()
+
+
+def user_leads_a_group(user_id: int) -> bool:
+    """Return whether this account leads at least one group."""
+
+    with connect() as conn:
+        row = conn.execute(
+            """
+            SELECT 1 AS found
+            FROM group_members
+            WHERE user_id = %s AND lead = true
+            LIMIT 1
+            """,
+            (user_id,),
+        ).fetchone()
+        conn.commit()
+    return row is not None
 
 
 def reset_auth_tables() -> None:

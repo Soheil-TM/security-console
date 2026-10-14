@@ -95,6 +95,7 @@ def _create_account(app: Flask) -> Reply:
             parsed["allow_checkov"],
             parsed["allow_sonar"],
             parsed["allow_trivy"],
+            must_change_password=parsed["must_change_password"],
             allow_sonar_ui=parsed["allow_sonar_ui"],
             first_name=parsed["first_name"],
             last_name=parsed["last_name"],
@@ -123,6 +124,8 @@ def _update_account(app: Flask, user_id: int) -> Reply:
         return jsonify({"error": "The last admin cannot be removed."}), 409
     password_hash = None
     if parsed["password"]:
+        if not _can_reset_password(g.user, current):
+            return jsonify({"error": "You cannot reset this password."}), 403
         password_hash = hash_password(parsed["password"])
     try:
         db.update_user(
@@ -139,6 +142,7 @@ def _update_account(app: Flask, user_id: int) -> Reply:
             allow_sonar_ui=parsed["allow_sonar_ui"],
             first_name=parsed["first_name"],
             last_name=parsed["last_name"],
+            must_change_password=parsed["must_change_password"],
         )
     except UniqueViolation:
         return jsonify({"error": "That username is already registered."}), 409
@@ -204,7 +208,6 @@ def _account_body(
     if not isinstance(body, dict):
         return _reject("The account details are incomplete.", 400)
     username = body.get("username")
-    email = body.get("email")
     role = body.get("role")
     password = body.get("password") or ""
     raw_access = body.get("access")
@@ -217,12 +220,9 @@ def _account_body(
     last_name = _kept_name(body, "last_name", "Last name", current)
     if isinstance(last_name, Response):
         return last_name
-    if (
-        not isinstance(email, str)
-        or len(email.strip()) > 254
-        or not _EMAIL.fullmatch(email.strip())
-    ):
-        return _reject("Email is invalid.", 400)
+    email_text = _email_text(body, current)
+    if isinstance(email_text, Response):
+        return email_text
     if role not in ROLES:
         return _reject("Role is invalid.", 400)
     if not isinstance(password, str) or len(password) > 128:
@@ -244,7 +244,7 @@ def _account_body(
         "username": username.strip(),
         "first_name": first_name,
         "last_name": last_name,
-        "email": email.strip().lower(),
+        "email": email_text,
         "role": role,
         "password": password,
         "disabled": disabled,
@@ -253,7 +253,51 @@ def _account_body(
         "allow_sonar": flags["sonar"],
         "allow_trivy": flags["trivy"],
         "allow_sonar_ui": sonar_ui,
+        "must_change_password": _must_change(body, password, password_required),
     }
+
+
+def _must_change(body: dict[str, Any], password: str, required: bool) -> bool:
+    """A new account uses the checkbox. A reset uses it only with a password."""
+
+    if required:
+        return bool(body.get("must_change_password"))
+    if not password:
+        return False
+    if "must_change_password" not in body:
+        return True
+    return bool(body.get("must_change_password"))
+
+
+def _can_reset_password(actor: dict[str, Any], target: dict[str, Any]) -> bool:
+    """An admin resets other people. Only admin resets another admin."""
+
+    if actor.get("role") != "admin":
+        return False
+    if int(actor.get("id") or 0) == int(target["id"]):
+        return False
+    if target.get("role") == "admin" and actor.get("username") != "admin":
+        return False
+    return True
+
+
+def _email_text(
+    body: dict[str, Any],
+    current: dict[str, Any] | None,
+) -> str | Response:
+    """Allow a blank email. A filled one must look like an address."""
+
+    if "email" not in body and current is not None:
+        return str(current.get("email") or "")
+    email = body.get("email", "")
+    if not isinstance(email, str):
+        return _reject("Email is invalid.", 400)
+    text = email.strip().lower()
+    if not text:
+        return ""
+    if len(text) > 254 or _EMAIL.fullmatch(text) is None:
+        return _reject("Email is invalid.", 400)
+    return text
 
 
 def _kept_name(

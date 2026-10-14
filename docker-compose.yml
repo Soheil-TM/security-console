@@ -132,7 +132,7 @@ services:
   # not wait for it, so a Sonar password problem cannot block the other tools.
   sonar-init:
     build: .
-    image: security-console:17
+    image: security-console:18
     entrypoint: ["python", "-m", "security_console.sonar_setup"]
     user: "0:0"
     depends_on:
@@ -159,7 +159,7 @@ services:
 
   scanner:
     build: .
-    image: security-console:17
+    image: security-console:18
     entrypoint: ["python", "-m", "security_console.worker"]
     environment:
       SCANNER_TOKEN_FILE: /run/secrets/scanner_token
@@ -192,7 +192,7 @@ services:
 
   console:
     build: .
-    image: security-console:17
+    image: security-console:18
     depends_on:
       db:
         condition: service_healthy

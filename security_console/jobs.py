@@ -48,25 +48,66 @@ def parse_job(body: Any) -> dict[str, Any]:
             raise JobError("Commit SHA is invalid.")
         if image_sha:
             raise JobError("Image scans do not take a commit.")
-        return {
-            "id": scan_id,
-            "target": "image",
-            "repo": "",
-            "image": image.strip(),
-            "tools": ["trivy"],
-            "requested_sha": "",
-        }
+        return _with_secrets(
+            body,
+            {
+                "id": scan_id,
+                "target": "image",
+                "repo": "",
+                "image": image.strip(),
+                "tools": ["trivy"],
+                "requested_sha": "",
+            },
+        )
     repo = body.get("repo")
     if not isinstance(repo, str) or not valid_repo(repo.strip()):
         raise JobError("Repository URL must start with http or https.")
     requested_sha = normalize_commit_sha(body.get("requested_sha"))
     if requested_sha is None:
         raise JobError("Commit SHA is invalid.")
-    return {
-        "id": scan_id,
-        "target": "repo",
-        "repo": repo.strip(),
-        "image": "",
-        "tools": tools,
-        "requested_sha": requested_sha,
-    }
+    return _with_secrets(
+        body,
+        {
+            "id": scan_id,
+            "target": "repo",
+            "repo": repo.strip(),
+            "image": "",
+            "tools": tools,
+            "requested_sha": requested_sha,
+        },
+    )
+
+
+def _with_secrets(body: dict[str, Any], job: dict[str, Any]) -> dict[str, Any]:
+    """Keep a credential only when the console attached one for this scan."""
+
+    token = _secret(body, "clone_token", 256)
+    username = _secret(body, "registry_username", 128)
+    password = _secret(body, "registry_password", 256)
+    certificate = _secret(body, "ca_cert", 12000, pem=True)
+    if token:
+        job["clone_token"] = token
+    if username:
+        job["registry_username"] = username
+    if password:
+        job["registry_password"] = password
+    if certificate:
+        job["ca_cert"] = certificate
+    return job
+
+
+def _secret(body: dict[str, Any], key: str, limit: int, *, pem: bool = False) -> str:
+    value = body.get(key) or ""
+    if value == "":
+        return ""
+    if not isinstance(value, str) or len(value) > limit:
+        raise JobError("Invalid scan.")
+    if pem:
+        if "PRIVATE KEY" in value:
+            raise JobError("Invalid scan.")
+        if any(ord(ch) < 9 or (13 < ord(ch) < 32) for ch in value):
+            raise JobError("Invalid scan.")
+        return value
+    if any(ord(ch) < 32 or ch.isspace() for ch in value):
+        raise JobError("Invalid scan.")
+    return value

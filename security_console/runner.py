@@ -63,9 +63,12 @@ def execute_job(job: dict[str, Any], on_phase: Phase | None = None) -> dict[str,
         else:
             result = _repo_scan(job, phase)
     except CloneError as exc:
-        result = _failed(exc, reason=exc.reason)
+        result = _failed(
+            RuntimeError(_redact_job(str(exc), job)),
+            reason=exc.reason,
+        )
     except Exception as exc:
-        result = _failed(exc)
+        result = _failed(RuntimeError(_redact_job(str(exc), job)))
     result["requested_sha"] = requested
     return result
 
@@ -93,12 +96,15 @@ def list_images() -> list[dict[str, Any]]:
 def _repo_scan(job: dict[str, Any], phase: Phase) -> dict[str, Any]:
     local_path = _scan_path(job["id"])
     host_path = _host_path(job["id"])
+    auth_dir = local_path.parent / (job["id"] + "-auth")
+    auth_config = _git_auth_file(auth_dir, job)
     try:
         phase("clone")
         commit_sha = _clone(
             job["repo"],
             local_path,
             str(job.get("requested_sha") or ""),
+            auth_config,
         )
         _reject_huge_tree(local_path)
         client = _client()
@@ -143,6 +149,8 @@ def _repo_scan(job: dict[str, Any], phase: Phase) -> dict[str, Any]:
     finally:
         if local_path.exists():
             shutil.rmtree(local_path, ignore_errors=True)
+        if auth_dir.exists():
+            shutil.rmtree(auth_dir, ignore_errors=True)
 
 
 def _image_scan(job: dict[str, Any], phase: Phase) -> dict[str, Any]:
@@ -163,6 +171,21 @@ def _image_scan(job: dict[str, Any], phase: Phase) -> dict[str, Any]:
             image = client.images.get(image_ref)
         except _image_not_found():
             image = None
+        password = str(job.get("registry_password") or "")
+        if image is None and password:
+            phase("Pull")
+            _pull_image(
+                client,
+                image_ref,
+                str(job.get("registry_username") or ""),
+                password,
+            )
+            try:
+                image = client.images.get(image_ref)
+            except _image_not_found():
+                image = None
+            if image is None:
+                raise RuntimeError("The registry did not return the image.")
         if image is not None:
             size = int((image.attrs or {}).get("Size") or 0)
             if size > _image_limit():
@@ -421,7 +444,12 @@ def _empty_sonar(key: str, error: str) -> dict[str, Any]:
     }
 
 
-def _clone(repo: str, dest: Path, requested_sha: str) -> str:
+def _clone(
+    repo: str,
+    dest: Path,
+    requested_sha: str,
+    auth_config: str | None = None,
+) -> str:
     pins = clone_pins(repo)
     if not pins:
         raise CloneError("Repository URL is not allowed.", "clone_failed")
@@ -429,9 +457,15 @@ def _clone(repo: str, dest: Path, requested_sha: str) -> str:
         shutil.rmtree(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
     if requested_sha:
-        commands = git_fetch_sha_commands(repo, str(dest), requested_sha, pins)
+        commands = git_fetch_sha_commands(
+            repo,
+            str(dest),
+            requested_sha,
+            pins,
+            auth_config,
+        )
     else:
-        commands = [git_clone_args(repo, str(dest), pins)]
+        commands = [git_clone_args(repo, str(dest), pins, auth_config)]
     for command in commands:
         timeout = 180 if "fetch" in command or "clone" in command else 30
         try:
@@ -612,6 +646,62 @@ def _public_error(notes: list[str]) -> str:
         if note and "Could not refresh the Trivy" not in note
     ]
     return "\n".join(kept)[:2000]
+
+
+def _git_auth_file(directory: Path, job: dict[str, Any]) -> str | None:
+    """Write a git config the clone includes. The token stays out of argv."""
+
+    token = str(job.get("clone_token") or "")
+    ca_cert = str(job.get("ca_cert") or "")
+    if not token and not ca_cert:
+        return None
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    os.chmod(directory, 0o700)
+    lines = ["[http]"]
+    if token:
+        lines.append("\textraHeader = PRIVATE-TOKEN: " + token)
+    if ca_cert:
+        ca_path = directory / "ca.pem"
+        ca_path.write_text(ca_cert, encoding="utf-8")
+        os.chmod(ca_path, 0o600)
+        lines.append("\tsslCAInfo = " + str(ca_path))
+    path = directory / "auth.config"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    os.chmod(path, 0o600)
+    return str(path)
+
+
+def _pull_image(client: Any, ref: str, username: str, password: str) -> None:
+    """Pull one private image through the Docker API. Trivy never sees the password."""
+
+    try:
+        stream = client.api.pull(
+            ref,
+            stream=True,
+            decode=True,
+            auth_config={"username": username, "password": password},
+        )
+    except Exception as exc:
+        raise RuntimeError(_hide_secret(str(exc), password)) from None
+    message = ""
+    for item in stream:
+        if isinstance(item, dict) and item.get("error"):
+            message = _hide_secret(str(item["error"]), password)
+    if message:
+        raise RuntimeError(message)
+
+
+def _redact_job(text: str, job: dict[str, Any]) -> str:
+    hidden = text
+    for key in ("clone_token", "registry_password"):
+        hidden = _hide_secret(hidden, str(job.get(key) or ""))
+    return hidden
+
+
+def _hide_secret(text: str, secret: str) -> str:
+    if secret and secret in text:
+        return text.replace(secret, "***")
+    return text
 
 
 def _failed(exc: Exception, *, reason: str = "") -> dict[str, Any]:

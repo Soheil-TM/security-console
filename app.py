@@ -35,6 +35,7 @@ from security_console.dispatch import (
     scanner_url,
 )
 from security_console.images import valid_image_ref
+from security_console.integrations import credentials_for
 from security_console.repos import normalize_commit_sha, valid_repo
 from security_console.sonar_proxy import install_sonar_proxy
 from security_console.sonar_setup import read_public_status, run_setup
@@ -93,6 +94,15 @@ def execute_scan(scan_id: str) -> None:
         save_scan(item)
 
     try:
+        try:
+            secrets = credentials_for(item)
+        except psycopg.Error:
+            app.logger.error("integration lookup failed")
+            item["status"] = "failed"
+            item["error"] = "Sign-in is unavailable."
+            item["phase"] = ""
+            item["finished_at"] = utcnow()
+            return
         outcome = dispatch_scan(
             {
                 "id": item["id"],
@@ -101,6 +111,7 @@ def execute_scan(scan_id: str) -> None:
                 "image": item["image"],
                 "tools": item["tools"],
                 "requested_sha": item.get("requested_sha") or "",
+                **secrets,
             },
             on_phase,
         )
@@ -118,7 +129,11 @@ def execute_scan(scan_id: str) -> None:
     except Exception as exc:
         item["status"] = "failed"
         item["phase"] = ""
-        item["error"] = str(exc)[-2000:]
+        text = str(exc)
+        for value in locals().get("secrets", {}).values():
+            if value and value in text:
+                text = text.replace(value, "***")
+        item["error"] = text[-2000:]
         item["commit_sha"] = item.get("commit_sha") or ""
         item["failure_reason"] = item.get("failure_reason") or ""
         item["finished_at"] = utcnow()

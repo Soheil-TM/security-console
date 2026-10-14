@@ -163,10 +163,12 @@ def install_auth(app: Flask) -> None:
         return _call_db(app, _set_idle_timeout)
 
     from security_console.groups import install_groups
+    from security_console.integrations import install_integrations
     from security_console.users import install_users
 
     install_users(app)
     install_groups(app)
+    install_integrations(app)
 
 
 def _call_db(app: Flask, action: Callable[[], Reply]) -> Reply:

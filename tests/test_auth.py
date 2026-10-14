@@ -318,6 +318,8 @@ def test_admin_manages_users(client: FlaskClient) -> None:
     created = client.post(
         "/api/users",
         json={
+            "first_name": "New",
+            "last_name": "User",
             "username": "new-user",
             "email": "New@Example.com",
             "password": "correct-password",
@@ -328,6 +330,8 @@ def test_admin_manages_users(client: FlaskClient) -> None:
     )
     assert created.status_code == 201
     user_id = created.get_json()["id"]
+    assert created.get_json()["first_name"] == "New"
+    assert created.get_json()["last_name"] == "User"
     assert created.get_json()["email"] == "new@example.com"
     assert created.get_json()["access"]["sonar"] is True
 
@@ -342,6 +346,7 @@ def test_admin_manages_users(client: FlaskClient) -> None:
         headers={"X-CSRF-Token": csrf},
     )
     assert updated.status_code == 200
+    assert updated.get_json()["first_name"] == "New"
     assert updated.get_json()["role"] == "viewer"
     assert updated.get_json()["access"]["sonar"] is False
 
@@ -518,6 +523,8 @@ def test_password_gate_blocks_sensitive_routes_until_the_change(
     created = client.post(
         "/api/users",
         json={
+            "first_name": "New",
+            "last_name": "User",
             "username": "new-user",
             "email": "new@example.com",
             "password": "replacement-pass",

@@ -67,6 +67,8 @@ def public_user(user: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": int(user["id"]),
         "username": user["username"],
+        "first_name": user.get("first_name") or "",
+        "last_name": user.get("last_name") or "",
         "email": user.get("email") or "",
         "role": user["role"],
         "disabled": bool(user.get("disabled")),
@@ -94,6 +96,8 @@ def _create_account(app: Flask) -> Reply:
             parsed["allow_sonar"],
             parsed["allow_trivy"],
             allow_sonar_ui=parsed["allow_sonar_ui"],
+            first_name=parsed["first_name"],
+            last_name=parsed["last_name"],
         )
     except UniqueViolation:
         return jsonify({"error": "That username is already registered."}), 409
@@ -108,7 +112,11 @@ def _update_account(app: Flask, user_id: int) -> Reply:
     current = db.find_user_by_id(user_id)
     if current is None:
         return jsonify({"error": "User not found."}), 404
-    parsed = _account_body(request.get_json(silent=True), password_required=False)
+    parsed = _account_body(
+        request.get_json(silent=True),
+        password_required=False,
+        current=current,
+    )
     if isinstance(parsed, Response):
         return parsed
     if _removes_last_admin(current, parsed):
@@ -129,6 +137,8 @@ def _update_account(app: Flask, user_id: int) -> Reply:
             parsed["allow_trivy"],
             password_hash,
             allow_sonar_ui=parsed["allow_sonar_ui"],
+            first_name=parsed["first_name"],
+            last_name=parsed["last_name"],
         )
     except UniqueViolation:
         return jsonify({"error": "That username is already registered."}), 409
@@ -189,6 +199,7 @@ def _account_body(
     body: Any,
     *,
     password_required: bool,
+    current: dict[str, Any] | None = None,
 ) -> dict[str, Any] | Response:
     if not isinstance(body, dict):
         return _reject("The account details are incomplete.", 400)
@@ -200,6 +211,12 @@ def _account_body(
     access: dict[str, Any] = raw_access if isinstance(raw_access, dict) else {}
     if not isinstance(username, str) or not valid_username(username.strip()):
         return _reject("Username is invalid.", 400)
+    first_name = _kept_name(body, "first_name", "First name", current)
+    if isinstance(first_name, Response):
+        return first_name
+    last_name = _kept_name(body, "last_name", "Last name", current)
+    if isinstance(last_name, Response):
+        return last_name
     if (
         not isinstance(email, str)
         or len(email.strip()) > 254
@@ -225,6 +242,8 @@ def _account_body(
         sonar_ui = True
     return {
         "username": username.strip(),
+        "first_name": first_name,
+        "last_name": last_name,
         "email": email.strip().lower(),
         "role": role,
         "password": password,
@@ -235,6 +254,25 @@ def _account_body(
         "allow_trivy": flags["trivy"],
         "allow_sonar_ui": sonar_ui,
     }
+
+
+def _kept_name(
+    body: dict[str, Any],
+    key: str,
+    label: str,
+    current: dict[str, Any] | None,
+) -> str | Response:
+    """Require a name on create. An update keeps the stored name if omitted."""
+
+    if key not in body and current is not None:
+        return str(current.get(key) or "")
+    value = body.get(key)
+    if not isinstance(value, str):
+        return _reject(label + " is invalid.", 400)
+    text = " ".join(value.split())
+    if not text or len(text) > 80 or any(ord(ch) < 32 for ch in text):
+        return _reject(label + " is invalid.", 400)
+    return text
 
 
 def _reject(message: str, status: int) -> Response:

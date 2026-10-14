@@ -162,9 +162,11 @@ def install_auth(app: Flask) -> None:
     def idle_timeout() -> Reply:
         return _call_db(app, _set_idle_timeout)
 
+    from security_console.groups import install_groups
     from security_console.users import install_users
 
     install_users(app)
+    install_groups(app)
 
 
 def _call_db(app: Flask, action: Callable[[], Reply]) -> Reply:
@@ -332,6 +334,8 @@ def _session_payload(user: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": int(user["id"]),
         "username": user["username"],
+        "first_name": user.get("first_name") or "",
+        "last_name": user.get("last_name") or "",
         "email": user.get("email") or "",
         "role": user["role"],
         "access": access_map(user),

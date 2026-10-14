@@ -26,6 +26,8 @@ SCHEMA = (
         allow_sonar boolean NOT NULL DEFAULT false,
         allow_sonar_ui boolean NOT NULL DEFAULT false,
         allow_trivy boolean NOT NULL DEFAULT true,
+        first_name text NOT NULL DEFAULT '',
+        last_name text NOT NULL DEFAULT '',
         must_change_password boolean NOT NULL DEFAULT false,
         session_version integer NOT NULL DEFAULT 0,
         idle_timeout_minutes integer NOT NULL DEFAULT 15,
@@ -77,6 +79,50 @@ SCHEMA = (
     """
     CREATE INDEX IF NOT EXISTS ingest_attempts_ip_time
         ON ingest_attempts (ip, attempted_at)
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS project_groups (
+        id bigserial PRIMARY KEY,
+        name text NOT NULL UNIQUE,
+        description text NOT NULL DEFAULT '',
+        created_by bigint REFERENCES users (id) ON DELETE SET NULL,
+        created_at timestamptz NOT NULL DEFAULT now()
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS group_projects (
+        group_id bigint NOT NULL
+            REFERENCES project_groups (id) ON DELETE CASCADE,
+        project_key text NOT NULL,
+        kind text NOT NULL CHECK (kind IN ('repo', 'image')),
+        target text NOT NULL,
+        PRIMARY KEY (group_id, project_key)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS group_members (
+        group_id bigint NOT NULL
+            REFERENCES project_groups (id) ON DELETE CASCADE,
+        user_id bigint NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+        lead boolean NOT NULL DEFAULT false,
+        added_at timestamptz NOT NULL DEFAULT now(),
+        PRIMARY KEY (group_id, user_id)
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS group_members_user
+        ON group_members (user_id)
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS group_events (
+        id bigserial PRIMARY KEY,
+        group_id bigint NOT NULL
+            REFERENCES project_groups (id) ON DELETE CASCADE,
+        actor text NOT NULL,
+        action text NOT NULL,
+        detail text NOT NULL DEFAULT '',
+        created_at timestamptz NOT NULL DEFAULT now()
+    )
     """,
 )
 
@@ -303,6 +349,14 @@ MIGRATIONS = (
         NOT NULL DEFAULT 15
     """,
     """
+    ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS first_name text NOT NULL DEFAULT ''
+    """,
+    """
+    ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS last_name text NOT NULL DEFAULT ''
+    """,
+    """
     DO $$
     BEGIN
         IF NOT EXISTS (
@@ -363,6 +417,8 @@ def insert_user(
     allow_trivy: bool = True,
     must_change_password: bool = False,
     allow_sonar_ui: bool = False,
+    first_name: str = "",
+    last_name: str = "",
 ) -> int:
     """Insert one account and return its id."""
 
@@ -372,9 +428,9 @@ def insert_user(
             INSERT INTO users (
                 username, email, password_hash, role,
                 allow_semgrep, allow_checkov, allow_sonar, allow_trivy,
-                allow_sonar_ui, must_change_password
+                allow_sonar_ui, must_change_password, first_name, last_name
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
             (
@@ -388,6 +444,8 @@ def insert_user(
                 allow_trivy,
                 allow_sonar_ui,
                 must_change_password,
+                first_name,
+                last_name,
             ),
         ).fetchone()
         conn.commit()
@@ -402,7 +460,8 @@ def find_user(username: str) -> dict[str, Any] | None:
     with connect() as conn:
         row = conn.execute(
             """
-            SELECT id, username, email, password_hash, role, disabled,
+            SELECT id, username, email, first_name, last_name,
+                   password_hash, role, disabled,
                    allow_semgrep, allow_checkov, allow_sonar, allow_trivy,
                    allow_sonar_ui, must_change_password, session_version,
                    idle_timeout_minutes
@@ -421,7 +480,7 @@ def find_user_by_id(user_id: int) -> dict[str, Any] | None:
     with connect() as conn:
         row = conn.execute(
             """
-            SELECT id, username, email, role, disabled,
+            SELECT id, username, email, first_name, last_name, role, disabled,
                    allow_semgrep, allow_checkov, allow_sonar,
                    allow_trivy, allow_sonar_ui, must_change_password,
                    session_version, idle_timeout_minutes, created_at
@@ -440,7 +499,7 @@ def list_users() -> list[dict[str, Any]]:
     with connect() as conn:
         rows = conn.execute(
             """
-            SELECT id, username, email, role, disabled,
+            SELECT id, username, email, first_name, last_name, role, disabled,
                    allow_semgrep, allow_checkov, allow_sonar,
                    allow_trivy, allow_sonar_ui, created_at
             FROM users
@@ -481,6 +540,8 @@ def update_user(
     allow_trivy: bool,
     password_hash: str | None,
     allow_sonar_ui: bool = False,
+    first_name: str = "",
+    last_name: str = "",
 ) -> None:
     """Replace the editable fields of one account."""
 
@@ -492,7 +553,8 @@ def update_user(
                 SET username = %s, email = %s, role = %s, disabled = %s,
                     allow_semgrep = %s, allow_checkov = %s,
                     allow_sonar = %s, allow_trivy = %s,
-                    allow_sonar_ui = %s
+                    allow_sonar_ui = %s,
+                    first_name = %s, last_name = %s
                 WHERE id = %s
                 """,
                 (
@@ -505,6 +567,8 @@ def update_user(
                     allow_sonar,
                     allow_trivy,
                     allow_sonar_ui,
+                    first_name,
+                    last_name,
                     user_id,
                 ),
             )
@@ -516,6 +580,7 @@ def update_user(
                     allow_semgrep = %s, allow_checkov = %s,
                     allow_sonar = %s, allow_trivy = %s,
                     allow_sonar_ui = %s,
+                    first_name = %s, last_name = %s,
                     password_hash = %s,
                     session_version = session_version + 1
                 WHERE id = %s
@@ -530,6 +595,8 @@ def update_user(
                     allow_sonar,
                     allow_trivy,
                     allow_sonar_ui,
+                    first_name,
+                    last_name,
                     password_hash,
                     user_id,
                 ),
@@ -871,6 +938,253 @@ def require_password_change(username: str, password_hash: str) -> None:
             (password_hash, username),
         )
         conn.commit()
+
+
+def group_project_keys(user_id: int) -> set[str]:
+    """Return every project key in groups this account belongs to."""
+
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT DISTINCT p.project_key
+            FROM group_projects AS p
+            JOIN group_members AS m ON m.group_id = p.group_id
+            WHERE m.user_id = %s
+            """,
+            (user_id,),
+        ).fetchall()
+        conn.commit()
+    return {str(row["project_key"]) for row in rows}
+
+
+def _group_ids_for(
+    conn: psycopg.Connection[dict[str, Any]],
+    user_id: int | None,
+) -> list[int]:
+    if user_id is None:
+        rows = conn.execute(
+            "SELECT id FROM project_groups ORDER BY name"
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            """
+            SELECT g.id
+            FROM project_groups AS g
+            JOIN group_members AS m ON m.group_id = g.id
+            WHERE m.user_id = %s
+            ORDER BY g.name
+            """,
+            (user_id,),
+        ).fetchall()
+    return [int(row["id"]) for row in rows]
+
+
+def _load_group(
+    conn: psycopg.Connection[dict[str, Any]],
+    group_id: int,
+) -> dict[str, Any] | None:
+    row = conn.execute(
+        """
+        SELECT id, name, description, created_by, created_at
+        FROM project_groups
+        WHERE id = %s
+        """,
+        (group_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    projects = conn.execute(
+        """
+        SELECT project_key, kind, target
+        FROM group_projects
+        WHERE group_id = %s
+        ORDER BY kind, target
+        """,
+        (group_id,),
+    ).fetchall()
+    members = conn.execute(
+        """
+        SELECT u.id, u.username, u.role, m.lead
+        FROM group_members AS m
+        JOIN users AS u ON u.id = m.user_id
+        WHERE m.group_id = %s
+        ORDER BY u.username
+        """,
+        (group_id,),
+    ).fetchall()
+    events = conn.execute(
+        """
+        SELECT actor, action, detail, created_at
+        FROM group_events
+        WHERE group_id = %s
+        ORDER BY id DESC
+        LIMIT 8
+        """,
+        (group_id,),
+    ).fetchall()
+    loaded = dict(row)
+    loaded["projects"] = [dict(item) for item in projects]
+    loaded["members"] = [dict(item) for item in members]
+    loaded["events"] = [dict(item) for item in events]
+    return loaded
+
+
+def list_groups(user_id: int | None) -> list[dict[str, Any]]:
+    """Return every group, or only the groups one account belongs to."""
+
+    with connect() as conn:
+        groups = [
+            loaded
+            for group_id in _group_ids_for(conn, user_id)
+            if (loaded := _load_group(conn, group_id)) is not None
+        ]
+        conn.commit()
+    return groups
+
+
+def get_group(group_id: int) -> dict[str, Any] | None:
+    """Return one group with its projects, members, and recent events."""
+
+    with connect() as conn:
+        loaded = _load_group(conn, group_id)
+        conn.commit()
+    return loaded
+
+
+def users_by_username(names: list[str]) -> list[dict[str, Any]]:
+    """Return accounts whose usernames are in this list."""
+
+    if not names:
+        return []
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, username, role, disabled
+            FROM users
+            WHERE username = ANY(%s)
+            """,
+            (names,),
+        ).fetchall()
+        conn.commit()
+    return [dict(row) for row in rows]
+
+
+def insert_group(
+    name: str,
+    description: str,
+    created_by: int,
+    projects: list[dict[str, str]],
+    members: list[tuple[int, bool]],
+    actor: str,
+    detail: str,
+) -> int:
+    """Create a group and return its id."""
+
+    with connect() as conn:
+        row = conn.execute(
+            """
+            INSERT INTO project_groups (name, description, created_by)
+            VALUES (%s, %s, %s)
+            RETURNING id
+            """,
+            (name, description, created_by),
+        ).fetchone()
+        if row is None:
+            raise RuntimeError("group insert did not return an id")
+        group_id = int(row["id"])
+        _write_group_children(conn, group_id, projects, members)
+        _write_group_event(conn, group_id, actor, "created", detail)
+        conn.commit()
+    return group_id
+
+
+def update_group(
+    group_id: int,
+    name: str,
+    description: str,
+    projects: list[dict[str, str]],
+    members: list[tuple[int, bool]],
+    actor: str,
+    detail: str,
+) -> None:
+    """Replace a group's name, projects, and members."""
+
+    with connect() as conn:
+        conn.execute(
+            """
+            UPDATE project_groups
+            SET name = %s, description = %s
+            WHERE id = %s
+            """,
+            (name, description, group_id),
+        )
+        conn.execute(
+            "DELETE FROM group_projects WHERE group_id = %s",
+            (group_id,),
+        )
+        conn.execute(
+            "DELETE FROM group_members WHERE group_id = %s",
+            (group_id,),
+        )
+        _write_group_children(conn, group_id, projects, members)
+        _write_group_event(conn, group_id, actor, "updated", detail)
+        conn.commit()
+
+
+def delete_group(group_id: int) -> None:
+    """Delete a group. Members, projects, and events go with it."""
+
+    with connect() as conn:
+        conn.execute(
+            "DELETE FROM project_groups WHERE id = %s",
+            (group_id,),
+        )
+        conn.commit()
+
+
+def _write_group_children(
+    conn: psycopg.Connection[dict[str, Any]],
+    group_id: int,
+    projects: list[dict[str, str]],
+    members: list[tuple[int, bool]],
+) -> None:
+    for project in projects:
+        conn.execute(
+            """
+            INSERT INTO group_projects (group_id, project_key, kind, target)
+            VALUES (%s, %s, %s, %s)
+            """,
+            (
+                group_id,
+                project["key"],
+                project["kind"],
+                project["target"],
+            ),
+        )
+    for user_id, lead in members:
+        conn.execute(
+            """
+            INSERT INTO group_members (group_id, user_id, lead)
+            VALUES (%s, %s, %s)
+            """,
+            (group_id, user_id, lead),
+        )
+
+
+def _write_group_event(
+    conn: psycopg.Connection[dict[str, Any]],
+    group_id: int,
+    actor: str,
+    action: str,
+    detail: str,
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO group_events (group_id, actor, action, detail)
+        VALUES (%s, %s, %s, %s)
+        """,
+        (group_id, actor, action, detail[:500]),
+    )
 
 
 def reset_auth_tables() -> None:

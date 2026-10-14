@@ -40,11 +40,19 @@ def test_viewer_cannot_start_and_sees_allowed_tools_from_any_owner() -> None:
     )
 
     assert can_start_scan(viewer, ["semgrep"]) is False
-    shown = present_scan(viewer, own, summary=True)
-    colleague = present_scan(viewer, shared, summary=False)
-    hidden = present_scan(viewer, blocked, summary=False)
+    keys = {project_key(own)}
+    shown = present_scan(viewer, own, summary=True, group_keys=keys)
+    colleague = present_scan(viewer, shared, summary=False, group_keys=keys)
+    hidden = present_scan(viewer, blocked, summary=False, group_keys=keys)
+    outside = present_scan(
+        viewer,
+        dict(shared, id="d", repo="https://example.com/other.git"),
+        summary=False,
+        group_keys=keys,
+    )
 
     assert hidden is None
+    assert outside is None
     assert shown is not None
     assert shown["finding_count"] == 1
     assert "findings" not in shown
@@ -109,7 +117,12 @@ def test_history_keeps_twenty_scans_for_each_project() -> None:
         }
     )
 
-    shown = recent_per_project(user, scans, summary=True)
+    shown = recent_per_project(
+        user,
+        scans,
+        summary=True,
+        group_keys={"https://example.com/a", "https://example.com/b"},
+    )
     ids = [item["id"] for item in shown]
     repo_a = [item for item in shown if item["repo"].endswith("/a.git")]
 

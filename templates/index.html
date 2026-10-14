@@ -317,7 +317,8 @@
       box-shadow: 0 0 0 3px rgba(15, 118, 110, .18);
     }
     .pw-row { position: relative; display: block; }
-    .pw-row input { width: 100%; padding-right: 44px; appearance: none; }
+    .pw-row input { width: 100%; padding-right: 44px; }
+    input[type="password"] { -webkit-text-security: disc; }
     .pw-row input::-ms-reveal,
     .pw-row input::-ms-clear {
       display: none;
@@ -345,7 +346,7 @@
       font-weight: 700;
     }
     .login-card button[type="submit"]:disabled { opacity: .7; }
-    #toggle-password {
+    #toggle-password, .pw-toggle {
       position: absolute;
       top: 0;
       right: 0;
@@ -359,14 +360,16 @@
       display: grid;
       place-items: center;
     }
-    #toggle-password svg { width: 20px; height: 20px; }
-    #toggle-password .eye-open { display: block; }
-    #toggle-password .eye-off { display: none; }
-    #toggle-password[aria-pressed="true"] .eye-open { display: none; }
-    #toggle-password[aria-pressed="true"] .eye-off { display: block; }
-    #toggle-password:hover,
-    #toggle-password:focus-visible { color: var(--teal); background: transparent; }
-    #toggle-password:focus-visible { outline: 2px solid var(--teal); outline-offset: -3px; }
+    #toggle-password svg, .pw-toggle svg { width: 20px; height: 20px; }
+    #toggle-password .eye-open, .pw-toggle .eye-open { display: block; }
+    #toggle-password .eye-off, .pw-toggle .eye-off { display: none; }
+    #toggle-password[aria-pressed="true"] .eye-open,
+    .pw-toggle[aria-pressed="true"] .eye-open { display: none; }
+    #toggle-password[aria-pressed="true"] .eye-off,
+    .pw-toggle[aria-pressed="true"] .eye-off { display: block; }
+    #toggle-password:hover, .pw-toggle:hover,
+    #toggle-password:focus-visible, .pw-toggle:focus-visible { color: var(--teal); background: transparent; }
+    #toggle-password:focus-visible, .pw-toggle:focus-visible { outline: 2px solid var(--teal); outline-offset: -3px; }
     html.dark .login-card input {
       background: var(--bg);
       color: var(--ink);
@@ -389,10 +392,10 @@
       border-color: #2dd4bf;
       box-shadow: 0 0 0 1000px var(--bg) inset, 0 0 0 3px rgba(45, 212, 191, .28);
     }
-    html.dark #toggle-password { color: var(--muted); background: transparent; }
-    html.dark #toggle-password:hover,
-    html.dark #toggle-password:focus-visible { color: #99f6e4; background: transparent; }
-    html.dark #toggle-password:focus-visible { outline-color: #2dd4bf; }
+    html.dark #toggle-password, html.dark .pw-toggle { color: var(--muted); background: transparent; }
+    html.dark #toggle-password:hover, html.dark .pw-toggle:hover,
+    html.dark #toggle-password:focus-visible, html.dark .pw-toggle:focus-visible { color: #99f6e4; background: transparent; }
+    html.dark #toggle-password:focus-visible, html.dark .pw-toggle:focus-visible { outline-color: #2dd4bf; }
     .login-error {
       background: #fdecea;
       border: 1px solid #f5c2c0;
@@ -406,9 +409,11 @@
     html.dark .card,
     html.dark .scanner,
     html.dark input,
+    html.dark textarea,
     html.dark select.field { background: var(--card); color: var(--ink); }
-    html.dark input, html.dark select.field, html.dark .scanner { border-color: var(--line); }
+    html.dark input, html.dark textarea, html.dark select.field, html.dark .scanner { border-color: var(--line); }
     .account-grid { display: grid; gap: 12px; max-width: 520px; }
+    .account-grid + .account-grid { margin-top: 12px; }
     .user-table { width: 100%; border-collapse: collapse; }
     .user-table th, .user-table td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); }
     .user-table th { color: var(--muted); font-size: 12px; font-weight: 600; }
@@ -427,7 +432,9 @@
     .row-actions { display: flex; gap: 6px; }
     .filters { display: flex; gap: 8px; margin-bottom: 12px; }
     .filters > * { flex: 1; }
-    #pw-match { color: var(--critical); font-size: 12px; margin-top: 6px; }
+    #pw-match, .pw-bad { color: var(--critical); font-size: 12px; margin-top: 6px; }
+    .pw-ok { color: #146c43; font-size: 12px; margin-top: 6px; }
+    html.dark .pw-ok { color: #86efac; }
     body.authed .login-screen { display: none; }
     body.must-change .password-gate { display: grid; }
     body.must-change .app { display: none; }
@@ -608,7 +615,16 @@
       background: #fff;
       outline: none;
     }
-    input:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15, 118, 110, .15); }
+    textarea {
+      width: 100%;
+      border: 1px solid #c5d1de;
+      border-radius: 8px;
+      padding: 8px 12px;
+      background: #fff;
+      outline: none;
+      resize: vertical;
+    }
+    input:focus, textarea:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15, 118, 110, .15); }
     .login-card .pw-row input { padding-right: 44px; }
     .scanners {
       display: grid;
@@ -1157,7 +1173,7 @@
         <span class="field-label">Password</span>
         <span class="pw-row">
           <input id="password" name="password" type="password" autocomplete="current-password" required maxlength="128" dir="ltr">
-          <button type="button" id="toggle-password" aria-label="Toggle password visibility" aria-pressed="false">
+          <button type="button" class="pw-toggle" id="toggle-password" data-target="password" aria-label="Toggle password visibility" aria-pressed="false">
             <svg class="eye-open" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
               <circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/>
@@ -1250,6 +1266,7 @@
           <button type="button" class="mode" data-action="view" data-view="account">Account</button>
           <button type="button" class="mode" data-action="view" data-view="users" id="nav-users" hidden>Users</button>
           <button type="button" class="mode" data-action="view" data-view="access" id="nav-access" hidden>Tool access</button>
+          <button type="button" class="mode" data-action="view" data-view="groups" id="nav-groups">Groups</button>
           <button type="button" class="mode" data-action="view" data-view="sonar-setup" id="nav-sonar-setup" hidden>Sonar setup</button>
         </div>
         <a id="sonar-link" href="{{ sonar_url }}" target="_blank" rel="noopener" hidden>SonarQube <span aria-hidden="true">↗</span></a>
@@ -1374,7 +1391,7 @@
           <div class="card" style="overflow:auto">
             <table class="user-table">
               <thead>
-                <tr><th>Username</th><th>Email</th><th>Role</th><th>Status</th><th>Tools</th><th></th></tr>
+                <tr><th>Name</th><th>Username</th><th>Email</th><th>Role</th><th>Status</th><th>Tools</th><th></th></tr>
               </thead>
               <tbody id="user-rows"></tbody>
             </table>
@@ -1382,9 +1399,18 @@
           <form class="launch" id="user-form" style="margin-top:12px">
             <h2 id="user-form-title" style="margin:0 0 12px;font-size:16px">New user</h2>
             <div class="account-grid">
-              <label><span class="field-label">Username</span><input id="user-name" required maxlength="64" dir="ltr"></label>
-              <label><span class="field-label">Email</span><input id="user-email" type="email" required maxlength="254" dir="ltr"></label>
-              <label><span class="field-label">Password</span><input id="user-pass" type="password" maxlength="128" dir="ltr" autocomplete="new-password"></label>
+              <label><span class="field-label">First name</span><input id="user-first" required maxlength="80" autocomplete="off"></label>
+              <label><span class="field-label">Last name</span><input id="user-last" required maxlength="80" autocomplete="off"></label>
+              <label><span class="field-label">Username</span><input id="user-name" required maxlength="64" dir="ltr" autocomplete="off"></label>
+              <label><span class="field-label">Email</span><input id="user-email" type="email" required maxlength="254" dir="ltr" autocomplete="off"></label>
+            </div>
+            <div class="account-grid" id="user-passwords">
+              <label><span class="field-label">Password</span><span class="pw-row"><input id="user-pass" type="password" minlength="12" maxlength="128" dir="ltr" autocomplete="new-password"><button type="button" class="pw-toggle" data-target="user-pass" aria-label="Toggle password visibility" aria-pressed="false"><svg class="eye-open" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg><svg class="eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3.5 20.5 21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M9.9 5.4A10.2 10.2 0 0 1 12 5c6 0 9.5 7 9.5 7a17 17 0 0 1-3.6 4.4M6.2 6.8C4 8.3 2.5 12 2.5 12S6 19 12 19c1.4 0 2.7-.3 3.8-.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M10.2 10.4a2.6 2.6 0 0 0 3.6 3.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></span></label>
+              <label><span class="field-label">Confirm password</span><span class="pw-row"><input id="user-pass-again" type="password" minlength="12" maxlength="128" dir="ltr" autocomplete="new-password"><button type="button" class="pw-toggle" data-target="user-pass-again" aria-label="Toggle password visibility" aria-pressed="false"><svg class="eye-open" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg><svg class="eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3.5 20.5 21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M9.9 5.4A10.2 10.2 0 0 1 12 5c6 0 9.5 7 9.5 7a17 17 0 0 1-3.6 4.4M6.2 6.8C4 8.3 2.5 12 2.5 12S6 19 12 19c1.4 0 2.7-.3 3.8-.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M10.2 10.4a2.6 2.6 0 0 0 3.6 3.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></span></label>
+              <p id="user-pass-ok" class="pw-ok" hidden>Passwords match.</p>
+              <p id="user-pass-bad" class="pw-bad" hidden>Passwords do not match.</p>
+            </div>
+            <div class="account-grid">
               <label><span class="field-label">Role</span>
                 <select id="user-form-role" class="field">
                   <option value="admin">Admin</option>
@@ -1428,6 +1454,33 @@
             </div>
             <p class="meta" id="sonar-setup-msg"></p>
           </div>
+        </section>
+        <section id="view-groups" hidden>
+          <div class="page-head">
+            <div>
+              <h1>Groups</h1>
+              <p class="meta">A lead attaches a repository or image. Members see those scans and open them to fix findings. The lead reads the result of the group here.</p>
+            </div>
+            <button type="button" class="ghost" id="group-new">New group</button>
+          </div>
+          <div id="group-error" class="login-error" hidden></div>
+          <div id="group-list"></div>
+          <form class="launch" id="group-form" hidden style="margin-top:12px">
+            <h2 id="group-form-title" style="margin:0 0 12px;font-size:16px">New group</h2>
+            <div class="account-grid">
+              <label><span class="field-label">Group name</span><input id="group-name" required maxlength="80"></label>
+              <label><span class="field-label">Description</span><input id="group-description" maxlength="500"></label>
+            </div>
+            <label><span class="field-label">Repositories, one https URL per line</span><textarea id="group-repos" rows="3" dir="ltr"></textarea></label>
+            <label><span class="field-label">Images, one name per line</span><textarea id="group-images" rows="2" dir="ltr"></textarea></label>
+            <label><span class="field-label">Members, one username per line</span><textarea id="group-members" rows="3" dir="ltr"></textarea></label>
+            <label><span class="field-label">Leads, one username per line</span><textarea id="group-leads" rows="2" dir="ltr"></textarea></label>
+            <div style="display:flex;gap:8px;margin-top:12px">
+              <button type="submit" id="group-save">Save</button>
+              <button type="button" class="ghost" id="group-cancel">Cancel</button>
+            </div>
+          </form>
+          <div id="group-report"></div>
         </section>
         <section id="view-account" hidden>
           <div class="page-head">
@@ -1496,6 +1549,8 @@
     const state = {
       view: "dashboard",
       dashScope: "",
+      groups: [],
+      groupId: null,
       scans: [],
       scan: null,
       sev: "",
@@ -1530,7 +1585,7 @@
     const reportsOpen = new Set();
     let scansMenuOpen = true;
     let settingsMenuOpen = false;
-    const SETTINGS_VIEWS = ["account", "users", "access", "sonar-setup"];
+    const SETTINGS_VIEWS = ["account", "users", "access", "groups", "sonar-setup"];
     function csrfToken() {
       const match = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/);
       return match ? decodeURIComponent(match[1]) : "";
@@ -1600,6 +1655,7 @@
       document.querySelector("#nav-users").hidden = user.role !== "admin";
       document.querySelector("#nav-access").hidden = user.role !== "admin";
       document.querySelector("#nav-sonar-setup").hidden = user.role !== "admin";
+      document.querySelector("#group-new").hidden = user.role === "viewer";
       const sonarLink = document.querySelector("#sonar-link");
       if (sonarLink) sonarLink.hidden = !(user.access && user.access.sonar_ui);
       if (user.role !== "admin" && (state.view === "users" || state.view === "access" || state.view === "sonar-setup")) setView("scans");
@@ -1607,11 +1663,17 @@
       syncThemeButton();
     }
 
+    function displayName(user) {
+      const name = [user.first_name, user.last_name].filter(Boolean).join(" ").trim();
+      return name || user.username || "";
+    }
+
     function paintProfile(user) {
       const role = ROLE_LABEL[user.role] || user.role || "";
-      const initial = String(user.username || "?").slice(0, 1).toUpperCase();
-      document.querySelector("#profile-name").textContent = user.username || "";
-      document.querySelector("#menu-name").textContent = user.username || "";
+      const shown = displayName(user);
+      const initial = String(shown || "?").slice(0, 1).toUpperCase();
+      document.querySelector("#profile-name").textContent = shown;
+      document.querySelector("#menu-name").textContent = shown;
       document.querySelector("#profile-role").textContent = role;
       document.querySelector("#menu-role").textContent = role;
       document.querySelector("#profile-avatar").textContent = initial;
@@ -1795,7 +1857,7 @@
 
     function setView(view) {
       state.view = view;
-      ["dashboard", "scans", "knowledge", "users", "access", "sonar-setup", "account"].forEach((name) => {
+      ["dashboard", "scans", "knowledge", "users", "access", "groups", "sonar-setup", "account"].forEach((name) => {
         document.querySelector("#view-" + name).hidden = view !== name;
       });
       syncLaunch();
@@ -1807,6 +1869,7 @@
       renderHistory();
       if (view === "users" || view === "access") loadAccounts();
       if (view === "sonar-setup") loadSonarSetup();
+      if (view === "groups") loadGroups();
       if (view === "dashboard") renderDashboard();
     }
 
@@ -2701,6 +2764,29 @@
           }
         }
       }
+      if (action === "group-open") {
+        state.groupId = Number(el.dataset.id);
+        renderGroups();
+      }
+      if (action === "group-edit") {
+        state.groupId = Number(el.dataset.id);
+        showGroupForm(selectedGroup());
+      }
+      if (action === "group-delete") {
+        const group = state.groups.find((item) => item.id === Number(el.dataset.id));
+        if (!group || !window.confirm("Delete " + group.name + "?")) return;
+        api("/api/groups/" + group.id, {method: "DELETE"}).then(async (response) => {
+          if (!response.ok) {
+            const body = await response.json().catch(() => ({}));
+            const box = document.querySelector("#group-error");
+            box.hidden = false;
+            box.textContent = body.error || "Could not delete the group.";
+            return;
+          }
+          if (state.groupId === group.id) state.groupId = null;
+          await loadGroups();
+        });
+      }
       if (action === "dash-scope") {
         state.dashScope = el.dataset.scope === "all" ? "all" : "mine";
         dashStamp = null;
@@ -2912,6 +2998,121 @@
       msg.textContent = imageMode ? "Scanning image..." : "Cloning and scanning...";
     });
 
+    function groupLines(value) {
+      return String(value || "").split(/\n+/).map((item) => item.trim()).filter(Boolean);
+    }
+
+    function selectedGroup() {
+      return state.groups.find((group) => group.id === state.groupId) || null;
+    }
+
+    async function loadGroups() {
+      const box = document.querySelector("#group-error");
+      const response = await api("/api/groups");
+      if (!response.ok) {
+        box.hidden = false;
+        box.textContent = "Could not load groups.";
+        return;
+      }
+      box.hidden = true;
+      const body = await response.json();
+      state.groups = Array.isArray(body) ? body : [];
+      if (!state.groups.some((group) => group.id === state.groupId)) state.groupId = null;
+      renderGroups();
+    }
+
+    function renderGroups() {
+      const list = document.querySelector("#group-list");
+      const report = document.querySelector("#group-report");
+      if (!list || !report) return;
+      if (!state.groups.length) {
+        list.innerHTML = '<div class="empty"><strong>No groups yet</strong>A developer creates a group for one project and adds the people who work on it.</div>';
+      } else {
+        const body = state.groups.map((group) => {
+          const actions = '<button type="button" class="ghost" data-action="group-open" data-id="' + group.id + '">Report</button>'
+            + (group.can_edit ? ' <button type="button" class="ghost" data-action="group-edit" data-id="' + group.id + '">Edit</button> <button type="button" class="ghost" data-action="group-delete" data-id="' + group.id + '">Delete</button>' : "");
+          return "<tr><td><b>" + esc(group.name) + "</b></td><td>" + (group.projects || []).length + "</td><td>" + (group.members || []).length + "</td><td>" + actions + "</td></tr>";
+        }).join("");
+        list.innerHTML = '<div class="dash-panel"><table class="dash-table"><thead><tr><th>Group</th><th>Projects</th><th>Members</th><th></th></tr></thead><tbody>' + body + "</tbody></table></div>";
+      }
+      const group = selectedGroup();
+      report.innerHTML = group ? groupReport(group) : "";
+    }
+
+    function groupReport(group) {
+      const rows = (group.projects || []).map((project) => {
+        const items = state.scans.filter((item) => projectKey(item) === project.key)
+          .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
+        const latest = items[0];
+        if (!latest) return '<tr><td><b>' + esc(project.target) + '</b></td><td colspan="6">No scan yet</td></tr>';
+        const trust = dashTrust(latest);
+        const tally = dashCode(latest);
+        const code = trust === "ok"
+          ? '<b class="n critical">' + tally.critical + '</b> critical · <b class="n high">' + tally.high + "</b> high"
+          : esc(trust === "running" ? "Running" : dashFailText(latest));
+        const sonar = dashSonar(latest);
+        const sonarText = !sonar ? "—" : (sonar.unavailable ? "Unavailable" : sonar.vulnerabilities + " vulnerabilities · " + sonar.hotspots + " hotspots");
+        const previous = items.slice(1).find((item) => dashTrust(item) === "ok") || null;
+        const row = {trust, code: tally, sonar, delta: null, stale: false, first: !previous && trust === "ok", latest};
+        if (trust === "ok" && previous) {
+          const before = dashCode(previous);
+          row.delta = {critical: tally.critical - before.critical, high: tally.high - before.high};
+        }
+        return '<tr data-action="open" data-id="' + esc(latest.id) + '"><td><b>' + esc(project.target) + "</b></td><td>" + esc((latest.created_at || "").replace(" UTC", "")) + "</td><td>" + esc(latest.owner || "") + "</td><td>" + code + "</td><td>" + esc(sonarText) + "</td><td>" + esc(dashGate(row)) + "</td><td>" + esc(dashChange(row)) + "</td></tr>";
+      }).join("");
+      const events = (group.events || []).map((event) => "<li>" + esc((event.created_at || "").replace("T", " ").slice(0, 16)) + " · " + esc(event.actor) + " " + esc(event.action) + (event.detail ? " · " + esc(event.detail) : "") + "</li>").join("");
+      return '<div class="dash-panel"><h2>' + esc(group.name) + '</h2><p class="meta">' + esc(group.description || "Latest scan of each project in this group.") + '</p><table class="dash-table"><thead><tr><th>Project</th><th>Latest scan</th><th>Who ran it</th><th>Code</th><th>SonarQube</th><th>Gate</th><th>Since previous</th></tr></thead><tbody>' + rows + "</tbody></table>" + (events ? "<h2>Recent changes</h2><ul>" + events + "</ul>" : "") + "</div>";
+    }
+
+    function showGroupForm(group) {
+      const form = document.querySelector("#group-form");
+      form.hidden = false;
+      form.dataset.id = group ? String(group.id) : "";
+      document.querySelector("#group-form-title").textContent = group ? "Edit " + group.name : "New group";
+      document.querySelector("#group-name").value = group ? group.name : "";
+      document.querySelector("#group-description").value = group ? (group.description || "") : "";
+      document.querySelector("#group-repos").value = group ? (group.projects || []).filter((item) => item.kind === "repo").map((item) => item.target).join("\n") : "";
+      document.querySelector("#group-images").value = group ? (group.projects || []).filter((item) => item.kind === "image").map((item) => item.target).join("\n") : "";
+      const members = group ? (group.members || []) : [];
+      const selfName = currentUser && currentUser.role === "developer" ? currentUser.username : "";
+      document.querySelector("#group-members").value = group ? members.map((item) => item.username).join("\n") : selfName;
+      document.querySelector("#group-leads").value = group ? members.filter((item) => item.lead).map((item) => item.username).join("\n") : selfName;
+    }
+
+    document.querySelector("#group-new").addEventListener("click", () => showGroupForm(null));
+    document.querySelector("#group-cancel").addEventListener("click", () => {
+      document.querySelector("#group-form").hidden = true;
+    });
+    document.querySelector("#group-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const box = document.querySelector("#group-error");
+      const leads = new Set(groupLines(document.querySelector("#group-leads").value));
+      const names = new Set([...groupLines(document.querySelector("#group-members").value), ...leads]);
+      const payload = {
+        name: document.querySelector("#group-name").value,
+        description: document.querySelector("#group-description").value,
+        repos: groupLines(document.querySelector("#group-repos").value),
+        images: groupLines(document.querySelector("#group-images").value),
+        members: [...names].map((username) => ({username, lead: leads.has(username)}))
+      };
+      const id = document.querySelector("#group-form").dataset.id;
+      const response = await api(id ? "/api/groups/" + id : "/api/groups", {
+        method: id ? "PATCH" : "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(payload)
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        box.hidden = false;
+        box.textContent = body.error || "Could not save the group.";
+        return;
+      }
+      box.hidden = true;
+      document.querySelector("#group-form").hidden = true;
+      state.groupId = body.id;
+      await loadGroups();
+    });
+
     async function tick() {
       if (!currentUser) return;
       try {
@@ -2937,6 +3138,7 @@
           if (currentUser && setupResponse.ok) state.sonarSetup = await setupResponse.json();
         }
         renderDashboard();
+        if (state.view === "groups") renderGroups();
       } catch (err) {
         if (currentUser) document.querySelector("#form-msg").textContent = "Lost contact with the console.";
       }
@@ -2944,9 +3146,11 @@
       setTimeout(tick, running ? 3000 : 5000);
     }
 
-    document.querySelector("#toggle-password").addEventListener("click", () => {
-      const input = document.querySelector("#password");
-      const button = document.querySelector("#toggle-password");
+    document.addEventListener("click", (event) => {
+      const button = event.target.closest(".pw-toggle");
+      if (!button) return;
+      const input = document.querySelector("#" + button.dataset.target);
+      if (!input) return;
       const show = input.type === "password";
       input.type = show ? "text" : "password";
       button.setAttribute("aria-pressed", show ? "true" : "false");
@@ -3075,28 +3279,61 @@
       }
     }
 
+    function openUserEditor(user) {
+      editingUser = user;
+      document.querySelector("#user-form-title").textContent = "Edit " + displayName(user);
+      document.querySelector("#user-first").value = user.first_name || "";
+      document.querySelector("#user-last").value = user.last_name || "";
+      document.querySelector("#user-name").value = user.username;
+      document.querySelector("#user-email").value = user.email;
+      document.querySelector("#user-pass").value = "";
+      document.querySelector("#user-pass-again").value = "";
+      document.querySelector("#user-passwords").hidden = true;
+      document.querySelector("#user-form-role").value = user.role;
+      document.querySelector("#user-disabled").checked = user.disabled;
+      userFormTools(user.access, user.role);
+      syncUserPassword();
+    }
+
     function resetUserForm() {
       editingUser = null;
       document.querySelector("#user-form-title").textContent = "New user";
+      document.querySelector("#user-first").value = "";
+      document.querySelector("#user-last").value = "";
       document.querySelector("#user-name").value = "";
       document.querySelector("#user-email").value = "";
       document.querySelector("#user-pass").value = "";
-      document.querySelector("#user-pass").required = true;
+      document.querySelector("#user-pass-again").value = "";
+      document.querySelector("#user-passwords").hidden = false;
       document.querySelector("#user-form-role").value = "viewer";
       document.querySelector("#user-disabled").checked = false;
       userFormTools({semgrep: true, checkov: true, sonar: false, trivy: true}, "viewer");
+      syncUserPassword();
+    }
+
+    function syncUserPassword() {
+      const creating = !editingUser;
+      const password = creating ? document.querySelector("#user-pass").value : "";
+      const again = creating ? document.querySelector("#user-pass-again").value : "";
+      const mismatch = (password.length > 0 || again.length > 0) && password !== again;
+      const matched = password.length >= 12 && password === again;
+      document.querySelector("#user-pass-ok").hidden = !matched;
+      document.querySelector("#user-pass-bad").hidden = !mismatch;
+      document.querySelector("#user-pass").required = creating;
+      document.querySelector("#user-pass-again").required = creating;
+      document.querySelector("#user-save").disabled = creating && !matched;
     }
 
     function renderUsers() {
       const needle = document.querySelector("#user-q").value.trim().toLowerCase();
       const role = document.querySelector("#user-role").value;
       const rows = accountUsers.filter((user) => {
-        const text = (user.username + " " + user.email).toLowerCase();
+        const text = (displayName(user) + " " + user.username + " " + user.email).toLowerCase();
         return (role === "all" || user.role === role) && (!needle || text.includes(needle));
       });
       document.querySelector("#user-rows").innerHTML = rows.map((user) => (
-        '<tr><td>' + esc(user.username) + '</td><td dir="ltr">' + esc(user.email) + '</td><td>' + esc(ROLE_LABEL[user.role] || user.role) + '</td><td>' + (user.disabled ? "Disabled" : "Active") + '</td><td>' + esc(toolNames(user.access)) + '</td><td><div class="row-actions"><button type="button" class="ghost" data-action="edit-user" data-id="' + user.id + '">Edit</button><button type="button" class="ghost" data-action="delete-user" data-id="' + user.id + '">Delete</button></div></td></tr>'
-      )).join("") || '<tr><td colspan="6">No users match this filter.</td></tr>';
+        '<tr><td>' + esc(displayName(user)) + '</td><td dir="ltr">' + esc(user.username) + '</td><td dir="ltr">' + esc(user.email) + '</td><td>' + esc(ROLE_LABEL[user.role] || user.role) + '</td><td>' + (user.disabled ? "Disabled" : "Active") + '</td><td>' + esc(toolNames(user.access)) + '</td><td><div class="row-actions"><button type="button" class="ghost" data-action="edit-user" data-id="' + user.id + '">Edit</button><button type="button" class="ghost" data-action="delete-user" data-id="' + user.id + '">Delete</button></div></td></tr>'
+      )).join("") || '<tr><td colspan="7">No users match this filter.</td></tr>';
     }
 
     function renderAccess() {
@@ -3132,6 +3369,9 @@
       userFormTools(editingUser ? editingUser.access : {semgrep: true, checkov: false, sonar: false, trivy: true}, event.target.value);
     });
     document.querySelector("#user-cancel").addEventListener("click", resetUserForm);
+    ["#user-pass", "#user-pass-again"].forEach((selector) => {
+      document.querySelector(selector).addEventListener("input", syncUserPassword);
+    });
     resetUserForm();
 
     document.querySelector("#user-form").addEventListener("submit", async (event) => {
@@ -3142,14 +3382,18 @@
         access[input.value] = role === "admin" || input.checked;
       });
       access.sonar_ui = role === "admin" || document.querySelector("#user-sonar-ui").checked;
+      const password = editingUser ? "" : document.querySelector("#user-pass").value;
+      const again = editingUser ? "" : document.querySelector("#user-pass-again").value;
+      if (password !== again) return;
       const payload = {
+        first_name: document.querySelector("#user-first").value.trim(),
+        last_name: document.querySelector("#user-last").value.trim(),
         username: document.querySelector("#user-name").value.trim(),
         email: document.querySelector("#user-email").value.trim(),
         role,
         disabled: document.querySelector("#user-disabled").checked,
         access
       };
-      const password = document.querySelector("#user-pass").value;
       if (password) payload.password = password;
       const response = await api(editingUser ? "/api/users/" + editingUser.id : "/api/users", {
         method: editingUser ? "PATCH" : "POST",
@@ -3164,6 +3408,11 @@
         return;
       }
       box.hidden = true;
+      if (currentUser && body.id === currentUser.id) {
+        currentUser.first_name = body.first_name;
+        currentUser.last_name = body.last_name;
+        paintProfile(currentUser);
+      }
       resetUserForm();
       await loadAccounts();
     });
@@ -3173,17 +3422,7 @@
       if (!button) return;
       const user = accountUsers.find((item) => String(item.id) === button.dataset.id);
       if (!user) return;
-      if (button.dataset.action === "edit-user") {
-        editingUser = user;
-        document.querySelector("#user-form-title").textContent = "Edit " + user.username;
-        document.querySelector("#user-name").value = user.username;
-        document.querySelector("#user-email").value = user.email;
-        document.querySelector("#user-pass").value = "";
-        document.querySelector("#user-pass").required = false;
-        document.querySelector("#user-form-role").value = user.role;
-        document.querySelector("#user-disabled").checked = user.disabled;
-        userFormTools(user.access, user.role);
-      }
+      if (button.dataset.action === "edit-user") openUserEditor(user);
       if (button.dataset.action === "delete-user") {
         if (!window.confirm("Delete user " + user.username + "?")) return;
         const response = await api("/api/users/" + user.id, {method: "DELETE"});

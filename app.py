@@ -4,6 +4,8 @@ import os
 import sys
 import threading
 import uuid
+
+import psycopg
 from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
@@ -11,7 +13,14 @@ from typing import Any
 
 from flask import Flask, Response, g, jsonify, render_template, request
 
-from security_console.access import can_start_scan, present_scan, recent_per_project
+from security_console import db
+from security_console.access import (
+    can_scan_project,
+    can_start_scan,
+    present_scan,
+    project_key,
+    recent_per_project,
+)
 from security_console.alerts import alert_from_payload
 from security_console.auth import (
     ConfigError,
@@ -160,7 +169,21 @@ def create_scan() -> View:
             ), 400
         if not tools:
             return jsonify({"error": "Select at least one tool."}), 400
-    if not can_start_scan(user, tools):
+    scan_key = project_key({"target": target, "repo": repo, "image": image})
+    try:
+        group_keys = (
+            set()
+            if user.get("role") == "admin"
+            else db.group_project_keys(int(user["id"]))
+        )
+    except psycopg.Error:
+        app.logger.error("group lookup failed")
+        return jsonify({"error": "Sign-in is unavailable."}), 503
+    if not can_scan_project(user, tools, scan_key, group_keys):
+        if can_start_scan(user, tools):
+            return jsonify(
+                {"error": "This project is not in one of your groups."}
+            ), 403
         return jsonify({"error": "You do not have permission."}), 403
     with lock:
         if any(item["status"] == "running" for item in scans.values()):
@@ -206,7 +229,17 @@ def get_images() -> View:
 def list_scans() -> Response:
     user = getattr(g, "user", None) or {}
     summary = request.args.get("summary") == "1"
-    visible = recent_per_project(user, list(scans.values()), summary=summary)
+    try:
+        group_keys = _group_keys(user)
+    except psycopg.Error:
+        app.logger.error("group lookup failed")
+        return jsonify({"error": "Sign-in is unavailable."}), 503
+    visible = recent_per_project(
+        user,
+        list(scans.values()),
+        summary=summary,
+        group_keys=group_keys,
+    )
     return jsonify(visible)
 
 
@@ -216,7 +249,12 @@ def get_scan(scan_id: str) -> View:
     item = scans.get(scan_id)
     if not item:
         return jsonify({"error": "Not found"}), 404
-    shown = present_scan(user, item, summary=False)
+    try:
+        group_keys = _group_keys(user)
+    except psycopg.Error:
+        app.logger.error("group lookup failed")
+        return jsonify({"error": "Sign-in is unavailable."}), 503
+    shown = present_scan(user, item, summary=False, group_keys=group_keys)
     if shown is None:
         return jsonify({"error": "Not found"}), 404
     return jsonify(shown)
@@ -269,6 +307,14 @@ def too_large(_exc: Exception) -> View:
 
 install_auth(app)
 install_sonar_proxy(app)
+
+
+def _group_keys(user: dict[str, Any]) -> set[str] | None:
+    """Return group projects for a member. Admins are not filtered."""
+
+    if user.get("role") == "admin":
+        return None
+    return db.group_project_keys(int(user["id"]))
 
 
 def boot() -> None:

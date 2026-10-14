@@ -38,6 +38,26 @@ def can_start_scan(user: dict[str, Any], tools: list[str]) -> bool:
     return all(allowed.get(tool, False) for tool in tools)
 
 
+def can_scan_project(
+    user: dict[str, Any],
+    tools: list[str],
+    project: str,
+    group_keys: set[str],
+) -> bool:
+    """Return whether this account may scan one group project.
+
+    Admins may scan any accepted target. A developer may scan it only when
+    that project belongs to one of their groups and every requested tool is
+    allowed.
+    """
+
+    if not can_start_scan(user, tools):
+        return False
+    if user.get("role") == "admin":
+        return True
+    return project in group_keys
+
+
 def project_key(scan: dict[str, Any]) -> str:
     """Group scans the same way the reports list groups them.
 
@@ -53,13 +73,22 @@ def project_key(scan: dict[str, Any]) -> str:
     return key.rstrip("/").lower()
 
 
-def can_view_scan(user: dict[str, Any], scan: dict[str, Any]) -> bool:
+def can_view_scan(
+    user: dict[str, Any],
+    scan: dict[str, Any],
+    *,
+    group_keys: set[str] | None = None,
+) -> bool:
     """Return whether this account may read the scan.
 
-    Admins see every scan. Everyone else sees a scan when at least one of
-    its tools is allowed. The owner records who started it.
+    Admins see every scan. Everyone else sees a scan only when its project
+    is in one of their groups and at least one of its tools is allowed.
+    The owner records who started it and does not grant access.
     """
 
+    if user.get("role") != "admin":
+        if project_key(scan) not in (group_keys or set()):
+            return False
     allowed = access_map(user)
     tools = [tool for tool in scan.get("tools") or [] if tool in TOOLS]
     if not tools:
@@ -72,6 +101,7 @@ def recent_per_project(
     items: list[dict[str, Any]],
     *,
     summary: bool,
+    group_keys: set[str] | None = None,
     limit: int = 20,
 ) -> list[dict[str, Any]]:
     """Keep the newest scans for each repository or image."""
@@ -84,7 +114,12 @@ def recent_per_project(
     counts: dict[str, int] = {}
     visible: list[dict[str, Any]] = []
     for item in ordered:
-        shown = present_scan(user, item, summary=summary)
+        shown = present_scan(
+            user,
+            item,
+            summary=summary,
+            group_keys=group_keys,
+        )
         if shown is None:
             continue
         key = project_key(item)
@@ -120,10 +155,11 @@ def present_scan(
     scan: dict[str, Any],
     *,
     summary: bool,
+    group_keys: set[str] | None = None,
 ) -> dict[str, Any] | None:
     """Return the scan fields this account is allowed to read."""
 
-    if not can_view_scan(user, scan):
+    if not can_view_scan(user, scan, group_keys=group_keys):
         return None
     allowed = access_map(user)
     findings = [

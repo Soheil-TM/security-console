@@ -693,6 +693,43 @@
     }
     .ghost:hover { border-color: var(--teal); color: var(--teal-2); }
     .hint { margin: 8px 2px 0; color: var(--muted); font-size: 12px; }
+    .member-pick { position: relative; margin-top: 8px; }
+    .member-list {
+      position: absolute;
+      z-index: 6;
+      left: 0;
+      right: 0;
+      margin-top: 4px;
+      max-height: 240px;
+      overflow: auto;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+    .member-option {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      width: 100%;
+      padding: 8px 12px;
+      border: 0;
+      background: transparent;
+      color: var(--ink);
+      text-align: left;
+    }
+    .member-option span, .member-row .meta { color: var(--muted); font-size: 12px; }
+    .member-option:hover, .member-option:focus-visible { background: #f4fbfa; }
+    html.dark .member-option:hover, html.dark .member-option:focus-visible { background: #214057; }
+    .member-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .member-lead { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
     .launch-mode { margin-bottom: 10px; }
     .image-list {
       margin-top: 8px;
@@ -1545,18 +1582,23 @@
               <label><span class="field-label">Group name</span><input id="group-name" required maxlength="80"></label>
               <label><span class="field-label">Description</span><input id="group-description" maxlength="500"></label>
             </div>
-            <label><span class="field-label">Repositories, one https URL per line</span><textarea id="group-repos" rows="3" dir="ltr"></textarea></label>
+            <label><span class="field-label">Repositories, one https URL per line (optional)</span><textarea id="group-repos" rows="3" dir="ltr"></textarea></label>
             <div id="group-repo-pick" hidden style="display:flex;gap:8px;margin-top:8px">
               <select id="group-repo-choice" class="field" style="flex:1"></select>
               <button type="button" class="ghost" id="group-repo-add">Add</button>
             </div>
-            <label><span class="field-label">Images, one name per line</span><textarea id="group-images" rows="2" dir="ltr"></textarea></label>
+            <label><span class="field-label">Images, one name per line (optional)</span><textarea id="group-images" rows="2" dir="ltr"></textarea></label>
             <div id="group-image-pick" hidden style="display:flex;gap:8px;margin-top:8px">
               <select id="group-image-choice" class="field" style="flex:1"></select>
               <button type="button" class="ghost" id="group-image-add">Add</button>
             </div>
-            <label><span class="field-label">Members, one username per line</span><textarea id="group-members" rows="3" dir="ltr"></textarea></label>
-            <label><span class="field-label">Leads, one username per line</span><textarea id="group-leads" rows="2" dir="ltr"></textarea></label>
+            <span class="field-label">Members</span>
+            <div class="member-pick">
+              <input id="group-member-q" type="search" placeholder="Search name or username" autocomplete="off">
+              <div id="group-member-list" class="member-list" hidden></div>
+            </div>
+            <div id="group-member-chosen"></div>
+            <p class="hint">Choose people from the list. A viewer can join, and cannot lead.</p>
             <div style="display:flex;gap:8px;margin-top:12px">
               <button type="submit" id="group-save">Save</button>
               <button type="button" class="ghost" id="group-cancel">Cancel</button>
@@ -1935,6 +1977,8 @@
     const TOOL_LABEL = {semgrep: "Semgrep", checkov: "Checkov", sonar: "SonarQube", trivy: "Trivy"};
     let accountUsers = [];
     let editingUser = null;
+    let groupPeople = [];
+    let chosenMembers = [];
 
     function paintSettings() {
       document.querySelector("#settings-chev").textContent = settingsMenuOpen ? "▾" : "▸";
@@ -2890,6 +2934,18 @@
           }
         }
       }
+      if (action === "member-add") {
+        addGroupMember(el.dataset.user || "");
+      }
+      if (action === "member-remove") {
+        chosenMembers = chosenMembers.filter((item) => item.username !== el.dataset.user);
+        renderChosenMembers();
+        if (!document.querySelector("#group-member-list").hidden) renderMemberChoices();
+      }
+      if (action === "member-lead") {
+        const person = chosenMembers.find((item) => item.username === el.dataset.user);
+        if (person && person.role !== "viewer" && !person.locked) person.lead = el.checked;
+      }
       if (action === "group-open") {
         state.groupId = Number(el.dataset.id);
         renderGroups();
@@ -3280,7 +3336,7 @@
 
     function showQueuedScan(body) {
       const imageMode = isImageScan(body);
-      state.pendingMsg = body.id;
+      state.pendingMsg = body.reused ? null : body.id;
       state.pane = "report";
       state.overviewKey = "";
       state.scan = body;
@@ -3297,7 +3353,13 @@
       renderHistory();
       const msg = document.querySelector("#form-msg");
       msg.className = "";
-      msg.textContent = imageMode ? "Scanning image..." : "Cloning and scanning...";
+      if (body.reused && body.reuse_reason === "recent") {
+        msg.textContent = "A report from the last 24 hours already covers this. Opening it.";
+      } else if (body.reused && body.reuse_reason === "running") {
+        msg.textContent = "That scan is already running. Opening it.";
+      } else {
+        msg.textContent = imageMode ? "Scanning image..." : "Cloning and scanning...";
+      }
     }
 
     let retryBusy = false;
@@ -3311,8 +3373,8 @@
       }
       const imageMode = isImageScan(scan);
       const payload = imageMode
-        ? {target: "image", image: scan.image, tools: ["trivy"]}
-        : {target: "repo", repo: scan.repo, tools: scan.tools, requested_sha: scan.requested_sha || ""};
+        ? {target: "image", image: scan.image, tools: ["trivy"], force: true}
+        : {target: "repo", repo: scan.repo, tools: scan.tools, requested_sha: scan.requested_sha || "", force: true};
       try {
         const response = await api("/api/scans", {
           method: "POST",
@@ -3446,8 +3508,74 @@
       return '<div class="dash-panel"><h2>' + esc(group.name) + '</h2><p class="meta">' + esc(group.description || "Latest scan of each project in this group.") + '</p><table class="dash-table"><thead><tr><th>Project</th><th>Latest scan</th><th>Who ran it</th><th>Code</th><th>SonarQube</th><th>Gate</th><th>Since previous</th></tr></thead><tbody>' + rows + "</tbody></table>" + (events ? "<h2>Recent changes</h2><ul>" + events + "</ul>" : "") + "</div>";
     }
 
-    function showGroupForm(group) {
+    function groupPerson(username, lead, locked, role) {
+      const known = groupPeople.find((item) => item.username === username) || {};
+      const resolved = known.role || role || "";
+      return {
+        username,
+        first_name: known.first_name || "",
+        last_name: known.last_name || "",
+        role: resolved,
+        lead: resolved !== "viewer" && Boolean(lead),
+        locked: Boolean(locked)
+      };
+    }
+
+    async function loadGroupPeople() {
+      const response = await api("/api/groups/people");
+      if (!response.ok) {
+        groupPeople = [];
+        return false;
+      }
+      const body = await response.json().catch(() => []);
+      groupPeople = Array.isArray(body) ? body : [];
+      return true;
+    }
+
+    function renderChosenMembers() {
+      const box = document.querySelector("#group-member-chosen");
+      if (!chosenMembers.length) {
+        box.innerHTML = '<p class="hint">No one selected yet.</p>';
+        return;
+      }
+      box.innerHTML = chosenMembers.map((person) => {
+        const viewer = person.role === "viewer";
+        const lead = '<label class="member-lead"><input type="checkbox" data-action="member-lead" data-user="' + esc(person.username) + '"' + (person.lead ? " checked" : "") + (viewer || person.locked ? " disabled" : "") + "> Lead</label>";
+        const remove = person.locked ? "" : '<button type="button" class="ghost" data-action="member-remove" data-user="' + esc(person.username) + '">Remove</button>';
+        return '<div class="member-row"><div><b>' + esc(displayName(person)) + '</b><div class="meta">' + esc(person.username) + " · " + esc(ROLE_LABEL[person.role] || person.role) + "</div></div><div class=\"row-actions\">" + lead + remove + "</div></div>";
+      }).join("");
+    }
+
+    function renderMemberChoices() {
+      const list = document.querySelector("#group-member-list");
+      const query = document.querySelector("#group-member-q").value.trim().toLowerCase();
+      const taken = new Set(chosenMembers.map((item) => item.username));
+      const matches = groupPeople.filter((person) => {
+        if (taken.has(person.username)) return false;
+        const text = (displayName(person) + " " + person.username + " " + (ROLE_LABEL[person.role] || "")).toLowerCase();
+        return !query || text.includes(query);
+      }).slice(0, 8);
+      list.hidden = false;
+      if (!matches.length) {
+        list.innerHTML = '<p class="hint">No matching people.</p>';
+        return;
+      }
+      list.innerHTML = matches.map((person) => '<button type="button" class="member-option" data-action="member-add" data-user="' + esc(person.username) + '"><b>' + esc(displayName(person)) + "</b><span>" + esc(person.username) + " · " + esc(ROLE_LABEL[person.role] || person.role) + "</span></button>").join("");
+    }
+
+    function addGroupMember(username) {
+      if (!username || chosenMembers.some((item) => item.username === username)) return;
+      const known = groupPeople.find((item) => item.username === username);
+      if (!known) return;
+      chosenMembers.push(groupPerson(username, false, false, known.role));
+      document.querySelector("#group-member-q").value = "";
+      document.querySelector("#group-member-list").hidden = true;
+      renderChosenMembers();
+    }
+
+    async function showGroupForm(group) {
       const form = document.querySelector("#group-form");
+      const box = document.querySelector("#group-error");
       form.hidden = false;
       form.dataset.id = group ? String(group.id) : "";
       document.querySelector("#group-form-title").textContent = group ? "Edit " + group.name : "New group";
@@ -3455,28 +3583,44 @@
       document.querySelector("#group-description").value = group ? (group.description || "") : "";
       document.querySelector("#group-repos").value = group ? (group.projects || []).filter((item) => item.kind === "repo").map((item) => item.target).join("\n") : "";
       document.querySelector("#group-images").value = group ? (group.projects || []).filter((item) => item.kind === "image").map((item) => item.target).join("\n") : "";
+      document.querySelector("#group-member-q").value = "";
+      document.querySelector("#group-member-list").hidden = true;
+      const loaded = await loadGroupPeople();
+      if (!loaded) {
+        box.hidden = false;
+        box.textContent = "Could not load people.";
+      }
       const members = group ? (group.members || []) : [];
-      const selfName = currentUser && currentUser.role === "developer" ? currentUser.username : "";
-      document.querySelector("#group-members").value = group ? members.map((item) => item.username).join("\n") : selfName;
-      document.querySelector("#group-leads").value = group ? members.filter((item) => item.lead).map((item) => item.username).join("\n") : selfName;
+      const lockSelf = !group && currentUser && currentUser.role === "developer";
+      chosenMembers = members.map((item) => groupPerson(item.username, item.lead, false, item.role));
+      if (lockSelf && !chosenMembers.some((item) => item.username === currentUser.username)) {
+        chosenMembers.unshift(groupPerson(currentUser.username, true, true, currentUser.role));
+      }
+      if (lockSelf) {
+        chosenMembers = chosenMembers.map((item) => item.username === currentUser.username ? groupPerson(item.username, true, true, item.role) : item);
+      }
+      renderChosenMembers();
       fillGroupPickers();
     }
 
     document.querySelector("#group-new").addEventListener("click", () => showGroupForm(null));
+    document.querySelector("#group-member-q").addEventListener("focus", renderMemberChoices);
+    document.querySelector("#group-member-q").addEventListener("input", renderMemberChoices);
+    document.addEventListener("click", (event) => {
+      if (!event.target.closest(".member-pick")) document.querySelector("#group-member-list").hidden = true;
+    });
     document.querySelector("#group-cancel").addEventListener("click", () => {
       document.querySelector("#group-form").hidden = true;
     });
     document.querySelector("#group-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       const box = document.querySelector("#group-error");
-      const leads = new Set(groupLines(document.querySelector("#group-leads").value));
-      const names = new Set([...groupLines(document.querySelector("#group-members").value), ...leads]);
       const payload = {
         name: document.querySelector("#group-name").value,
         description: document.querySelector("#group-description").value,
         repos: groupLines(document.querySelector("#group-repos").value),
         images: groupLines(document.querySelector("#group-images").value),
-        members: [...names].map((username) => ({username, lead: leads.has(username)}))
+        members: chosenMembers.map((item) => ({username: item.username, lead: item.lead}))
       };
       const id = document.querySelector("#group-form").dataset.id;
       const response = await api(id ? "/api/groups/" + id : "/api/groups", {

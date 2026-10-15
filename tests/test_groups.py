@@ -85,7 +85,7 @@ def test_parse_group_keeps_a_repo_and_its_lead() -> None:
     assert parsed["members"] == [{"username": "ada", "lead": True}]
 
 
-def test_parse_group_rejects_a_group_without_a_project() -> None:
+def test_parse_group_accepts_a_group_without_a_project() -> None:
     parsed, error = parse_group(
         {
             "name": "Empty",
@@ -95,5 +95,6 @@ def test_parse_group_rejects_a_group_without_a_project() -> None:
         }
     )
 
-    assert parsed is None
-    assert error == "Add a repository or an image."
+    assert error == ""
+    assert parsed is not None
+    assert parsed["projects"] == []

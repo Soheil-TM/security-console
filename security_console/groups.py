@@ -28,6 +28,10 @@ def install_groups(app: Flask) -> None:
     def list_project_groups() -> Reply:
         return _call(app, _list_groups)
 
+    @app.get("/api/groups/people")
+    def list_group_people() -> Reply:
+        return _call(app, _list_people)
+
     @app.post("/api/groups")
     def create_project_group() -> Reply:
         return _call(app, lambda: _create_group(app))
@@ -117,6 +121,24 @@ def public_group(
             for item in group.get("events") or []
         ],
     }
+
+
+def _list_people() -> Reply:
+    """Names an admin or developer may add to a group. No email."""
+
+    if g.user.get("role") not in {"admin", "developer"}:
+        return jsonify({"error": "You do not have permission."}), 403
+    people = [
+        {
+            "username": row["username"],
+            "first_name": row.get("first_name") or "",
+            "last_name": row.get("last_name") or "",
+            "role": row["role"],
+        }
+        for row in db.list_users()
+        if not row.get("disabled")
+    ]
+    return jsonify(people)
 
 
 def _list_groups() -> Response:
@@ -274,8 +296,6 @@ def _projects(
             return [], "That project is listed twice."
         seen.add(key)
         projects.append({"kind": "image", "target": image, "key": key})
-    if not projects:
-        return [], "Add a repository or an image."
     if len(projects) > _MAX_PROJECTS:
         return [], "A group can hold 30 projects."
     return projects, ""

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 TOOLS = ("semgrep", "checkov", "sonar", "trivy")
 ROLES = ("admin", "developer", "viewer")
+REUSE_HOURS = 24
 
 
 def access_map(user: dict[str, Any]) -> dict[str, bool]:
@@ -191,3 +193,96 @@ def present_scan(
     if not summary:
         shown["findings"] = findings
     return shown
+
+
+def tools_cover(previous: list[str] | tuple[str, ...], requested: list[str]) -> bool:
+    """Return whether a finished scan already ran every requested tool."""
+
+    if not requested:
+        return False
+    have = {tool for tool in previous if tool in TOOLS}
+    return all(tool in have for tool in requested)
+
+
+def _scan_time(scan: dict[str, Any]) -> datetime | None:
+    raw = str(scan.get("finished_at") or scan.get("created_at") or "").strip()
+    if not raw:
+        return None
+    text = raw.replace(" UTC", "").strip()
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(text, fmt).replace(tzinfo=UTC)
+        except ValueError:
+            continue
+    return None
+
+
+def _sha_matches(scan: dict[str, Any], requested_sha: str) -> bool:
+    """When a commit is requested, only reuse a scan of that commit."""
+
+    if not requested_sha:
+        return True
+    want = requested_sha.lower()
+    commit = str(scan.get("commit_sha") or "").lower()
+    asked = str(scan.get("requested_sha") or "").lower()
+    return want in {commit, asked} and bool(want)
+
+
+def find_reusable_scan(
+    user: dict[str, Any],
+    items: list[dict[str, Any]],
+    *,
+    target: str,
+    repo: str,
+    image: str,
+    tools: list[str],
+    requested_sha: str = "",
+    group_keys: set[str] | None = None,
+    now: datetime | None = None,
+    force: bool = False,
+) -> tuple[dict[str, Any], str] | None:
+    """Return a running or recent scan that covers this request.
+
+    A running scan of the same project is shared. A finished successful scan
+    of the same project is reused when it is under ``REUSE_HOURS`` old and
+    already ran every requested tool. ``force`` skips finished reuse so Retry
+    can start a new scan.
+    """
+
+    request = {"target": target, "repo": repo, "image": image}
+    key = project_key(request)
+    clock = now or datetime.now(UTC)
+    newest_running: dict[str, Any] | None = None
+    newest_done: dict[str, Any] | None = None
+    for item in items:
+        if project_key(item) != key:
+            continue
+        if not tools_cover(item.get("tools") or [], tools):
+            continue
+        if not can_view_scan(user, item, group_keys=group_keys):
+            continue
+        if not _sha_matches(item, requested_sha):
+            continue
+        status = item.get("status") or ""
+        if status == "running":
+            if newest_running is None or str(item.get("created_at") or "") > str(
+                newest_running.get("created_at") or ""
+            ):
+                newest_running = item
+            continue
+        if force or status != "done":
+            continue
+        if item.get("failure_reason") in {"clone_failed", "sha_mismatch"}:
+            continue
+        when = _scan_time(item)
+        if when is None or clock - when > timedelta(hours=REUSE_HOURS):
+            continue
+        if newest_done is None or str(item.get("created_at") or "") > str(
+            newest_done.get("created_at") or ""
+        ):
+            newest_done = item
+    if newest_running is not None:
+        return newest_running, "running"
+    if newest_done is not None:
+        return newest_done, "recent"
+    return None

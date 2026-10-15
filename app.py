@@ -17,6 +17,7 @@ from security_console import db
 from security_console.access import (
     can_scan_project,
     can_start_scan,
+    find_reusable_scan,
     present_scan,
     project_key,
     recent_per_project,
@@ -200,7 +201,29 @@ def create_scan() -> View:
                 {"error": "This project is not in one of your groups."}
             ), 403
         return jsonify({"error": "You do not have permission."}), 403
+    force = bool(body.get("force"))
     with lock:
+        reusable = find_reusable_scan(
+            user,
+            list(scans.values()),
+            target=target,
+            repo=repo,
+            image=image,
+            tools=tools,
+            requested_sha=requested_sha,
+            group_keys=group_keys,
+            force=force,
+        )
+        if reusable is not None:
+            item, reason = reusable
+            shown = present_scan(
+                user, item, summary=False, group_keys=group_keys
+            )
+            if shown is None:
+                return jsonify({"error": "You do not have permission."}), 403
+            shown["reused"] = True
+            shown["reuse_reason"] = reason
+            return jsonify(shown), 200
         if any(item["status"] == "running" for item in scans.values()):
             return jsonify({"error": "A scan is already running."}), 409
         scan_id = uuid.uuid4().hex[:12]

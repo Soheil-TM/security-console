@@ -593,6 +593,8 @@
     .idle-card p { margin: 0; color: var(--muted); line-height: 1.6; }
     .idle-card strong { color: var(--ink); }
     .idle-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+    .password-card { width: min(440px, 100%); }
+    .password-card form { margin-top: 16px; }
 
     .main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
     .launch-wrap { padding: 16px 18px 0; }
@@ -1278,7 +1280,6 @@
         <button type="button" data-action="view" data-view="knowledge">Knowledge</button>
         <button type="button" data-action="view" data-view="settings"><span class="nav-label"><span id="settings-chev">▸</span> Settings</span></button>
         <div class="nav-sub" id="settings-wrap" hidden>
-          <button type="button" class="mode" data-action="view" data-view="account">Account</button>
           <button type="button" class="mode" data-action="view" data-view="users" id="nav-users" hidden>Users</button>
           <button type="button" class="mode" data-action="view" data-view="access" id="nav-access" hidden>Tool access</button>
           <button type="button" class="mode" data-action="view" data-view="groups" id="nav-groups">Groups</button>
@@ -1563,28 +1564,29 @@
           </form>
           <div id="group-report"></div>
         </section>
-        <section id="view-account" hidden>
-          <div class="page-head">
-            <div>
-              <h1>Account settings</h1>
-              <p class="meta">Type the new password twice, then save. Idle timeout is in the account menu.</p>
-            </div>
-          </div>
-          <form class="launch account-grid" id="password-form">
-            <div id="pw-error" class="login-error" hidden></div>
-            <div id="pw-ok" class="meta" hidden>Password updated.</div>
-            <label><span class="field-label">Current password</span><input id="pw-current" type="password" required maxlength="128" dir="ltr" autocomplete="current-password"></label>
-            <label><span class="field-label">New password</span><input id="pw-new" type="password" required minlength="12" maxlength="128" dir="ltr" autocomplete="new-password"></label>
-            <label>
-              <span class="field-label">Repeat new password</span>
-              <input id="pw-again" type="password" required minlength="12" maxlength="128" dir="ltr" autocomplete="new-password">
-              <div id="pw-match" hidden>The new password and the repeat do not match.</div>
-            </label>
-            <button type="submit" id="pw-save" disabled>Save</button>
-          </form>
-        </section>
       </div>
     </div>
+    </div>
+  </div>
+  <div class="idle-warn" id="password-dialog" hidden>
+    <div class="idle-card password-card" role="dialog" aria-modal="true" aria-labelledby="password-title">
+      <h2 id="password-title">Change password</h2>
+      <p>Type the current password, then the new one twice. Use at least 12 characters.</p>
+      <form id="password-form" class="account-grid">
+        <div id="pw-error" class="login-error" hidden></div>
+        <div id="pw-ok" class="meta" hidden>Password updated.</div>
+        <label><span class="field-label">Current password<span class="req" aria-hidden="true">*</span></span><input id="pw-current" type="password" required maxlength="128" dir="ltr" autocomplete="current-password"></label>
+        <label><span class="field-label">New password<span class="req" aria-hidden="true">*</span></span><input id="pw-new" type="password" required minlength="12" maxlength="128" dir="ltr" autocomplete="new-password"></label>
+        <label>
+          <span class="field-label">Repeat new password<span class="req" aria-hidden="true">*</span></span>
+          <input id="pw-again" type="password" required minlength="12" maxlength="128" dir="ltr" autocomplete="new-password">
+          <div id="pw-match" hidden>The new password and the repeat do not match.</div>
+        </label>
+        <div class="idle-actions">
+          <button type="button" class="ghost" id="password-cancel">Cancel</button>
+          <button type="submit" id="pw-save" disabled>Save</button>
+        </div>
+      </form>
     </div>
   </div>
   <div class="idle-warn" id="idle-warn" hidden>
@@ -1666,7 +1668,7 @@
     const reportsOpen = new Set();
     let scansMenuOpen = true;
     let settingsMenuOpen = false;
-    const SETTINGS_VIEWS = ["account", "users", "access", "groups", "connections", "sonar-setup"];
+    const SETTINGS_VIEWS = ["users", "access", "groups", "connections", "sonar-setup"];
     function csrfToken() {
       const match = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/);
       return match ? decodeURIComponent(match[1]) : "";
@@ -1705,6 +1707,7 @@
       currentUser = null;
       stopIdleWatch();
       closeProfileMenu();
+      document.querySelector("#password-dialog").hidden = true;
       document.body.classList.remove("authed", "must-change");
       state.dashScope = "";
     }
@@ -1938,9 +1941,18 @@
       document.querySelector("#settings-wrap").hidden = !settingsMenuOpen;
     }
 
+    function firstSettingsView() {
+      const order = ["users", "access", "groups", "connections", "sonar-setup"];
+      const found = order.find((name) => {
+        const button = document.querySelector('nav [data-view="' + name + '"]');
+        return button && !button.hidden;
+      });
+      return found || "groups";
+    }
+
     function setView(view) {
       state.view = view;
-      ["dashboard", "scans", "knowledge", "users", "access", "groups", "connections", "sonar-setup", "account"].forEach((name) => {
+      ["dashboard", "scans", "knowledge", "users", "access", "groups", "connections", "sonar-setup"].forEach((name) => {
         document.querySelector("#view-" + name).hidden = view !== name;
       });
       syncLaunch();
@@ -2865,7 +2877,7 @@
           if (SETTINGS_VIEWS.includes(state.view)) settingsMenuOpen = !settingsMenuOpen;
           else {
             settingsMenuOpen = true;
-            setView("account");
+            setView(firstSettingsView());
           }
           paintSettings();
         } else {
@@ -3587,14 +3599,18 @@
     });
     document.addEventListener("keydown", (event) => {
       noteInput();
-      if (event.key === "Escape") closeProfileMenu();
+      if (event.key === "Escape") {
+        if (!document.querySelector("#password-dialog").hidden) closePasswordDialog();
+        else closeProfileMenu();
+      }
     });
     document.addEventListener("mousemove", noteInput);
     document.addEventListener("touchstart", noteInput, {passive: true});
     document.querySelector("#change-password").addEventListener("click", () => {
       closeProfileMenu();
-      setView("account");
+      openPasswordDialog();
     });
+    document.querySelector("#password-cancel").addEventListener("click", closePasswordDialog);
     document.querySelector("#idle-timeout").addEventListener("change", async (event) => {
       const select = event.target;
       const previous = String(idleMinutes);
@@ -3883,6 +3899,20 @@
       msg.textContent = "Access saved for " + user.username + ".";
       await loadAccounts();
     });
+
+    function openPasswordDialog() {
+      document.querySelector("#password-form").reset();
+      document.querySelector("#pw-error").hidden = true;
+      document.querySelector("#pw-ok").hidden = true;
+      document.querySelector("#pw-match").hidden = true;
+      syncPasswordSubmit();
+      document.querySelector("#password-dialog").hidden = false;
+      document.querySelector("#pw-current").focus();
+    }
+
+    function closePasswordDialog() {
+      document.querySelector("#password-dialog").hidden = true;
+    }
 
     function syncPasswordSubmit() {
       const next = document.querySelector("#pw-new").value;

@@ -192,6 +192,8 @@ def _guard_request() -> Reply | None:
         return _falco_post()
     if request.method == "GET" and request.path in {"/", "/login"}:
         return None
+    if request.path.startswith("/api/guest/"):
+        return None
     if (request.method, request.path) in _OPEN:
         return None
     if (request.method, request.path) == ("POST", "/api/auth/refresh"):
@@ -743,6 +745,12 @@ def _trusted_proxy(remote: str) -> bool:
         except ValueError:
             continue
     return False
+
+
+def cookie_flags() -> dict[str, Any]:
+    """Cookie options shared by the session and the guest cookie."""
+
+    return _cookie_flags()
 
 
 def _cookie_flags() -> dict[str, Any]:

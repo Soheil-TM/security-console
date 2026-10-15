@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import re
@@ -658,7 +659,10 @@ def _git_auth_file(directory: Path, job: dict[str, Any]) -> str | None:
     directory.mkdir(mode=0o700, parents=True, exist_ok=True)
     os.chmod(directory, 0o700)
     lines = ["[http]"]
-    if token:
+    if token and job.get("clone_style") == "basic":
+        pair = base64.b64encode(("x-access-token:" + token).encode()).decode()
+        lines.append("\textraHeader = Authorization: Basic " + pair)
+    elif token:
         lines.append("\textraHeader = PRIVATE-TOKEN: " + token)
     if ca_cert:
         ca_path = directory / "ca.pem"

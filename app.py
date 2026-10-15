@@ -9,6 +9,7 @@ import psycopg
 from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
+from secrets import token_urlsafe
 from typing import Any
 
 from flask import Flask, Response, g, jsonify, render_template, request
@@ -25,6 +26,8 @@ from security_console.access import (
 from security_console.alerts import alert_from_payload
 from security_console.auth import (
     ConfigError,
+    client_ip,
+    cookie_flags,
     install_auth,
     prepare_auth,
     validate_runtime_config,
@@ -34,6 +37,16 @@ from security_console.dispatch import (
     dispatch_scan,
     scanner_token,
     scanner_url,
+)
+from security_console.guest import (
+    COOKIE as GUEST_COOKIE,
+    COOKIE_DAYS as GUEST_COOKIE_DAYS,
+    HOURLY_LIMIT as GUEST_HOURLY_LIMIT,
+    expired as guest_expired,
+    parse_guest_scan,
+    present_guest_scan,
+    recent_count as guest_recent_count,
+    session_key as guest_session_key,
 )
 from security_console.images import valid_image_ref
 from security_console.integrations import credentials_for
@@ -50,6 +63,7 @@ MAX_ALERTS = 300
 
 lock = threading.Lock()
 scans: dict[str, dict[str, Any]] = {}
+guest_secrets: dict[str, dict[str, str]] = {}
 alerts: list[dict[str, Any]] = []
 
 
@@ -70,11 +84,23 @@ def load_state() -> None:
             item = json.loads(path.read_text())
         except json.JSONDecodeError:
             continue
+        if guest_expired(item):
+            path.unlink(missing_ok=True)
+            continue
         if item.get("status") == "running":
             item["status"] = "failed"
             item["error"] = "The console restarted during the scan."
             path.write_text(json.dumps(item, ensure_ascii=False))
         scans[item["id"]] = item
+
+
+def prune_guest_scans() -> None:
+    """Drop guest scans past their keep time. Call with ``lock`` held."""
+
+    for scan_id, item in list(scans.items()):
+        if item.get("status") != "running" and guest_expired(item):
+            scans.pop(scan_id, None)
+            (DATA / "scans" / f"{scan_id}.json").unlink(missing_ok=True)
 
 
 def save_scan(item: dict[str, Any]) -> None:
@@ -96,7 +122,10 @@ def execute_scan(scan_id: str) -> None:
 
     try:
         try:
-            secrets = credentials_for(item)
+            if item.get("guest"):
+                secrets = guest_secrets.pop(scan_id, {})
+            else:
+                secrets = credentials_for(item)
         except psycopg.Error:
             app.logger.error("integration lookup failed")
             item["status"] = "failed"
@@ -296,6 +325,118 @@ def get_scan(scan_id: str) -> View:
     if shown is None:
         return jsonify({"error": "Not found"}), 404
     return jsonify(shown)
+
+
+def _guest_key() -> str:
+    cookie = request.cookies.get(GUEST_COOKIE, "")
+    return guest_session_key(cookie) if len(cookie) >= 32 else ""
+
+
+def _guest_reply(payload: Any, status: int, cookie: str = "") -> Response:
+    response = jsonify(payload)
+    response.status_code = status
+    if cookie:
+        response.set_cookie(
+            GUEST_COOKIE,
+            cookie,
+            max_age=GUEST_COOKIE_DAYS * 86400,
+            path="/api/guest",
+            **cookie_flags(),
+        )
+    return response
+
+
+@app.post("/api/guest/scans")
+def create_guest_scan() -> Response:
+    if not request.is_json:
+        return _guest_reply({"error": "Request rejected."}, 403)
+    cookie = ""
+    guest = _guest_key()
+    if not guest:
+        cookie = token_urlsafe(32)
+        guest = guest_session_key(cookie)
+    body = request.get_json(silent=True)
+    fields, one_time, error = parse_guest_scan(body)
+    if fields is None:
+        return _guest_reply({"error": error}, 400, cookie)
+    force = isinstance(body, dict) and body.get("force") is True
+    ip = client_ip()
+    with lock:
+        prune_guest_scans()
+        reusable = find_reusable_scan(
+            {"role": "admin"},
+            list(scans.values()),
+            target=fields["target"],
+            repo=fields["repo"],
+            image=fields["image"],
+            tools=fields["tools"],
+            force=force,
+            guest=guest,
+        )
+        if reusable is not None:
+            item, reason = reusable
+            shown = present_guest_scan(item, summary=False)
+            shown["reused"] = True
+            shown["reuse_reason"] = reason
+            return _guest_reply(shown, 200, cookie)
+        recent = guest_recent_count(list(scans.values()), guest, ip)
+        if recent >= GUEST_HOURLY_LIMIT:
+            return _guest_reply(
+                {"error": "Too many scans this hour. Sign in or try again later."},
+                429,
+                cookie,
+            )
+        if any(item["status"] == "running" for item in scans.values()):
+            return _guest_reply(
+                {"error": "The scanner is busy. Try again in a minute."},
+                409,
+                cookie,
+            )
+        scan_id = uuid.uuid4().hex[:12]
+        item = {
+            "id": scan_id,
+            **fields,
+            "status": "running",
+            "findings": [],
+            "sonar": None,
+            "phase": "Trivy" if fields["target"] == "image" else "clone",
+            "error": "",
+            "created_at": utcnow(),
+            "finished_at": "",
+            "owner": "Guest",
+            "guest": guest,
+            "guest_ip": ip,
+            "private": bool(one_time),
+            "requested_sha": "",
+            "commit_sha": "",
+            "failure_reason": "",
+        }
+        scans[scan_id] = item
+        guest_secrets[scan_id] = one_time
+        save_scan(item)
+    threading.Thread(target=execute_scan, args=(scan_id,), daemon=True).start()
+    return _guest_reply(present_guest_scan(item, summary=False), 202, cookie)
+
+
+@app.get("/api/guest/scans")
+def list_guest_scans() -> Response:
+    guest = _guest_key()
+    mine = [
+        item
+        for item in scans.values()
+        if guest and item.get("guest") == guest and not guest_expired(item)
+    ]
+    mine.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
+    return jsonify([present_guest_scan(item, summary=True) for item in mine[:20]])
+
+
+@app.get("/api/guest/scans/<scan_id>")
+def get_guest_scan(scan_id: str) -> View:
+    guest = _guest_key()
+    item = scans.get(scan_id)
+    if not guest or not item or item.get("guest") != guest:
+        return jsonify({"error": "Not found"}), 404
+    return jsonify(present_guest_scan(item, summary=False))
 
 
 @app.post("/api/falco")

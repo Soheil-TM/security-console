@@ -87,6 +87,10 @@ def _with_secrets(body: dict[str, Any], job: dict[str, Any]) -> dict[str, Any]:
     certificate = _secret(body, "ca_cert", 12000, pem=True)
     if token:
         job["clone_token"] = token
+        style = body.get("clone_style") or "header"
+        if style not in {"header", "basic"}:
+            raise JobError("Invalid scan.")
+        job["clone_style"] = style
     if username:
         job["registry_username"] = username
     if password:

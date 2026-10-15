@@ -40,11 +40,11 @@ def valid_image_ref(value: str) -> bool:
         return True
     if _REF.fullmatch(text) is None:
         return False
-    host = _registry_host(text)
+    host = registry_host(text)
     return host is None or not host_is_blocked(host)
 
 
-def _registry_host(text: str) -> str | None:
+def registry_host(text: str) -> str | None:
     """Return the registry host, or None for a Docker Hub short name."""
 
     slash = text.find("/")

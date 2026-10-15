@@ -1195,6 +1195,127 @@
     @media (prefers-reduced-motion: reduce) {
       .badge.running, .dot.running, .progress span { animation: none; }
     }
+    .login-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 90;
+      display: none;
+      min-height: 0;
+      background: rgba(12, 22, 34, .62);
+    }
+    body.login-open:not(.authed) .login-screen { display: grid; }
+    .login-card { position: relative; }
+    .login-close {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 32px;
+      height: 32px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 20px;
+      line-height: 1;
+    }
+    .login-close:hover { background: var(--bg); color: var(--ink); }
+    .public { min-height: 100%; display: flex; flex-direction: column; }
+    body.authed .public { display: none; }
+    .public-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 0 20px;
+      background: var(--navy);
+      color: #d5e0ec;
+      border-bottom: 1px solid #24384c;
+    }
+    .public-top .brand { border-bottom: 0; padding: 12px 0; }
+    .public-actions { display: flex; align-items: center; gap: 12px; }
+    .public-theme { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+    #public-login {
+      height: 38px;
+      padding: 0 18px;
+      border: 0;
+      border-radius: 10px;
+      background: var(--teal);
+      color: white;
+      font-weight: 700;
+    }
+    #public-login:hover { background: var(--teal-2); }
+    .public-main { width: min(920px, 100%); margin: 0 auto; padding: 44px 20px 32px; }
+    .public-hero { text-align: center; margin-bottom: 22px; }
+    .public-hero h1 { margin: 0 0 8px; font-size: 28px; }
+    .public-hero p { margin: 0; color: var(--muted); line-height: 1.7; }
+    .public-card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+    .public-card .seg { display: inline-flex; margin-bottom: 14px; }
+    .public-row { display: flex; gap: 10px; align-items: stretch; }
+    .public-row input { flex: 1; }
+    #guest-go {
+      min-width: 110px;
+      border: 0;
+      border-radius: 10px;
+      background: var(--teal);
+      color: white;
+      font-weight: 700;
+    }
+    #guest-go:hover { background: var(--teal-2); }
+    #guest-go:disabled { opacity: .6; cursor: default; }
+    .public-tools { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 12px; color: var(--ink); font-size: 13px; }
+    .public-tools label { display: inline-flex; align-items: center; gap: 6px; }
+    .public-private { margin-top: 12px; }
+    .public-private summary { cursor: pointer; color: var(--teal); font-weight: 600; font-size: 13px; }
+    html.dark .public-private summary { color: #5eead4; }
+    .public-private .grid { display: grid; gap: 10px; margin-top: 10px; grid-template-columns: 1fr 1fr; }
+    .public-private .grid > .wide { grid-column: 1 / -1; }
+    #guest-msg { min-height: 20px; margin: 10px 2px 0; font-size: 13px; color: var(--muted); }
+    #guest-msg.bad { color: var(--critical); }
+    html.dark #guest-msg.bad { color: #fda4af; }
+    .public-section { margin-top: 22px; }
+    .public-section h2 { font-size: 15px; margin: 0 0 10px; }
+    .guest-list { display: grid; gap: 8px; }
+    .guest-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--card);
+      color: var(--ink);
+      text-align: left;
+    }
+    .guest-item:hover, .guest-item.on { border-color: var(--teal); }
+    .guest-item .sub { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .guest-item .name { font-weight: 600; word-break: break-all; }
+    .guest-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .guest-head h2 { margin: 0 0 4px; font-size: 18px; word-break: break-all; }
+    .guest-head .meta { color: var(--muted); font-size: 12px; }
+    .guest-sev { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 14px 0; }
+    .guest-sev div { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+    .guest-sev b { display: block; font-size: 20px; }
+    .guest-sev span { color: var(--muted); font-size: 12px; }
+    .guest-error { white-space: pre-wrap; margin-top: 12px; }
+    .guest-findings { width: 100%; border-collapse: collapse; direction: ltr; }
+    .guest-findings th, .guest-findings td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; font-size: 13px; }
+    .guest-findings th { color: var(--muted); font-size: 12px; }
+    .guest-findings .where { color: var(--muted); font-size: 12px; margin-top: 4px; word-break: break-all; }
+    .guest-findings .check { font-weight: 600; word-break: break-word; }
+    @media (max-width: 980px) {
+      .public-row { flex-direction: column; }
+      #guest-go { height: 42px; }
+      .public-private .grid, .guest-sev { grid-template-columns: 1fr 1fr; }
+      .public-theme span { display: none; }
+    }
     @media (max-width: 980px) {
       .app { height: auto; }
       .workspace { grid-template-columns: 1fr; }
@@ -1214,10 +1335,79 @@
   </style>
 </head>
 <body>
+  <div class="public" id="public">
+    <header class="public-top">
+      <div class="brand">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><path fill="#2dd4bf" d="M16 2.5 27.5 7v8.2c0 7.2-4.6 12.2-11.5 14.3C9.1 27.4 4.5 22.4 4.5 15.2V7z"/></svg>
+        <div>
+          <strong>Security console</strong>
+          <small>Code and image scans</small>
+        </div>
+      </div>
+      <div class="public-actions">
+        <div class="public-theme">
+          <span>Dark mode</span>
+          <button type="button" id="public-theme" class="switch" role="switch" aria-checked="false" aria-label="Dark mode"><span class="switch-knob"></span></button>
+        </div>
+        <button type="button" id="public-login">Sign in</button>
+      </div>
+    </header>
+    <main class="public-main">
+      <div class="public-hero">
+        <h1>Scan a repository or an image</h1>
+        <p>Paste a Git URL or an image name. The report opens here, and only this browser can see it.</p>
+      </div>
+      <form class="public-card" id="guest-form" autocomplete="off">
+        <div class="seg" role="tablist">
+          <button type="button" class="on" data-guest-target="repo" role="tab" aria-selected="true">Repository</button>
+          <button type="button" data-guest-target="image" role="tab" aria-selected="false">Image</button>
+        </div>
+        <div class="public-row">
+          <input id="guest-input" type="url" dir="ltr" maxlength="500" required placeholder="https://gitlab.example.com/team/app.git">
+          <button type="submit" id="guest-go">Scan</button>
+        </div>
+        <div class="public-tools" id="guest-tools">
+          <label><input type="checkbox" value="semgrep" checked> Semgrep</label>
+          <label><input type="checkbox" value="checkov" checked> Checkov</label>
+          <label><input type="checkbox" value="trivy" checked> Trivy</label>
+        </div>
+        <div class="public-tools" id="guest-image-tools" hidden>
+          <span>Images are scanned with Trivy.</span>
+        </div>
+        <details class="public-private" id="guest-private">
+          <summary>Private repository or registry? Add a token for this scan</summary>
+          <div class="grid" id="guest-repo-secret">
+            <label class="wide">
+              <span class="field-label">Access token</span>
+              <input id="guest-token" type="password" dir="ltr" maxlength="256" autocomplete="off" placeholder="GitLab or GitHub token with read access">
+            </label>
+          </div>
+          <div class="grid" id="guest-image-secret" hidden>
+            <label>
+              <span class="field-label">Registry username</span>
+              <input id="guest-reg-user" type="text" dir="ltr" maxlength="128" autocomplete="off">
+            </label>
+            <label>
+              <span class="field-label">Registry token or password</span>
+              <input id="guest-reg-pass" type="password" dir="ltr" maxlength="256" autocomplete="off">
+            </label>
+          </div>
+          <p class="hint">The token is used for this scan only. It is not saved, and saved company connections are never used here.</p>
+        </details>
+        <p id="guest-msg" role="status"></p>
+      </form>
+      <section class="public-section" id="guest-mine" hidden>
+        <h2>Your scans in this browser</h2>
+        <div class="guest-list" id="guest-list"></div>
+      </section>
+      <section class="public-section public-card" id="guest-result" hidden></section>
+    </main>
+  </div>
   <div class="login-screen" id="login-screen">
     <form class="login-card" id="login-form">
+      <button type="button" class="login-close" id="login-close" aria-label="Close">×</button>
       <h1>Sign in</h1>
-      <p>Sign in to start a scan and read the reports.</p>
+      <p>Sign in to scan your team's projects and read the group reports.</p>
       <div id="login-error" class="login-error" hidden></div>
       <label>
         <span class="field-label">Username</span>
@@ -1738,24 +1928,36 @@
           if (refreshBody.code === "idle_expired" || refreshBody.code === "absolute_expired") {
             showIdleEnded(refreshBody.error);
           } else {
-            showLogin();
+            showLogin(true);
           }
         }
       }
       return response;
     }
 
-    function showLogin() {
+    function showLogin(openDialog) {
       currentUser = null;
       stopIdleWatch();
       closeProfileMenu();
       document.querySelector("#password-dialog").hidden = true;
       document.body.classList.remove("authed", "must-change");
       state.dashScope = "";
+      if (openDialog) openLoginDialog();
+      else closeLoginDialog();
+      loadGuestScans();
+    }
+
+    function openLoginDialog() {
+      document.body.classList.add("login-open");
+      setTimeout(() => document.querySelector("#username").focus(), 0);
+    }
+
+    function closeLoginDialog() {
+      document.body.classList.remove("login-open");
     }
 
     function showIdleEnded(message) {
-      showLogin();
+      showLogin(true);
       const error = document.querySelector("#login-error");
       error.hidden = false;
       error.textContent = message || "Your session ended because of inactivity.";
@@ -1768,6 +1970,7 @@
 
     function showApp(user) {
       currentUser = user;
+      closeLoginDialog();
       document.body.classList.add("authed");
       paintProfile(user);
       startIdleWatch();
@@ -3646,7 +3849,7 @@
         const scanResponse = await api("/api/scans");
         if (!currentUser) return;
         if (!scanResponse.ok) {
-          if (scanResponse.status === 401) showLogin();
+          if (scanResponse.status === 401) showLogin(true);
           return;
         }
         const scans = await scanResponse.json();
@@ -3720,16 +3923,21 @@
 
     function syncThemeButton() {
       const dark = document.documentElement.classList.contains("dark");
-      const button = document.querySelector("#theme");
-      button.setAttribute("aria-checked", dark ? "true" : "false");
-      button.setAttribute("aria-label", dark ? "Dark mode on" : "Dark mode off");
+      ["#theme", "#public-theme"].forEach((selector) => {
+        const button = document.querySelector(selector);
+        button.setAttribute("aria-checked", dark ? "true" : "false");
+        button.setAttribute("aria-label", dark ? "Dark mode on" : "Dark mode off");
+      });
     }
 
-    document.querySelector("#theme").addEventListener("click", () => {
+    function toggleTheme() {
       const dark = document.documentElement.classList.toggle("dark");
       localStorage.setItem("console-theme", dark ? "dark" : "light");
       syncThemeButton();
-    });
+    }
+
+    document.querySelector("#theme").addEventListener("click", toggleTheme);
+    document.querySelector("#public-theme").addEventListener("click", toggleTheme);
     syncThemeButton();
 
     document.querySelector("#profile-btn").addEventListener("click", (event) => {
@@ -3744,7 +3952,8 @@
     document.addEventListener("keydown", (event) => {
       noteInput();
       if (event.key === "Escape") {
-        if (!document.querySelector("#password-dialog").hidden) closePasswordDialog();
+        if (document.body.classList.contains("login-open")) closeLoginDialog();
+        else if (!document.querySelector("#password-dialog").hidden) closePasswordDialog();
         else closeProfileMenu();
       }
     });
@@ -4207,11 +4416,224 @@
       document.querySelector("#login-error").hidden = true;
     });
 
+    const guest = {target: "repo", scans: [], scan: null, timer: null};
+    const GUEST_PLACEHOLDER = {
+      repo: "https://gitlab.example.com/team/app.git",
+      image: "registry.example.com/team/app:1.0 or nginx:1.27"
+    };
+
+    function setGuestTarget(target) {
+      guest.target = target;
+      document.querySelectorAll("[data-guest-target]").forEach((button) => {
+        const on = button.dataset.guestTarget === target;
+        button.classList.toggle("on", on);
+        button.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      const input = document.querySelector("#guest-input");
+      input.type = target === "repo" ? "url" : "text";
+      input.placeholder = GUEST_PLACEHOLDER[target];
+      document.querySelector("#guest-tools").hidden = target !== "repo";
+      document.querySelector("#guest-image-tools").hidden = target !== "image";
+      document.querySelector("#guest-repo-secret").hidden = target !== "repo";
+      document.querySelector("#guest-image-secret").hidden = target !== "image";
+    }
+
+    function guestMessage(text, bad) {
+      const box = document.querySelector("#guest-msg");
+      box.textContent = text || "";
+      box.classList.toggle("bad", Boolean(bad));
+    }
+
+    function guestStatus(scan) {
+      return STATUS[scan.status] || scan.status || "";
+    }
+
+    function guestWhen(scan) {
+      return String(scan.created_at || "").replace(" UTC", "");
+    }
+
+    function renderGuestList() {
+      const wrap = document.querySelector("#guest-mine");
+      wrap.hidden = !guest.scans.length;
+      document.querySelector("#guest-list").innerHTML = guest.scans.map((scan) => {
+        const on = guest.scan && guest.scan.id === scan.id ? " on" : "";
+        const total = scan.finding_count || 0;
+        const detail = scan.status === "done" ? total + " findings" : (scan.status === "running" ? "Running " + (scan.phase || "") : "Failed");
+        return '<button type="button" class="guest-item' + on + '" data-guest-open="' + esc(scan.id) + '"><span><span class="name">' + esc(scanTitle(scan)) + '</span><span class="sub">' + esc(guestWhen(scan)) + " · " + esc(detail) + (scan.private ? " · private" : "") + '</span></span><span class="badge ' + esc(scan.status) + '">' + esc(guestStatus(scan)) + "</span></button>";
+      }).join("");
+    }
+
+    function guestFindingRows(findings) {
+      const groups = new Map();
+      findings.forEach((row) => {
+        const key = row.tool + "\0" + row.check + "\0" + bucket(row.severity);
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(row);
+      });
+      const order = (rows) => SEV.findIndex((item) => item[0] === bucket(rows[0].severity));
+      return [...groups.values()]
+        .sort((a, b) => order(a) - order(b) || b.length - a.length)
+        .slice(0, 300)
+        .map((rows) => {
+          const sample = rows[0];
+          const level = bucket(sample.severity);
+          const label = SEV.find((item) => item[0] === level);
+          const places = rows.slice(0, 5).map((row) => esc(row.path) + (row.line ? ":" + esc(row.line) : "")).join("<br>");
+          const more = rows.length > 5 ? "<br>and " + (rows.length - 5) + " more" : "";
+          return '<tr><td><span class="pill ' + level + '">' + label[2] + '</span></td><td><div class="check">' + esc(sample.check || "—") + "</div>" + (sample.message ? "<div>" + esc(sample.message) + "</div>" : "") + '<div class="where">' + places + more + '</div></td><td>' + esc(TOOL_LABEL[sample.tool] || sample.tool) + '</td><td>' + rows.length + "</td></tr>";
+        }).join("");
+    }
+
+    function renderGuestResult() {
+      const box = document.querySelector("#guest-result");
+      const scan = guest.scan;
+      box.hidden = !scan;
+      if (!scan) return;
+      const subtitle = isImageScan(scan) ? "Image" : scan.repo;
+      const tools = (scan.tools || []).map((tool) => TOOL_LABEL[tool] || tool).join(", ");
+      const again = scan.status === "failed" ? '<button type="button" class="retry" data-guest-again="1">Scan again</button>' : "";
+      let body = "";
+      if (scan.status === "running") {
+        body = '<div class="empty"><strong>Running ' + esc(scan.phase || "scan") + "</strong>The report fills in when the scan is done.</div>";
+      } else if (scan.status === "failed") {
+        body = '<div class="login-error guest-error">' + esc(scan.error || "The scan failed.") + "</div>";
+      } else {
+        const tally = scan.severity || counts(scan.findings || [], (row) => row.severity);
+        const tiles = SEV.map((item) => "<div><b>" + (tally[item[0]] || 0) + "</b><span>" + item[2] + "</span></div>").join("");
+        const rows = guestFindingRows(scan.findings || []);
+        body = '<div class="guest-sev">' + tiles + "</div>" + (rows
+          ? '<table class="guest-findings"><thead><tr><th>Severity</th><th>Rule</th><th>Tool</th><th>Count</th></tr></thead><tbody>' + rows + "</tbody></table>"
+          : '<div class="empty"><strong>No findings</strong>The scanners did not report anything.</div>');
+      }
+      box.innerHTML = '<div class="guest-head"><div><h2>' + esc(scanTitle(scan)) + '</h2><div class="meta">' + esc(subtitle) + "</div><div class=\"meta\">" + esc(tools) + " · " + esc(guestWhen(scan)) + (scan.private ? " · private" : "") + '</div></div><div class="scan-actions"><span class="badge ' + esc(scan.status) + '">' + esc(guestStatus(scan)) + "</span>" + again + "</div></div>" + body;
+    }
+
+    async function openGuestScan(id) {
+      const response = await fetch("/api/guest/scans/" + encodeURIComponent(id), {headers: {"Accept": "application/json"}, credentials: "same-origin"});
+      if (!response.ok) return;
+      guest.scan = await response.json();
+      renderGuestList();
+      renderGuestResult();
+    }
+
+    async function loadGuestScans() {
+      clearTimeout(guest.timer);
+      if (currentUser) return;
+      try {
+        const response = await fetch("/api/guest/scans", {headers: {"Accept": "application/json"}, credentials: "same-origin"});
+        const list = response.ok ? await response.json() : [];
+        if (currentUser) return;
+        guest.scans = Array.isArray(list) ? list : [];
+        const shown = guest.scan && guest.scans.find((item) => item.id === guest.scan.id);
+        const changed = shown && (shown.status !== guest.scan.status || shown.phase !== guest.scan.phase);
+        if (changed || (shown && !guest.scan.findings)) await openGuestScan(shown.id);
+        else renderGuestList();
+      } catch (err) {
+        return;
+      }
+      const running = guest.scans.some((item) => item.status === "running");
+      if (running) guest.timer = setTimeout(loadGuestScans, 3000);
+    }
+
+    function guestBody(force) {
+      const value = document.querySelector("#guest-input").value.trim();
+      const body = {target: guest.target};
+      if (guest.target === "repo") {
+        body.repo = value;
+        body.tools = [...document.querySelectorAll("#guest-tools input:checked")].map((input) => input.value);
+        const token = document.querySelector("#guest-token").value.trim();
+        if (token) body.token = token;
+      } else {
+        body.image = value;
+        body.tools = ["trivy"];
+        const user = document.querySelector("#guest-reg-user").value.trim();
+        const pass = document.querySelector("#guest-reg-pass").value;
+        if (user || pass) {
+          body.registry_username = user;
+          body.registry_password = pass;
+        }
+      }
+      if (force) body.force = true;
+      return body;
+    }
+
+    async function startGuestScan(force) {
+      const button = document.querySelector("#guest-go");
+      button.disabled = true;
+      guestMessage("Starting the scan...");
+      try {
+        const response = await fetch("/api/guest/scans", {
+          method: "POST",
+          headers: {"Content-Type": "application/json", "Accept": "application/json"},
+          credentials: "same-origin",
+          body: JSON.stringify(guestBody(force))
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          guestMessage(body.error || "Could not start the scan.", true);
+          return;
+        }
+        document.querySelector("#guest-token").value = "";
+        document.querySelector("#guest-reg-pass").value = "";
+        if (body.reused) {
+          guestMessage(body.reuse_reason === "running" ? "That scan is already running. Opening it." : "You scanned this in the last 24 hours. Opening that report.");
+        } else {
+          guestMessage("Scan started.");
+        }
+        guest.scan = body;
+        renderGuestResult();
+        await loadGuestScans();
+        document.querySelector("#guest-result").scrollIntoView({behavior: "smooth", block: "start"});
+      } catch (err) {
+        guestMessage("Lost contact with the console.", true);
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    document.querySelectorAll("[data-guest-target]").forEach((button) => {
+      button.addEventListener("click", () => setGuestTarget(button.dataset.guestTarget));
+    });
+    document.querySelector("#guest-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      startGuestScan(false);
+    });
+    document.querySelector("#guest-list").addEventListener("click", (event) => {
+      const item = event.target.closest("[data-guest-open]");
+      if (item) openGuestScan(item.dataset.guestOpen);
+    });
+    document.querySelector("#guest-result").addEventListener("click", (event) => {
+      if (!event.target.closest("[data-guest-again]") || !guest.scan) return;
+      const scan = guest.scan;
+      setGuestTarget(isImageScan(scan) ? "image" : "repo");
+      document.querySelector("#guest-input").value = isImageScan(scan) ? scan.image : scan.repo;
+      if (!isImageScan(scan)) {
+        document.querySelectorAll("#guest-tools input").forEach((input) => {
+          input.checked = (scan.tools || []).includes(input.value);
+        });
+      }
+      if (scan.private) {
+        document.querySelector("#guest-private").open = true;
+        guestMessage("Enter the token again, then press Scan.");
+      } else {
+        startGuestScan(true);
+        return;
+      }
+      document.querySelector("#guest-form").scrollIntoView({behavior: "smooth", block: "start"});
+    });
+    document.querySelector("#public-login").addEventListener("click", openLoginDialog);
+    document.querySelector("#login-close").addEventListener("click", closeLoginDialog);
+    document.querySelector("#login-screen").addEventListener("click", (event) => {
+      if (event.target.id === "login-screen") closeLoginDialog();
+    });
+
     function expiryBody(body) {
       return body && (body.code === "idle_expired" || body.code === "absolute_expired");
     }
 
     async function boot() {
+      const askedLogin = location.pathname === "/login";
+      if (askedLogin) history.replaceState(null, "", "/" + location.search + location.hash);
       try {
         let response = await fetch("/api/auth/me", {headers: {"Accept": "application/json"}, credentials: "same-origin"});
         if (response.status === 401) {
@@ -4228,7 +4650,7 @@
           if (!refreshed.ok) {
             const body = await refreshed.json().catch(() => ({}));
             if (expiryBody(body)) showIdleEnded(body.error);
-            else showLogin();
+            else showLogin(askedLogin);
             return;
           }
           response = await fetch("/api/auth/me", {headers: {"Accept": "application/json"}, credentials: "same-origin"});
@@ -4236,14 +4658,14 @@
         if (!response.ok) {
           const body = await response.json().catch(() => ({}));
           if (expiryBody(body)) showIdleEnded(body.error);
-          else showLogin();
+          else showLogin(askedLogin);
           return;
         }
         const user = await response.json();
         showApp(user);
         if (!user.must_change_password) tick();
       } catch (err) {
-        showLogin();
+        showLogin(askedLogin);
       }
     }
     setView("dashboard");

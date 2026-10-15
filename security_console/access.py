@@ -85,9 +85,12 @@ def can_view_scan(
 
     Admins see every scan. Everyone else sees a scan only when its project
     is in one of their groups and at least one of its tools is allowed.
-    The owner records who started it and does not grant access.
+    The owner records who started it and does not grant access. A guest scan
+    from the public page is open to admins only.
     """
 
+    if scan.get("guest") and user.get("role") != "admin":
+        return False
     if user.get("role") != "admin":
         if project_key(scan) not in (group_keys or set()):
             return False
@@ -106,10 +109,10 @@ def recent_per_project(
     group_keys: set[str] | None = None,
     limit: int = 20,
 ) -> list[dict[str, Any]]:
-    """Keep the newest scans for each repository or image."""
+    """Keep the newest scans for each repository or image. Guest scans stay out."""
 
     ordered = sorted(
-        items,
+        (item for item in items if not item.get("guest")),
         key=lambda item: str(item.get("created_at") or ""),
         reverse=True,
     )
@@ -240,13 +243,15 @@ def find_reusable_scan(
     group_keys: set[str] | None = None,
     now: datetime | None = None,
     force: bool = False,
+    guest: str = "",
 ) -> tuple[dict[str, Any], str] | None:
     """Return a running or recent scan that covers this request.
 
     A running scan of the same project is shared. A finished successful scan
     of the same project is reused when it is under ``REUSE_HOURS`` old and
     already ran every requested tool. ``force`` skips finished reuse so Retry
-    can start a new scan.
+    can start a new scan. Signed-in scans and each guest session reuse only
+    their own scans, given by ``guest``.
     """
 
     request = {"target": target, "repo": repo, "image": image}
@@ -255,6 +260,8 @@ def find_reusable_scan(
     newest_running: dict[str, Any] | None = None
     newest_done: dict[str, Any] | None = None
     for item in items:
+        if (item.get("guest") or "") != guest:
+            continue
         if project_key(item) != key:
             continue
         if not tools_cover(item.get("tools") or [], tools):

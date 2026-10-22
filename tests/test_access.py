@@ -6,10 +6,12 @@ from datetime import UTC, datetime
 
 from security_console.access import (
     can_start_scan,
+    expand_sonar_findings,
     find_reusable_scan,
     present_scan,
     project_key,
     recent_per_project,
+    severity_bucket,
     tools_cover,
 )
 
@@ -60,11 +62,137 @@ def test_viewer_cannot_start_and_sees_allowed_tools_from_any_owner() -> None:
     assert shown is not None
     assert shown["finding_count"] == 1
     assert "findings" not in shown
-    assert shown["severity"]["critical"] == 1
+    assert shown["severity"]["high"] == 1
     assert colleague is not None
     assert colleague["owner"] == "someone"
     assert colleague["tools"] == ["semgrep"]
     assert [row["tool"] for row in colleague["findings"]] == ["semgrep"]
+
+
+def test_severity_bucket_maps_sonar_labels() -> None:
+    assert severity_bucket("BLOCKER") == "critical"
+    assert severity_bucket("CRITICAL") == "critical"
+    assert severity_bucket("MAJOR") == "high"
+    assert severity_bucket("HIGH") == "high"
+    assert severity_bucket("ERROR") == "high"
+    assert severity_bucket("MINOR") == "medium"
+    assert severity_bucket("MEDIUM") == "medium"
+    assert severity_bucket("LOW") == "low"
+    assert severity_bucket("INFO") == "info"
+    assert severity_bucket("") == "info"
+
+
+def test_expand_sonar_findings_issues_and_hotspots() -> None:
+    rows = expand_sonar_findings(
+        {
+            "issues": [
+                {
+                    "file": "src/app.py",
+                    "line": 12,
+                    "rule": "python:S2077",
+                    "severity": "MAJOR",
+                    "message": "sql",
+                }
+            ],
+            "hotspot_list": [
+                {
+                    "file": "src/db.py",
+                    "line": 4,
+                    "rule": "python:S2245",
+                    "message": "review",
+                    "vulnerabilityProbability": "HIGH",
+                }
+            ],
+        }
+    )
+    assert len(rows) == 2
+    assert rows[0] == {
+        "tool": "sonar",
+        "severity": "MAJOR",
+        "check": "python:S2077",
+        "path": "src/app.py",
+        "line": 12,
+        "message": "sql",
+    }
+    assert rows[1]["tool"] == "sonar"
+    assert rows[1]["severity"] == "HIGH"
+    assert severity_bucket(rows[0]["severity"]) == "high"
+    assert severity_bucket(rows[1]["severity"]) == "high"
+
+
+def test_present_scan_merges_sonar_into_findings() -> None:
+    admin = {"role": "admin", "username": "admin"}
+    scan = {
+        "id": "s1",
+        "repo": "https://example.com/a.git",
+        "owner": "admin",
+        "tools": ["semgrep", "sonar"],
+        "status": "done",
+        "findings": [
+            {
+                "tool": "semgrep",
+                "severity": "HIGH",
+                "check": "x",
+                "path": "a.py",
+                "line": 1,
+                "message": "m",
+            }
+        ],
+        "sonar": {
+            "quality_gate": "ERROR",
+            "bugs": 1,
+            "vulnerabilities": 0,
+            "code_smells": 0,
+            "security_hotspots": 1,
+            "issues": [
+                {
+                    "file": "b.py",
+                    "line": 2,
+                    "rule": "python:S1",
+                    "severity": "BLOCKER",
+                    "message": "blocker",
+                }
+            ],
+            "hotspot_list": [
+                {
+                    "file": "c.py",
+                    "line": 3,
+                    "rule": "python:S2",
+                    "message": "hot",
+                    "vulnerabilityProbability": "HIGH",
+                }
+            ],
+        },
+        "created_at": "2026-10-11",
+    }
+    shown = present_scan(admin, scan, summary=False)
+    assert shown is not None
+    assert shown["finding_count"] == 3
+    tools = [row["tool"] for row in shown["findings"]]
+    assert tools.count("sonar") == 2
+    assert tools.count("semgrep") == 1
+    assert shown["severity"]["critical"] == 1
+    assert shown["severity"]["high"] == 2
+
+    # Already-stored sonar findings are not duplicated.
+    with_stored = dict(
+        scan,
+        findings=scan["findings"]
+        + [
+            {
+                "tool": "sonar",
+                "severity": "MINOR",
+                "check": "stored",
+                "path": "d.py",
+                "line": 1,
+                "message": "m",
+            }
+        ],
+    )
+    again = present_scan(admin, with_stored, summary=False)
+    assert again is not None
+    assert again["finding_count"] == 2
+    assert [row["tool"] for row in again["findings"]].count("sonar") == 1
 
 
 def test_project_key_groups_repo_spellings_and_images() -> None:

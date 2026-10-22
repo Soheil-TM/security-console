@@ -196,6 +196,184 @@
     html.dark .rp-children .rp.overview { background: #162a44; }
     html.dark .rp-children .rp.overview .name { color: #93c5fd; }
     .scan-bars { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+    .security-history { margin-top: 20px; }
+    .investigate-panel {
+      margin-top: 16px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 16px 18px;
+      background: var(--card);
+    }
+    .inv-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 14px; }
+    .inv-chip {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 13px;
+    }
+    .inv-chip b { margin-right: 4px; }
+    .inv-table { width: 100%; border-collapse: collapse; direction: ltr; font-size: 13px; }
+    .inv-table th, .inv-table td {
+      text-align: left;
+      padding: 8px 6px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+    }
+    .inv-table select, .inv-table input, .inv-table textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 6px 8px;
+      background: var(--bg);
+      color: var(--ink);
+      font: inherit;
+    }
+    .inv-table textarea { min-height: 52px; resize: vertical; }
+    .inv-warn {
+      border: 1px solid #f5c2c7;
+      background: #fff5f5;
+      color: #842029;
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin: 14px 0;
+    }
+    html.dark .inv-warn {
+      border-color: #7f1d1d;
+      background: #3f1d28;
+      color: #fecaca;
+    }
+    .inv-accept { display: grid; gap: 10px; margin-top: 8px; }
+    .disp-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      border-radius: 999px;
+      padding: 2px 8px;
+      margin-left: 6px;
+    }
+    .disp-badge.accepted_risk { background: #fff3cd; color: #856404; }
+    .disp-badge.false_positive { background: #e8f6ef; color: #146c43; }
+    .disp-badge.true_positive { background: #fde8e8; color: #9f1239; }
+    .disp-badge.needs_review { background: #e8edf2; color: #475569; }
+    html.dark .disp-badge.accepted_risk { background: #422006; color: #fde68a; }
+    html.dark .disp-badge.false_positive { background: #12382c; color: #86efac; }
+    html.dark .disp-badge.true_positive { background: #3f1d28; color: #fda4af; }
+    html.dark .disp-badge.needs_review { background: #1e293b; color: #cbd5e1; }
+    .dash-assign { margin-top: 12px; }
+    .triage-inbox { display: grid; gap: 16px; }
+    .triage-block {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px 16px;
+      background: var(--card);
+    }
+    .triage-block h2 { margin: 0 0 10px; font-size: 15px; }
+    .triage-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      width: 100%;
+      text-align: left;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      background: transparent;
+      color: var(--ink);
+      padding: 10px 0;
+      cursor: pointer;
+      font: inherit;
+    }
+    .triage-row:last-child { border-bottom: 0; }
+    .triage-row:hover { color: var(--teal); }
+    .triage-chip {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      border-radius: 999px;
+      padding: 2px 8px;
+      white-space: nowrap;
+    }
+    .triage-chip.open { background: #fff3cd; color: #856404; }
+    .triage-chip.ready { background: #e8f6ef; color: #146c43; }
+    html.dark .triage-chip.open { background: #422006; color: #fde68a; }
+    html.dark .triage-chip.ready { background: #12382c; color: #86efac; }
+    .rp .triage-chip { margin-left: 8px; vertical-align: middle; }
+    .inv-filters { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+    .inv-filters button {
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 4px 10px;
+      font: inherit;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .inv-filters button.on { background: var(--teal); color: #042f2e; border-color: var(--teal); }
+    .inv-sticky {
+      position: sticky;
+      bottom: 0;
+      margin-top: 16px;
+      padding: 14px 16px;
+      border: 1px solid var(--line);
+      border-radius: 12px 12px 0 0;
+      background: var(--card);
+      box-shadow: 0 -8px 24px rgba(0,0,0,.12);
+      display: grid;
+      gap: 10px;
+      z-index: 2;
+    }
+    .inv-sticky-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+    .inv-ack { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; }
+    .risk-panel {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 16px 18px;
+      background: var(--card);
+    }
+    .risk-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .risk-head h2, .risk-form h2, .risk-panel > h2 {
+      margin: 0 0 8px;
+      font-size: 16px;
+    }
+    .risk-form {
+      display: grid;
+      gap: 10px;
+      margin: 14px 0;
+    }
+    .risk-form textarea,
+    .risk-form select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: var(--bg);
+      color: var(--ink);
+      font: inherit;
+    }
+    .risk-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .risk-diff-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin: 10px 0;
+    }
+    .risk-diff-grid div {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      text-align: center;
+    }
+    .risk-diff-grid b { display: block; font-size: 20px; }
+    .risk-log { margin: 0; padding-right: 18px; }
+    .risk-log li { margin: 8px 0; }
+    .meta.bad { color: var(--critical); }
     .scan-bar {
       display: grid;
       grid-template-columns: minmax(140px, 220px) minmax(0, 1fr) auto;
@@ -1507,10 +1685,12 @@
         <button type="button" data-action="view" data-view="scans"><span class="nav-label"><span id="scans-chev">▾</span> Scans</span> <span class="count" id="scan-count">0</span></button>
         <div class="nav-sub" id="history-wrap"></div>
         <button type="button" data-action="view" data-view="knowledge">Knowledge</button>
+        <button type="button" data-action="view" data-view="triage"><span class="nav-label">Triage</span> <span class="count" id="triage-count" hidden>0</span></button>
         <button type="button" data-action="view" data-view="settings"><span class="nav-label"><span id="settings-chev">▸</span> Settings</span></button>
         <div class="nav-sub" id="settings-wrap" hidden>
           <button type="button" class="mode" data-action="view" data-view="users" id="nav-users" hidden>Users</button>
           <button type="button" class="mode" data-action="view" data-view="access" id="nav-access" hidden>Tool access</button>
+          <button type="button" class="mode" data-action="view" data-view="projects" id="nav-projects">Projects</button>
           <button type="button" class="mode" data-action="view" data-view="groups" id="nav-groups">Groups</button>
           <button type="button" class="mode" data-action="view" data-view="connections" id="nav-connections" hidden>Connections</button>
           <button type="button" class="mode" data-action="view" data-view="sonar-setup" id="nav-sonar-setup" hidden>Sonar setup</button>
@@ -1523,13 +1703,23 @@
       <div class="launch-wrap">
         <form class="launch" id="scan-form">
           <div class="launch-row">
+            <label class="grow" id="scan-project-field">
+              <span class="field-label">Project</span>
+              <select id="scan-project" class="field">
+                <option value="">Select a project</option>
+              </select>
+            </label>
+            <label class="grow" id="scan-target-field" hidden>
+              <span class="field-label">Target</span>
+              <select id="scan-target" class="field"></select>
+            </label>
             <label class="grow" id="repo-source-field" hidden>
               <span class="field-label">Source</span>
               <select id="repo-source" class="field"><option value="">Public address</option></select>
             </label>
-            <label class="grow" id="repo-field">
+            <label class="grow" id="repo-field" hidden>
               <span class="field-label">Repository</span>
-              <input id="repo" type="url" required dir="ltr" placeholder="https://github.com/org/repo.git" value="https://github.com/TaghikhaniAlireza/Mace-eBPF.git">
+              <input id="repo" type="url" dir="ltr" placeholder="https://github.com/org/repo.git">
             </label>
             <label class="grow" id="repo-project-field" hidden>
               <span class="field-label">GitLab project</span>
@@ -1545,7 +1735,11 @@
             </label>
             <button type="submit" id="go">Start scan</button>
           </div>
-          <p class="hint" id="target-hint">Enter a repository URL and choose the tools.</p>
+          <p class="hint" id="target-hint">Choose a project, then start a scan of one of its targets.</p>
+          <label id="adhoc-toggle-wrap" hidden style="display:flex;align-items:center;gap:8px;margin:8px 0">
+            <input type="checkbox" id="adhoc-scan">
+            <span class="meta">Ad-hoc target (admin)</span>
+          </label>
           <div id="image-list" class="image-list" hidden></div>
           <div class="scanners" role="group" aria-label="Scanners">
             <label class="scanner">
@@ -1612,7 +1806,17 @@
             </div>
             <div id="sonar-card"></div>
             <div class="card" id="findings"></div>
+            <div id="investigate-panel" class="investigate-panel" hidden></div>
           </div>
+        </section>
+        <section id="view-triage" hidden>
+          <div class="page-head">
+            <div>
+              <h1>Triage</h1>
+              <p class="meta">Findings assigned to you, and projects whose latest scan still needs investigate before push.</p>
+            </div>
+          </div>
+          <div id="triage-inbox"></div>
         </section>
         <section id="view-knowledge" hidden>
           <div class="page-head">
@@ -1758,11 +1962,40 @@
             <p class="meta" id="sonar-setup-msg"></p>
           </div>
         </section>
+        <section id="view-projects" hidden>
+          <div class="page-head">
+            <div>
+              <h1>Projects</h1>
+              <p class="meta">A project ties repositories and images together. Scans, history, and push approval live under one slug.</p>
+            </div>
+            <button type="button" class="ghost" id="project-new">New project</button>
+          </div>
+          <div id="project-error" class="login-error" hidden></div>
+          <div id="project-list"></div>
+          <form class="launch" id="project-form" hidden style="margin-top:12px">
+            <h2 id="project-form-title" style="margin:0 0 12px;font-size:16px">New project</h2>
+            <div class="account-grid">
+              <label><span class="field-label">Name</span><input id="project-name" required maxlength="80"></label>
+              <label><span class="field-label">Slug</span><input id="project-slug" required maxlength="64" dir="ltr" placeholder="payments-api" pattern="[a-z0-9]+(?:-[a-z0-9]+)*"></label>
+            </div>
+            <label><span class="field-label">Description</span><input id="project-description" maxlength="500"></label>
+            <label><span class="field-label">Repositories, one https URL per line</span><textarea id="project-repos" rows="3" dir="ltr"></textarea></label>
+            <label><span class="field-label">Images, one name per line</span><textarea id="project-images" rows="2" dir="ltr"></textarea></label>
+            <label><span class="field-label">Groups that own this project</span>
+              <select id="project-groups" class="field" multiple size="4"></select>
+            </label>
+            <p class="hint">Leads of the selected groups can edit this project. Members can scan it.</p>
+            <div style="display:flex;gap:8px;margin-top:12px">
+              <button type="submit" id="project-save">Save</button>
+              <button type="button" class="ghost" id="project-cancel">Cancel</button>
+            </div>
+          </form>
+        </section>
         <section id="view-groups" hidden>
           <div class="page-head">
             <div>
               <h1>Groups</h1>
-              <p class="meta">A lead attaches a repository or image. Members see those scans and open them to fix findings. The lead reads the result of the group here.</p>
+              <p class="meta">A lead attaches projects. Members see those scans and open them to fix findings. The lead reads the result of the group here.</p>
             </div>
             <button type="button" class="ghost" id="group-new">New group</button>
           </div>
@@ -1774,16 +2007,10 @@
               <label><span class="field-label">Group name</span><input id="group-name" required maxlength="80"></label>
               <label><span class="field-label">Description</span><input id="group-description" maxlength="500"></label>
             </div>
-            <label><span class="field-label">Repositories, one https URL per line (optional)</span><textarea id="group-repos" rows="3" dir="ltr"></textarea></label>
-            <div id="group-repo-pick" hidden style="display:flex;gap:8px;margin-top:8px">
-              <select id="group-repo-choice" class="field" style="flex:1"></select>
-              <button type="button" class="ghost" id="group-repo-add">Add</button>
-            </div>
-            <label><span class="field-label">Images, one name per line (optional)</span><textarea id="group-images" rows="2" dir="ltr"></textarea></label>
-            <div id="group-image-pick" hidden style="display:flex;gap:8px;margin-top:8px">
-              <select id="group-image-choice" class="field" style="flex:1"></select>
-              <button type="button" class="ghost" id="group-image-add">Add</button>
-            </div>
+            <label><span class="field-label">Projects</span>
+              <select id="group-project-slugs" class="field" multiple size="5"></select>
+            </label>
+            <p class="hint">Attach first-class projects. Create them under Projects first.</p>
             <span class="field-label">Members</span>
             <div class="member-pick">
               <input id="group-member-q" type="search" placeholder="Search name or username" autocomplete="off">
@@ -1878,19 +2105,28 @@
       dashScope: "",
       groups: [],
       groupId: null,
+      projects: [],
+      projectSlug: null,
       scans: [],
       scan: null,
       sev: "",
       tool: "all",
       q: "",
       open: new Set(),
-      groups: [],
       sort: {key: "severity", dir: "asc"},
       seenId: null,
       pendingMsg: null,
       target: "repo",
       pane: "report",
-      overviewKey: ""
+      overviewKey: "",
+      securityHistory: null,
+      investigate: null,
+      invFilter: "all",
+      invAck: false,
+      assignments: [],
+      needsTriage: [],
+      triageByProject: {},
+      triageBadge: 0
     };
     let scanStamp = null;
     let histStamp = null;
@@ -1912,7 +2148,7 @@
     const reportsOpen = new Set();
     let scansMenuOpen = true;
     let settingsMenuOpen = false;
-    const SETTINGS_VIEWS = ["users", "access", "groups", "connections", "sonar-setup"];
+    const SETTINGS_VIEWS = ["users", "access", "projects", "groups", "connections", "sonar-setup"];
     function csrfToken() {
       const match = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/);
       return match ? decodeURIComponent(match[1]) : "";
@@ -1998,10 +2234,14 @@
       document.querySelector("#nav-sonar-setup").hidden = user.role !== "admin";
       document.querySelector("#nav-connections").hidden = user.role !== "admin";
       document.querySelector("#group-new").hidden = user.role === "viewer";
+      document.querySelector("#project-new").hidden = user.role === "viewer";
       const sonarLink = document.querySelector("#sonar-link");
       if (sonarLink) sonarLink.hidden = !(user.access && user.access.sonar_ui);
       if (user.role !== "admin" && (state.view === "users" || state.view === "access" || state.view === "sonar-setup" || state.view === "connections")) setView("scans");
       loadConnections();
+      loadProjects();
+      loadGroups();
+      loadTriageInbox();
       syncLaunch();
       syncThemeButton();
     }
@@ -2141,9 +2381,9 @@
 
     function bucket(value) {
       const name = String(value || "").toUpperCase();
-      if (["CRITICAL", "EMERGENCY", "ALERT"].includes(name)) return "critical";
-      if (["HIGH", "ERROR"].includes(name)) return "high";
-      if (["MEDIUM", "WARNING", "WARN"].includes(name)) return "medium";
+      if (["BLOCKER", "CRITICAL", "EMERGENCY", "ALERT"].includes(name)) return "critical";
+      if (["HIGH", "MAJOR", "ERROR"].includes(name)) return "high";
+      if (["MEDIUM", "MINOR", "WARNING", "WARN"].includes(name)) return "medium";
       if (name === "LOW") return "low";
       return "info";
     }
@@ -2201,17 +2441,17 @@
     }
 
     function firstSettingsView() {
-      const order = ["users", "access", "groups", "connections", "sonar-setup"];
+      const order = ["users", "access", "projects", "groups", "connections", "sonar-setup"];
       const found = order.find((name) => {
         const button = document.querySelector('nav [data-view="' + name + '"]');
         return button && !button.hidden;
       });
-      return found || "groups";
+      return found || "projects";
     }
 
     function setView(view) {
       state.view = view;
-      ["dashboard", "scans", "knowledge", "users", "access", "groups", "connections", "sonar-setup"].forEach((name) => {
+      ["dashboard", "scans", "triage", "knowledge", "users", "access", "projects", "groups", "connections", "sonar-setup"].forEach((name) => {
         document.querySelector("#view-" + name).hidden = view !== name;
       });
       syncLaunch();
@@ -2224,8 +2464,16 @@
       if (view === "users" || view === "access") loadAccounts();
       if (view === "sonar-setup") loadSonarSetup();
       if (view === "connections") loadConnections();
+      if (view === "projects") loadProjects();
       if (view === "groups") loadGroups();
-      if (view === "dashboard") renderDashboard();
+      if (view === "triage") {
+        loadTriageInbox();
+        renderTriageInbox();
+      }
+      if (view === "dashboard") {
+        renderDashboard();
+        loadTriageInbox();
+      }
     }
 
     let localImages = [];
@@ -2276,21 +2524,36 @@
 
     function syncLaunch() {
       const starter = currentUser && currentUser.role !== "viewer";
+      const isAdmin = currentUser && currentUser.role === "admin";
+      const adhoc = Boolean(isAdmin && document.querySelector("#adhoc-scan") && document.querySelector("#adhoc-scan").checked);
+      const projectSlug = (document.querySelector("#scan-project") || {}).value || "";
+      const selected = selectedScanTarget();
+      if (selected) state.target = selected.kind === "image" ? "image" : "repo";
       const showingImage = state.target === "image";
       document.querySelector(".launch-wrap").hidden = !starter || state.view !== "scans" || state.pane !== "scan";
-      const gitlabSource = !showingImage && document.querySelector("#repo-source").value;
-      const registrySource = showingImage && document.querySelector("#image-source").value;
-      document.querySelector("#repo-source-field").hidden = showingImage || !connections.some((item) => item.kind === "gitlab");
-      document.querySelector("#repo-field").hidden = showingImage || Boolean(gitlabSource);
-      document.querySelector("#repo-project-field").hidden = !gitlabSource;
-      document.querySelector("#image-source-field").hidden = !showingImage || !connections.some((item) => item.kind === "registry");
-      document.querySelector("#image-field").hidden = !showingImage;
-      document.querySelector("#image-list").hidden = !showingImage || Boolean(registrySource);
-      document.querySelector("#repo").required = !showingImage && !gitlabSource && state.pane === "scan";
+      const adhocWrap = document.querySelector("#adhoc-toggle-wrap");
+      if (adhocWrap) {
+        adhocWrap.hidden = !isAdmin;
+        adhocWrap.style.display = isAdmin ? "flex" : "none";
+      }
+      document.querySelector("#scan-project-field").hidden = adhoc;
+      document.querySelector("#scan-target-field").hidden = adhoc || !projectSlug;
+      fillScanTargetOptions();
+      const gitlabSource = adhoc && !showingImage && document.querySelector("#repo-source").value;
+      const registrySource = adhoc && showingImage && document.querySelector("#image-source").value;
+      document.querySelector("#repo-source-field").hidden = !adhoc || showingImage || !connections.some((item) => item.kind === "gitlab");
+      document.querySelector("#repo-field").hidden = !adhoc || showingImage || Boolean(gitlabSource);
+      document.querySelector("#repo-project-field").hidden = !adhoc || !gitlabSource;
+      document.querySelector("#image-source-field").hidden = !adhoc || !showingImage || !connections.some((item) => item.kind === "registry");
+      document.querySelector("#image-field").hidden = !adhoc || !showingImage;
+      document.querySelector("#image-list").hidden = !adhoc || !showingImage || Boolean(registrySource);
+      document.querySelector("#repo").required = adhoc && !showingImage && !gitlabSource && state.pane === "scan";
       document.querySelector("#image-ref").placeholder = registrySource ? "team/app:1.0" : "nginx:1.27";
-      document.querySelector("#target-hint").textContent = showingImage
-        ? (registrySource ? "Trivy scans an image pulled from the private registry." : "Image scans use Trivy. Pick an image on work-01, or type a name to pull it.")
-        : (gitlabSource ? "Choose a GitLab project from your groups." : "Repository scans use Semgrep, Checkov, and SonarQube.");
+      document.querySelector("#target-hint").textContent = adhoc
+        ? (showingImage
+          ? (registrySource ? "Trivy scans an image pulled from the private registry." : "Image scans use Trivy. Pick an image on work-01, or type a name to pull it.")
+          : (gitlabSource ? "Choose a GitLab project from your groups." : "Repository scans use Semgrep, Checkov, and SonarQube."))
+        : "Choose a project and one of its targets, then start the scan.";
       document.querySelectorAll("input[name=tool]").forEach((input) => {
         const allowed = !currentUser || (currentUser.access && currentUser.access[input.value]);
         const belongs = showingImage ? input.value === "trivy" : input.value !== "trivy";
@@ -2299,7 +2562,45 @@
         if (showingImage) input.checked = allowed && input.value === "trivy";
         else input.checked = Boolean(allowed && belongs && repoChecks[input.value]);
       });
-      if (showingImage && !registrySource && starter && state.pane === "scan") loadImages(false);
+      if (adhoc && showingImage && !registrySource && starter && state.pane === "scan") loadImages(false);
+    }
+
+    function selectedScanTarget() {
+      const select = document.querySelector("#scan-target");
+      if (!select || !select.value) return null;
+      try {
+        return JSON.parse(select.value);
+      } catch (err) {
+        return null;
+      }
+    }
+
+    function fillScanProjectOptions() {
+      const select = document.querySelector("#scan-project");
+      if (!select) return;
+      const current = select.value;
+      const options = ['<option value="">Select a project</option>'].concat(
+        (state.projects || []).map((item) =>
+          '<option value="' + esc(item.slug) + '"' + (item.slug === current ? " selected" : "") + ">"
+          + esc(item.name) + " (" + esc(item.slug) + ")</option>"
+        )
+      );
+      select.innerHTML = options.join("");
+    }
+
+    function fillScanTargetOptions() {
+      const select = document.querySelector("#scan-target");
+      const slug = (document.querySelector("#scan-project") || {}).value || "";
+      if (!select) return;
+      const project = (state.projects || []).find((item) => item.slug === slug);
+      const targets = (project && project.targets) || [];
+      const current = select.value;
+      select.innerHTML = targets.map((item) => {
+        const value = JSON.stringify({kind: item.kind, target: item.target});
+        const label = (item.kind === "image" ? "Image · " : "Repo · ") + item.target;
+        return '<option value="' + esc(value) + '"' + (value === current ? " selected" : "") + ">" + esc(label) + "</option>";
+      }).join("");
+      if (!select.value && select.options.length) select.selectedIndex = 0;
     }
 
     function setTarget(next) {
@@ -2331,7 +2632,7 @@
           {
             id: "read",
             title: "Read a result",
-            html: "<p>A repository report counts Semgrep and Checkov. An image report counts Trivy. Severities are Critical, High, Medium, Low, and Info. Click a color to keep only that severity. Click it again to clear the filter.</p><ul><li>The bar under the chart splits the result by tool. The number is that tool's count.</li><li>Search matches the rule name, file path, and message.</li><li>Open a row to see the file and line.</li><li>SonarQube is not line-by-line in this table. Its filter shows the Quality Gate card. Image reports do not include it.</li></ul>"
+            html: "<p>A repository report counts Semgrep, Checkov, and SonarQube in one table. An image report counts Trivy. Severities are Critical, High, Medium, Low, and Info (Sonar BLOCKER/MAJOR/MINOR map into those boxes). Click a color to keep only that severity. Click it again to clear the filter.</p><ul><li>The bar under the chart splits the result by tool. The number is that tool's count.</li><li>Search matches the rule name, file path, and message.</li><li>Open a row to see the file and line.</li><li>The SonarQube filter keeps the Quality Gate summary card and the same table filtered to Sonar rows. Image reports do not include SonarQube.</li></ul>"
           }
         ]
       },
@@ -2436,6 +2737,8 @@
     }
 
     function projectKey(item) {
+      if (item && item.project_slug) return String(item.project_slug).toLowerCase();
+      if (item && item.project_ref) return String(item.project_ref).toLowerCase();
       if (isImageScan(item)) return "image:" + String(item.image || "").toLowerCase();
       return String(item.repo || "").replace(/\.git$/i, "").replace(/\/+$/, "").toLowerCase();
     }
@@ -2510,8 +2813,14 @@
 
     function reportScanRow(item) {
       const total = (item.findings || []).length || item.finding_count || 0;
-      const on = state.pane === "report" && state.scan && state.scan.id === item.id ? " on" : "";
-      return '<button type="button" class="rp' + historyTone(item) + on + '" data-action="open" data-id="' + esc(item.id) + '"><span class="name">' + esc(historyName(item, total)) + '</span><span class="sub">' + esc(scanWhen(item)) + "</span></button>";
+      const on = (state.pane === "report" || state.pane === "investigate") && state.scan && state.scan.id === item.id ? " on" : "";
+      const canInv = item.status === "done" && (item.project_slug || item.project_id) && !scanIsFailed(item);
+      const inv = canInv
+        ? ' <button type="button" class="ghost" data-action="triage-open" data-scan="' + esc(item.id) + '">Investigate</button>'
+        : "";
+      return '<div class="rp-row" style="display:flex;align-items:center;gap:6px">'
+        + '<button type="button" class="rp' + historyTone(item) + on + '" data-action="open" data-id="' + esc(item.id) + '" style="flex:1"><span class="name">' + esc(historyName(item, total)) + '</span><span class="sub">' + esc(scanWhen(item)) + "</span></button>"
+        + inv + "</div>";
     }
 
     function reportGroup(group) {
@@ -2521,17 +2830,24 @@
       const countLabel = group.items.length === 1 ? "1 scan" : group.items.length + " scans";
       const summary = countLabel + " · " + historyName(latest, total);
       const overviewOn = state.pane === "overview" && state.overviewKey === group.key ? " on" : "";
+      const triage = state.triageByProject && state.triageByProject[group.key];
+      let triageChip = "";
+      if (triage) {
+        triageChip = triage.ready_for_gate
+          ? '<span class="triage-chip ready">Ready</span>'
+          : '<span class="triage-chip open">' + (triage.open_count || 0) + " open</span>";
+      }
       const children = open
         ? '<div class="rp-children">' + group.items.map(reportScanRow).join("") + '<button type="button" class="rp overview' + overviewOn + '" data-action="overview" data-key="' + esc(group.key) + '"><span class="name">Overview</span><span class="sub">Chart of every scan</span></button></div>'
         : "";
-      return '<div class="rp-group"><button type="button" class="rp" data-action="hist-project" data-key="' + esc(group.key) + '" title="' + esc(group.name) + '"><span class="name">' + (open ? "▾ " : "▸ ") + esc(group.name) + '</span><span class="sub">' + esc(summary) + "</span></button>" + children + "</div>";
+      return '<div class="rp-group"><button type="button" class="rp" data-action="hist-project" data-key="' + esc(group.key) + '" title="' + esc(group.name) + '"><span class="name">' + (open ? "▾ " : "▸ ") + esc(group.name) + triageChip + '</span><span class="sub">' + esc(summary) + "</span></button>" + children + "</div>";
     }
 
     function kindMarkup(kind, label) {
       const open = kindOpen.has(kind);
       const inScans = state.view === "scans";
       const scanOn = inScans && state.pane === "scan" && state.target === kind ? " on" : "";
-      const reportsOn = inScans && (state.pane === "report" || state.pane === "overview") && state.target === kind ? " on" : "";
+      const reportsOn = inScans && (state.pane === "report" || state.pane === "overview" || state.pane === "investigate") && state.target === kind ? " on" : "";
       const body = open
         ? '<div class="kind-body"><button type="button" class="mode' + scanOn + '" data-action="mode-scan" data-kind="' + kind + '">Scan</button><button type="button" class="mode' + reportsOn + '" data-action="mode-reports" data-kind="' + kind + '">Reports</button></div>'
         : "";
@@ -2568,7 +2884,7 @@
 
     function renderReportsNav() {
       const wrap = document.querySelector("#reports-nav");
-      const show = state.view === "scans" && (state.pane === "report" || state.pane === "overview");
+      const show = state.view === "scans" && (state.pane === "report" || state.pane === "overview" || state.pane === "investigate");
       wrap.hidden = !show;
       if (!show) return;
       const wantImage = state.target === "image";
@@ -2588,11 +2904,22 @@
     }
 
     function showPanes() {
-      const report = state.pane === "report" && state.scan;
+      const report = (state.pane === "report" || state.pane === "investigate") && state.scan;
+      const investigating = state.pane === "investigate";
       const starter = currentUser && currentUser.role !== "viewer";
       document.querySelector(".launch-wrap").hidden = !starter || state.view !== "scans" || state.pane !== "scan";
       document.querySelector("#scan-panel").hidden = !report;
       document.querySelector("#overview").hidden = state.pane !== "overview";
+      const toolbar = document.querySelector("#scan-panel .toolbar");
+      const sonar = document.querySelector("#sonar-card");
+      const findings = document.querySelector("#findings");
+      const summary = document.querySelector("#summary");
+      const inv = document.querySelector("#investigate-panel");
+      if (toolbar) toolbar.hidden = investigating;
+      if (sonar) sonar.hidden = investigating;
+      if (findings) findings.hidden = investigating;
+      if (summary) summary.hidden = investigating;
+      if (inv) inv.hidden = !investigating;
       renderReportsNav();
       const empty = document.querySelector("#empty");
       empty.hidden = state.pane === "overview" || Boolean(report);
@@ -2641,7 +2968,518 @@
         const when = (item.created_at || "").replace(" UTC", "");
         return '<button type="button" class="scan-bar" data-action="open" data-id="' + esc(item.id) + '"><span><b>' + esc(STATUS[item.status] || item.status) + '</b><span class="sub">' + esc(when) + '</span></span><span class="stack">' + pieces + '</span><span class="num">' + total + '</span></button>';
       }).join("");
-      box.innerHTML = '<div class="scan-head"><div><h1>' + esc(group.name) + '</h1><div class="repo">Overview</div><div class="meta">' + group.items.length + " scans</div></div></div>" + '<div class="summary">' + donut(totals) + stats(totals, "keep") + "</div>" + '<div class="scan-bars">' + bars + "</div>";
+      const hist = state.securityHistory && state.securityHistory.project_key === group.key
+        ? state.securityHistory
+        : null;
+      box.innerHTML = '<div class="scan-head"><div><h1>' + esc(group.name) + '</h1><div class="repo">Overview</div><div class="meta">' + group.items.length + " scans</div></div></div>"
+        + '<div class="summary">' + donut(totals) + stats(totals, "keep") + "</div>"
+        + '<div class="scan-bars">' + bars + "</div>"
+        + '<div id="security-history" class="security-history">' + (hist ? renderSecurityHistory(hist, group) : '<div class="empty"><strong>Loading security history…</strong></div>') + "</div>";
+      if (!hist || hist.project_key !== group.key) loadSecurityHistory(group.key);
+    }
+
+    async function loadSecurityHistory(projectKey) {
+      if (!projectKey || !currentUser) return;
+      try {
+        const response = await api("/api/security/history?project=" + encodeURIComponent(projectKey));
+        if (!response.ok) {
+          const box = document.querySelector("#security-history");
+          if (box) box.innerHTML = '<div class="note">Could not load security history.</div>';
+          return;
+        }
+        state.securityHistory = await response.json();
+        if (state.pane === "overview" && state.overviewKey === projectKey) renderOverview();
+      } catch (err) {
+        return;
+      }
+    }
+
+    function renderSecurityHistory(hist, group) {
+      const gate = hist.gate || {};
+      const approved = gate.approved_for_push;
+      const gateChip = approved
+        ? '<span class="dash-chip ok">Approved for push</span>'
+        : '<span class="dash-chip bad">Not approved for push</span>';
+      const acceptance = gate.acceptance;
+      const acceptanceLine = acceptance
+        ? '<p class="meta">Last accepted by <b>' + esc(acceptance.accepted_by) + "</b> on "
+          + esc((acceptance.created_at || "").replace(" UTC", ""))
+          + (acceptance.commit_sha ? " · commit " + esc(acceptance.commit_sha.slice(0, 12)) : "")
+          + "<br>" + esc(acceptance.reason) + "</p>"
+        : '<p class="meta">No risk acceptance yet for this project.</p>';
+      const done = (hist.scans || []).filter((item) => item.status === "done");
+      const options = done.map((item) => {
+        const when = (item.created_at || "").replace(" UTC", "");
+        const label = when + " · " + (item.finding_count || 0) + " findings · " + (item.id || "");
+        return {id: item.id, label: label, when: when};
+      });
+      let form = "";
+      if (hist.can_accept && options.length >= 2) {
+        const baselineOpts = options.map((item, index) =>
+          '<option value="' + esc(item.id) + '"' + (index === 0 ? " selected" : "") + ">" + esc(item.label) + "</option>"
+        ).join("");
+        const currentOpts = options.map((item, index) =>
+          '<option value="' + esc(item.id) + '"' + (index === options.length - 1 ? " selected" : "") + ">" + esc(item.label) + "</option>"
+        ).join("");
+        form = '<div class="risk-form">'
+          + "<h2>Accept remaining risk</h2>"
+          + '<p class="meta">Compare an earlier scan with a later one. Fixed findings are recorded; remaining risk needs your reason before push is allowed.</p>'
+          + '<label><span class="field-label">Earlier scan (before)</span><select id="risk-baseline" dir="ltr">' + baselineOpts + "</select></label>"
+          + '<label><span class="field-label">Later scan (after)</span><select id="risk-current" dir="ltr">' + currentOpts + "</select></label>"
+          + '<label><span class="field-label">Reason</span><textarea id="risk-reason" rows="3" maxlength="2000" placeholder="I reviewed the remaining findings and accept this risk for push."></textarea></label>'
+          + '<div class="risk-actions">'
+          + '<button type="button" class="ghost" data-action="risk-diff">Compare</button>'
+          + '<button type="button" data-action="risk-accept">Accept risk for push</button>'
+          + "</div>"
+          + '<div id="risk-diff" class="risk-diff" hidden></div>'
+          + '<div id="risk-msg" class="meta"></div>'
+          + "</div>";
+      } else if (!hist.can_accept) {
+        form = '<p class="meta">Only an admin or the project lead can accept remaining risk.</p>';
+      } else {
+        form = '<p class="meta">Run at least two successful scans to compare before and after.</p>';
+      }
+      const past = (hist.acceptances || []).slice(0, 5).map((item) => {
+        const stamp = (item.created_at || "").replace(" UTC", "");
+        const live = item.active ? "active" : "revoked";
+        return '<li><b>' + esc(item.accepted_by) + "</b> · " + esc(stamp)
+          + " · fixed " + esc(item.fixed_count) + " · remaining " + esc(item.remaining_count)
+          + " · new " + esc(item.new_count)
+          + ' <span class="badge ' + (item.active ? "done" : "failed") + '">' + live + "</span>"
+          + '<div class="meta">' + esc(item.reason) + "</div></li>";
+      }).join("");
+      return '<div class="risk-panel"><div class="risk-head"><h2>Security history</h2>' + gateChip + "</div>"
+        + acceptanceLine
+        + form
+        + (past ? "<h2>Acceptance log</h2><ul class=\"risk-log\">" + past + "</ul>" : "")
+        + "</div>";
+    }
+
+    async function showRiskDiff() {
+      const baseline = document.querySelector("#risk-baseline");
+      const current = document.querySelector("#risk-current");
+      const box = document.querySelector("#risk-diff");
+      const msg = document.querySelector("#risk-msg");
+      if (!baseline || !current || !box) return;
+      msg.textContent = "";
+      const response = await api(
+        "/api/security/diff?baseline=" + encodeURIComponent(baseline.value)
+        + "&current=" + encodeURIComponent(current.value)
+      );
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        msg.className = "meta bad";
+        msg.textContent = body.error || "Could not compare scans.";
+        box.hidden = true;
+        return;
+      }
+      box.hidden = false;
+      box.innerHTML = '<div class="risk-diff-grid">'
+        + "<div><b>" + esc(body.fixed_count) + "</b><span>Fixed</span></div>"
+        + "<div><b>" + esc(body.remaining_count) + "</b><span>Remaining</span></div>"
+        + "<div><b>" + esc(body.new_count) + "</b><span>New</span></div>"
+        + "</div>"
+        + '<p class="meta">Before: '
+        + esc((body.baseline_severity && body.baseline_severity.critical) || 0) + " critical / "
+        + esc((body.baseline_severity && body.baseline_severity.high) || 0) + " high → After: "
+        + esc((body.current_severity && body.current_severity.critical) || 0) + " critical / "
+        + esc((body.current_severity && body.current_severity.high) || 0) + " high</p>";
+    }
+
+    async function submitRiskAcceptance() {
+      const baseline = document.querySelector("#risk-baseline");
+      const current = document.querySelector("#risk-current");
+      const reason = document.querySelector("#risk-reason");
+      const msg = document.querySelector("#risk-msg");
+      if (!baseline || !current || !reason || !msg) return;
+      msg.className = "meta";
+      msg.textContent = "Saving acceptance…";
+      const response = await api("/api/security/acceptances", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          baseline_scan_id: baseline.value,
+          current_scan_id: current.value,
+          reason: reason.value
+        })
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        msg.className = "meta bad";
+        msg.textContent = body.error || "Could not accept risk.";
+        return;
+      }
+      msg.className = "meta";
+      msg.textContent = "Risk accepted. Push is approved for this project's recorded commit.";
+      if (state.overviewKey) await loadSecurityHistory(state.overviewKey);
+    }
+
+    const DISP_LABEL = {
+      true_positive: "True Positive",
+      false_positive: "False Positive",
+      accepted_risk: "Accepted Risk",
+      needs_review: "Needs Review"
+    };
+
+    let invReasonTimers = {};
+
+    async function openInvestigate(scanId) {
+      const id = scanId || (state.scan && state.scan.id);
+      if (!id) return;
+      if (!state.scan || state.scan.id !== id) {
+        const found = state.scans.find((item) => item.id === id);
+        if (found) state.scan = found;
+      }
+      if (!state.scan || !(state.scan.project_slug || state.scan.project_id)) {
+        // Still try investigate API — it validates project scans.
+      }
+      state.pane = "investigate";
+      state.investigate = null;
+      state.invFilter = "all";
+      state.invAck = false;
+      state.view = "scans";
+      setView("scans");
+      scansMenuOpen = true;
+      showPanes();
+      renderScanHead();
+      await loadInvestigate(id);
+    }
+
+    async function loadInvestigate(scanId) {
+      const box = document.querySelector("#investigate-panel");
+      if (!box) return;
+      box.innerHTML = '<div class="empty"><strong>Loading investigate…</strong></div>';
+      try {
+        const response = await api("/api/security/investigate?scan=" + encodeURIComponent(scanId));
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          box.innerHTML = '<div class="note">' + esc(body.error || "Could not load investigate.") + "</div>";
+          return;
+        }
+        state.investigate = body;
+        if (body.scan) {
+          state.scan = Object.assign({}, state.scan || {}, body.scan, {
+            findings: (body.findings || []).map((row) => {
+              const copy = Object.assign({}, row);
+              delete copy.finding_key;
+              return copy;
+            })
+          });
+          if (body.project_key) {
+            state.scan.project_slug = body.project_key;
+          }
+        }
+        renderInvestigate();
+        renderScanHead();
+      } catch (err) {
+        box.innerHTML = '<div class="note">Could not load investigate.</div>';
+      }
+    }
+
+    function invFindingStatus(row, dispositions) {
+      const disp = dispositions[row.finding_key || ""] || {};
+      return disp.status || "";
+    }
+
+    function filteredInvestigateFindings(data) {
+      const dispositions = data.dispositions || {};
+      const me = currentUser && currentUser.username;
+      return (data.findings || []).filter((row) => {
+        const status = invFindingStatus(row, dispositions);
+        const disp = dispositions[row.finding_key || ""] || {};
+        const filter = state.invFilter || "all";
+        if (filter === "all") return true;
+        if (filter === "undecided") return !status;
+        if (filter === "mine") return me && disp.assignee_username === me;
+        return status === filter;
+      });
+    }
+
+    function renderInvestigate() {
+      const box = document.querySelector("#investigate-panel");
+      const data = state.investigate;
+      if (!box || state.pane !== "investigate") return;
+      if (!data || !state.scan || (data.scan && data.scan.id !== state.scan.id && data.scan.id)) {
+        if (state.scan) loadInvestigate(state.scan.id);
+        return;
+      }
+      const counts = (data.readiness && data.readiness.counts) || {};
+      const ready = data.readiness && data.readiness.ready_for_gate;
+      const blockers = (data.readiness && data.readiness.blockers) || [];
+      const canTriage = data.can_triage;
+      const canAccept = data.can_accept_risk;
+      const assignees = data.assignees || [];
+      const dispositions = data.dispositions || {};
+      const filterDefs = [
+        ["all", "All"],
+        ["undecided", "Undecided"],
+        ["true_positive", "True Positive"],
+        ["false_positive", "False Positive"],
+        ["accepted_risk", "Accepted Risk"],
+        ["needs_review", "Needs Review"],
+        ["mine", "Assigned to me"]
+      ];
+      const filters = filterDefs.map((item) =>
+        '<button type="button" data-action="inv-filter" data-filter="' + item[0] + '"'
+        + (state.invFilter === item[0] ? ' class="on"' : "") + ">" + item[1]
+        + (item[0] !== "all" && item[0] !== "mine" ? " " + (counts[item[0]] || 0) : "")
+        + "</button>"
+      ).join("");
+      const chips = [
+        ["undecided", "Undecided"],
+        ["true_positive", "True Positive"],
+        ["false_positive", "False Positive"],
+        ["accepted_risk", "Accepted Risk"],
+        ["needs_review", "Needs Review"]
+      ].map((item) => '<span class="inv-chip"><b>' + (counts[item[0]] || 0) + "</b>" + item[1] + "</span>").join("");
+      const visible = filteredInvestigateFindings(data);
+      const rows = visible.map((row) => {
+        const key = row.finding_key || "";
+        const fullIndex = (data.findings || []).findIndex((item) => item.finding_key === key);
+        const disp = dispositions[key] || {};
+        const status = disp.status || "";
+        const reason = disp.reason || "";
+        const assignee = disp.assignee_username || "";
+        const statusOpts = ["", "true_positive", "false_positive", "accepted_risk", "needs_review"].map((value) => {
+          const label = value ? DISP_LABEL[value] : "Select…";
+          return '<option value="' + value + '"' + (value === status ? " selected" : "") + ">" + label + "</option>";
+        }).join("");
+        const assignOpts = ['<option value="">Unassigned</option>'].concat(
+          assignees.map((person) =>
+            '<option value="' + esc(person.username) + '"' + (person.username === assignee ? " selected" : "") + ">"
+            + esc(person.username) + "</option>"
+          )
+        ).join("");
+        const level = bucket(row.severity);
+        const sev = SEV.find((item) => item[0] === level);
+        const disabled = canTriage ? "" : " disabled";
+        const showAssignee = status === "true_positive" || status === "needs_review";
+        const showReason = status === "false_positive" || status === "accepted_risk";
+        return '<tr data-finding-key="' + esc(key) + '" data-index="' + fullIndex + '">'
+          + '<td><span class="pill ' + level + '">' + (sev ? sev[2] : level) + "</span></td>"
+          + '<td><div class="check">' + esc(row.check || "—") + '</div><div class="meta mono">' + esc(row.path || "") + (row.line ? ":" + esc(row.line) : "") + "</div></td>"
+          + "<td>" + esc(TOOL_LABEL[row.tool] || row.tool) + "</td>"
+          + '<td><select class="inv-status" data-action-change="inv-autosave"' + disabled + ">" + statusOpts + "</select></td>"
+          + "<td>" + (showAssignee
+            ? '<select class="inv-assignee" data-action-change="inv-autosave"' + disabled + ">" + assignOpts + "</select>"
+            : '<span class="meta">—</span><select class="inv-assignee" hidden>' + assignOpts + "</select>") + "</td>"
+          + "<td>" + (showReason
+            ? '<textarea class="inv-reason" maxlength="2000" placeholder="Reason (min 12 characters)"' + disabled + ">" + esc(reason) + "</textarea>"
+            : '<span class="meta">—</span><textarea class="inv-reason" hidden>' + esc(reason) + "</textarea>")
+          + "</td></tr>";
+      }).join("");
+      const acceptEnabled = ready && state.invAck && canAccept;
+      const sticky = '<div class="inv-sticky">'
+        + '<div class="inv-sticky-top"><div class="inv-chips">' + chips + "</div>"
+        + '<span id="inv-gate-msg" class="meta">' + (ready ? "Ready for push gate" : (blockers.length + " open")) + "</span></div>"
+        + (canAccept
+          ? '<label class="inv-ack"><input type="checkbox" id="inv-ack" data-action-change="inv-ack"' + (state.invAck ? " checked" : "") + ">"
+            + "<span>I understand these Accepted Risk items are real issues the organization knowingly accepts.</span></label>"
+            + '<label><span class="field-label">Gate reason</span><textarea id="inv-gate-reason" rows="2" maxlength="2000" placeholder="I reviewed the triage and accept residual risk for push."></textarea></label>'
+            + '<button type="button" data-action="inv-accept"' + (acceptEnabled ? "" : " disabled") + ">Accept risk for push</button>"
+          : '<p class="meta">Only an admin or project lead can accept risk for push.</p>')
+        + "</div>";
+      box.innerHTML = "<h2>Investigate</h2>"
+        + '<p class="meta">Classify each finding. True Positives must be fixed or elevated to Accepted Risk by a lead before push is approved.</p>'
+        + '<div class="inv-filters">' + filters + "</div>"
+        + (visible.length
+          ? '<table class="inv-table"><thead><tr><th>Severity</th><th>Finding</th><th>Tool</th><th>Status</th><th>Assignee</th><th>Reason</th></tr></thead><tbody>'
+            + rows + "</tbody></table>"
+          : '<div class="empty"><strong>Nothing in this filter</strong>Choose another chip or clear the filter.</div>')
+        + sticky;
+    }
+
+    async function saveInvestigateRow(index, opts) {
+      const data = state.investigate;
+      if (!data || !state.scan) return;
+      const row = (data.findings || [])[index];
+      if (!row) return;
+      const tr = document.querySelector('#investigate-panel tr[data-index="' + index + '"]')
+        || document.querySelectorAll("#investigate-panel tbody tr")[0];
+      const target = document.querySelector('#investigate-panel tr[data-finding-key="' + CSS.escape(row.finding_key) + '"]');
+      const node = target || tr;
+      if (!node) return;
+      const status = node.querySelector(".inv-status").value;
+      const reasonEl = node.querySelector(".inv-reason");
+      const assigneeEl = node.querySelector(".inv-assignee");
+      const reason = reasonEl ? reasonEl.value : "";
+      const assignee = assigneeEl ? assigneeEl.value : "";
+      const msg = document.querySelector("#inv-gate-msg");
+      if (!status) {
+        if (msg) {
+          msg.className = "meta bad";
+          msg.textContent = "Choose a disposition status.";
+        }
+        return;
+      }
+      if ((status === "false_positive" || status === "accepted_risk") && String(reason).trim().length < 12) {
+        if (!(opts && opts.allowShort)) {
+          if (msg) {
+            msg.className = "meta bad";
+            msg.textContent = "Write a reason of at least 12 characters.";
+          }
+          return;
+        }
+        return;
+      }
+      const response = await api("/api/security/dispositions", {
+        method: "PUT",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          scan_id: state.scan.id,
+          finding_key: row.finding_key,
+          status: status,
+          reason: reason,
+          assignee_username: assignee
+        })
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (msg) {
+          msg.className = "meta bad";
+          msg.textContent = body.error || "Could not save disposition.";
+        }
+        return;
+      }
+      if (body.disposition) {
+        data.dispositions[body.disposition.finding_key] = body.disposition;
+      }
+      if (body.readiness) data.readiness = body.readiness;
+      const keepAck = state.invAck;
+      const keepFilter = state.invFilter;
+      const gateReason = (document.querySelector("#inv-gate-reason") || {}).value || "";
+      renderInvestigate();
+      state.invAck = keepAck;
+      state.invFilter = keepFilter;
+      const ack = document.querySelector("#inv-ack");
+      if (ack) ack.checked = keepAck;
+      const gate = document.querySelector("#inv-gate-reason");
+      if (gate) gate.value = gateReason;
+      const btn = document.querySelector('[data-action="inv-accept"]');
+      if (btn) btn.disabled = !(data.readiness && data.readiness.ready_for_gate && state.invAck && data.can_accept_risk);
+      const saved = document.querySelector("#inv-gate-msg");
+      if (saved) {
+        saved.className = "meta";
+        saved.textContent = "Saved";
+      }
+      loadTriageInbox();
+    }
+
+    async function submitInvestigateAccept() {
+      const data = state.investigate;
+      const msg = document.querySelector("#inv-gate-msg");
+      const reason = document.querySelector("#inv-gate-reason");
+      const ack = document.querySelector("#inv-ack");
+      if (!data || !state.scan || !reason || !msg) return;
+      if (!ack || !ack.checked) {
+        msg.className = "meta bad";
+        msg.textContent = "Confirm that you understand Accepted Risk before continuing.";
+        return;
+      }
+      msg.className = "meta";
+      msg.textContent = "Saving acceptance…";
+      const response = await api("/api/security/acceptances", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          baseline_scan_id: data.baseline_scan_id || state.scan.id,
+          current_scan_id: state.scan.id,
+          reason: reason.value
+        })
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        msg.className = "meta bad";
+        msg.textContent = body.error || "Could not accept risk.";
+        if (body.readiness) {
+          data.readiness = body.readiness;
+          renderInvestigate();
+        }
+        return;
+      }
+      msg.className = "meta";
+      msg.textContent = "Risk accepted. Push is approved for this project's recorded commit.";
+      if (state.scan.project_slug) await loadSecurityHistory(state.scan.project_slug);
+      await loadInvestigate(state.scan.id);
+      loadTriageInbox();
+    }
+
+    async function loadTriageInbox() {
+      if (!currentUser) return;
+      try {
+        const response = await api("/api/security/triage-inbox");
+        if (!response.ok) return;
+        const body = await response.json();
+        state.assignments = Array.isArray(body.assignments) ? body.assignments : [];
+        state.needsTriage = Array.isArray(body.needs_triage) ? body.needs_triage : [];
+        state.triageByProject = body.triage_by_project || {};
+        state.triageBadge = Number(body.badge_count || 0);
+        paintTriageBadge();
+        renderAssignmentStrip();
+        renderTriageInbox();
+        reportStamp = null;
+        renderReportsNav();
+      } catch (err) {
+        return;
+      }
+    }
+
+    function paintTriageBadge() {
+      const badge = document.querySelector("#triage-count");
+      if (!badge) return;
+      const n = state.triageBadge || 0;
+      badge.textContent = String(n);
+      badge.hidden = n <= 0;
+    }
+
+    function renderTriageInbox() {
+      const box = document.querySelector("#triage-inbox");
+      if (!box || state.view !== "triage") return;
+      const assigned = state.assignments || [];
+      const needs = state.needsTriage || [];
+      const assignedHtml = assigned.length
+        ? assigned.map((item) =>
+          '<button type="button" class="triage-row" data-action="triage-open" data-scan="' + esc(item.scan_id || "") + '" data-project="' + esc(item.project_key || "") + '">'
+          + "<span><b>" + esc(item.project_key || "") + "</b><div class=\"meta\">" + esc(DISP_LABEL[item.status] || item.status) + (item.reason ? " · " + esc(item.reason.slice(0, 80)) : "") + "</div></span>"
+          + '<span class="triage-chip open">Assigned</span></button>'
+        ).join("")
+        : '<p class="meta">Nothing assigned to you.</p>';
+      const needsHtml = needs.length
+        ? needs.map((item) =>
+          '<button type="button" class="triage-row" data-action="triage-open" data-scan="' + esc(item.scan_id || "") + '" data-project="' + esc(item.project_key || "") + '">'
+          + "<span><b>" + esc(item.project_name || item.project_key) + "</b><div class=\"meta\">" + esc(item.project_key) + " · " + (item.open_count || 0) + " open</div></span>"
+          + '<span class="triage-chip open">' + (item.open_count || 0) + " open</span></button>"
+        ).join("")
+        : '<p class="meta">All visible project scans are triage-complete.</p>';
+      box.innerHTML = '<div class="triage-inbox"><div class="triage-block"><h2>Assigned to me</h2>' + assignedHtml
+        + '</div><div class="triage-block"><h2>Needs triage</h2>' + needsHtml + "</div></div>";
+    }
+
+    function renderAssignmentStrip() {
+      let box = document.querySelector("#dash-assignments");
+      if (!box) {
+        box = document.createElement("div");
+        box.id = "dash-assignments";
+        box.className = "dash-assign meta";
+        const dash = document.querySelector("#view-dashboard");
+        if (!dash) return;
+        const head = dash.querySelector(".page-head");
+        if (head && head.parentNode) head.parentNode.insertBefore(box, head.nextSibling);
+        else dash.prepend(box);
+      }
+      const rows = state.assignments || [];
+      const needs = state.needsTriage || [];
+      if (!rows.length && !needs.length) {
+        box.hidden = true;
+        box.innerHTML = "";
+        return;
+      }
+      box.hidden = false;
+      box.innerHTML = "<strong>Triage</strong> · "
+        + (rows.length ? rows.length + " assigned" : "0 assigned")
+        + " · "
+        + (needs.length ? needs.length + " projects open" : "projects clear")
+        + ' · <button type="button" class="ghost" data-action="view" data-view="triage">Open inbox</button>';
     }
 
     function collectGroups() {
@@ -2650,11 +3488,20 @@
       state.scans.forEach((item) => {
         const key = projectKey(item);
         if (!index.has(key)) {
-          const group = {key, name: scanTitle(item), image: isImageScan(item), items: []};
+          const name = item.project_name || scanTitle(item);
+          const group = {
+            key,
+            name,
+            image: isImageScan(item),
+            items: []
+          };
           index.set(key, group);
           groups.push(group);
         }
-        index.get(key).items.push(item);
+        const group = index.get(key);
+        group.items.push(item);
+        if (!isImageScan(item)) group.image = false;
+        if (item.project_name) group.name = item.project_name;
       });
       return groups;
     }
@@ -2867,7 +3714,7 @@
       showPanes();
       if (state.pane === "overview") renderOverview();
       const scan = state.scan;
-      if (state.pane !== "report" || !scan) return;
+      if ((state.pane !== "report" && state.pane !== "investigate") || !scan) return;
       const names = TOOL_LABEL;
       const tools = (scan.tools || []).map((tool) => names[tool] || tool).join(" · ");
       const subtitle = isImageScan(scan) ? "Image" : scan.repo;
@@ -2876,10 +3723,18 @@
       const label = failed
         ? "Failed"
         : (scan.status === "queued" ? (queueLabel(scan) || "Queued") : (STATUS[scan.status] || scan.status));
-      document.querySelector("#scan-head").innerHTML = '<div class="scan-head"><div><h1>' + esc(scanTitle(scan)) + '</h1><div class="repo">' + esc(subtitle) + '</div><div class="meta">' + esc(tools) + " · " + esc((scan.created_at || "").replace(" UTC", "")) + (scan.finished_at ? " to " + esc(scan.finished_at.replace(" UTC", "")) : "") + '</div></div><div class="scan-actions"><span class="badge ' + esc(badge) + '">' + esc(label) + "</span>" + retryButton(scan) + "</div></div>";
+      const projectScan = Boolean(scan.project_slug || scan.project_id);
+      const canInvestigate = projectScan && scan.status === "done" && !failed && currentUser;
+      const invBtn = canInvestigate
+        ? (state.pane === "investigate"
+          ? '<button type="button" class="ghost" data-action="report-back">Back to report</button>'
+          : '<button type="button" data-action="investigate">Investigate</button>')
+        : "";
+      document.querySelector("#scan-head").innerHTML = '<div class="scan-head"><div><h1>' + esc(scanTitle(scan)) + '</h1><div class="repo">' + esc(subtitle) + '</div><div class="meta">' + esc(tools) + " · " + esc((scan.created_at || "").replace(" UTC", "")) + (scan.finished_at ? " to " + esc(scan.finished_at.replace(" UTC", "")) : "") + (scan.project_slug ? " · project " + esc(scan.project_slug) : " · ad-hoc (no project)") + '</div></div><div class="scan-actions"><span class="badge ' + esc(badge) + '">' + esc(label) + "</span>" + invBtn + retryButton(scan) + "</div></div>";
       const error = document.querySelector("#scan-error");
       const problem = failed ? String(scan.error || "").trim() : scanErrorText(scan);
       error.innerHTML = problem ? '<div class="note">' + esc(problem) + "</div>" : "";
+      if (state.pane === "investigate") renderInvestigate();
     }
 
     function gateBadge(status) {
@@ -2889,36 +3744,32 @@
       return ["", "Unknown"];
     }
 
-    function sonarRank(value) {
-      const text = String(value || "").toUpperCase();
-      if (text === "BLOCKER" || text === "CRITICAL") return "critical";
-      if (text === "HIGH" || text === "MAJOR") return "high";
-      if (text === "MEDIUM" || text === "MINOR") return "medium";
-      if (text === "LOW") return "low";
-      return "info";
-    }
-
-    function sonarList(title, rows, badgeKey) {
-      const items = rows.map((row) => {
-        const badge = row[badgeKey] || "";
-        const pill = badge ? '<span class="pill ' + sonarRank(badge) + '">' + esc(badge) + "</span>" : "";
-        const line = row.line ? ":" + esc(row.line) : "";
-        return "<li>" + pill + " <code>" + esc(row.file || "") + line + '</code> <span class="rule">' + esc(row.rule || "") + "</span><p>" + esc(row.message || "") + "</p></li>";
-      }).join("");
-      return "<section><h3>" + esc(title) + " <em>" + rows.length + "</em></h3><ul>" + items + "</ul></section>";
-    }
-
-    function sonarLists(sonar) {
-      const issues = Array.isArray(sonar.issues) ? sonar.issues : null;
-      const hotspots = Array.isArray(sonar.hotspot_list) ? sonar.hotspot_list : null;
-      if (issues === null && hotspots === null) return "";
-      const parts = [];
-      if (issues && issues.length) parts.push(sonarList("Issues", issues, "severity"));
-      if (hotspots && hotspots.length) parts.push(sonarList("Hotspots", hotspots, "vulnerabilityProbability"));
-      if (parts.length) return '<div class="sonar-lists">' + parts.join("") + "</div>";
-      const counted = ["bugs", "vulnerabilities", "code_smells", "security_hotspots"].reduce((sum, key) => sum + (Number(sonar[key]) || 0), 0);
-      if (!counted) return "";
-      return '<p class="note">SonarQube did not return issue details for this scan.</p>';
+    function expandSonarFindings(sonar) {
+      if (!sonar || typeof sonar !== "object") return [];
+      const rows = [];
+      (Array.isArray(sonar.issues) ? sonar.issues : []).forEach((item) => {
+        if (!item || typeof item !== "object") return;
+        rows.push({
+          tool: "sonar",
+          severity: item.severity || "INFO",
+          check: item.rule || "",
+          path: item.file || "",
+          line: item.line,
+          message: item.message || ""
+        });
+      });
+      (Array.isArray(sonar.hotspot_list) ? sonar.hotspot_list : []).forEach((item) => {
+        if (!item || typeof item !== "object") return;
+        rows.push({
+          tool: "sonar",
+          severity: item.vulnerabilityProbability || "INFO",
+          check: item.rule || "",
+          path: item.file || "",
+          line: item.line,
+          message: item.message || ""
+        });
+      });
+      return rows;
     }
 
     function renderSonar() {
@@ -2957,13 +3808,15 @@
       const open = currentUser && currentUser.access && currentUser.access.sonar_ui
         ? '<a class="ghost" href="' + esc(publicSonarUrl(sonar.url)) + '" target="_blank" rel="noopener">Open in SonarQube</a>'
         : "";
-      box.innerHTML = '<div class="sonar-card"><div class="sonar-top"><h2>SonarQube</h2><span class="badge ' + badge[0] + '">Quality Gate ' + badge[1] + '</span>' + open + '</div><p class="meta">Project ' + esc(sonar.project_key) + '</p><div class="sonar-metrics">' + metrics.map((item) => '<div><b>' + esc(sonar[item[0]] ?? 0) + "</b><span>" + item[1] + "</span></div>").join("") + "</div>" + sonarLists(sonar) + "</div>";
+      box.innerHTML = '<div class="sonar-card"><div class="sonar-top"><h2>SonarQube</h2><span class="badge ' + badge[0] + '">Quality Gate ' + badge[1] + '</span>' + open + '</div><p class="meta">Project ' + esc(sonar.project_key) + '</p><div class="sonar-metrics">' + metrics.map((item) => '<div><b>' + esc(sonar[item[0]] ?? 0) + "</b><span>" + item[1] + "</span></div>").join("") + "</div></div>";
     }
 
     function reportFindings(scan) {
       const rows = (scan && scan.findings) || [];
       if (scan && isImageScan(scan)) return rows.filter((row) => row.tool === "trivy");
-      return rows.filter((row) => row.tool !== "trivy");
+      const base = rows.filter((row) => row.tool !== "trivy");
+      if (base.some((row) => row.tool === "sonar")) return base;
+      return base.concat(expandSonarFindings(scan && scan.sonar));
     }
 
     function alignReportTool() {
@@ -2974,14 +3827,14 @@
     function renderSummary() {
       const rows = reportFindings(state.scan);
       const tally = counts(rows, (row) => row.severity);
-      document.querySelector("#summary").innerHTML = '<div class="summary">' + donut(tally) + stats(tally, "sev") + "</div>";
-    }
-
-    function sonarTotal(scan) {
-      const sonar = scan && scan.sonar;
-      if (!sonar || sonar.error && !sonar.quality_gate) return 0;
-      if (!sonar.quality_gate && sonar.bugs == null) return 0;
-      return ["bugs", "vulnerabilities", "code_smells", "security_hotspots"].reduce((sum, key) => sum + (Number(sonar[key]) || 0), 0);
+      const scan = state.scan;
+      const projectScan = Boolean(scan && (scan.project_slug || scan.project_id));
+      const failed = scan ? scanIsFailed(scan) : true;
+      const showProjectHint = !!(scan && !projectScan && scan.status === "done" && !failed && currentUser);
+      const projectHint = showProjectHint
+        ? '<p class="note" id="inv-project-hint"><b>Triage needs a Project scan.</b> This report is ad-hoc (no project), so Investigate is hidden. Open <button type="button" class="ghost" data-action="view" data-view="projects">Settings → Projects</button>, add this image/repo, then Start scan from that project.</p>'
+        : "";
+      document.querySelector("#summary").innerHTML = projectHint + '<div class="summary">' + donut(tally) + stats(tally, "sev") + "</div>";
     }
 
     function paintFilters() {
@@ -2993,7 +3846,7 @@
         semgrep: findings.filter((row) => row.tool === "semgrep").length,
         checkov: findings.filter((row) => row.tool === "checkov").length,
         trivy: findings.filter((row) => row.tool === "trivy").length,
-        sonar: image ? 0 : sonarTotal(state.scan)
+        sonar: findings.filter((row) => row.tool === "sonar").length
       };
       document.querySelectorAll("#tool-seg button").forEach((el) => {
         const tool = el.dataset.tool;
@@ -3002,7 +3855,7 @@
         const badge = el.querySelector("em");
         if (badge) badge.textContent = String(countsByTool[tool] || 0);
       });
-      document.querySelector("#q").hidden = state.tool === "sonar";
+      document.querySelector("#q").hidden = false;
     }
 
     function filteredFindings() {
@@ -3016,11 +3869,6 @@
     }
 
     function renderFindings() {
-      if (state.tool === "sonar") {
-        document.querySelector("#shown").textContent = "";
-        document.querySelector("#findings").innerHTML = "";
-        return;
-      }
       const rows = filteredFindings();
       const groups = new Map();
       rows.forEach((row) => {
@@ -3038,10 +3886,7 @@
         return;
       }
       if (!state.groups.length) {
-        const sonarOnly = state.scan && (state.scan.tools || []).join() === "sonar" && state.scan.sonar && !state.scan.sonar.error;
-        document.querySelector("#findings").innerHTML = sonarOnly
-          ? '<div class="empty"><strong>The SonarQube summary is above</strong>Line-by-line issues open in SonarQube.</div>'
-          : '<div class="empty"><strong>Nothing matches this filter</strong>Clear the severity filter or the search.</div>';
+        document.querySelector("#findings").innerHTML = '<div class="empty"><strong>Nothing matches this filter</strong>Clear the severity filter or the search.</div>';
         return;
       }
       const body = state.groups.map((instances, index) => {
@@ -3192,6 +4037,24 @@
           await loadGroups();
         });
       }
+      if (action === "project-edit") {
+        const project = state.projects.find((item) => item.slug === el.dataset.slug);
+        if (project) showProjectForm(project);
+      }
+      if (action === "project-delete") {
+        const project = state.projects.find((item) => item.slug === el.dataset.slug);
+        if (!project || !window.confirm("Delete " + project.name + "?")) return;
+        api("/api/projects/" + encodeURIComponent(project.slug), {method: "DELETE"}).then(async (response) => {
+          if (!response.ok) {
+            const body = await response.json().catch(() => ({}));
+            const box = document.querySelector("#project-error");
+            box.hidden = false;
+            box.textContent = body.error || "Could not delete the project.";
+            return;
+          }
+          await loadProjects();
+        });
+      }
       if (action === "dash-scope") {
         state.dashScope = el.dataset.scope === "all" ? "all" : "mine";
         dashStamp = null;
@@ -3274,11 +4137,49 @@
         syncScan();
         renderHistory();
       }
+      if (action === "risk-diff") {
+        showRiskDiff();
+        return;
+      }
+      if (action === "risk-accept") {
+        submitRiskAcceptance();
+        return;
+      }
+      if (action === "investigate") {
+        openInvestigate(state.scan && state.scan.id);
+        return;
+      }
+      if (action === "report-back") {
+        state.pane = "report";
+        showPanes();
+        scanStamp = null;
+        syncScan();
+        return;
+      }
+      if (action === "inv-filter") {
+        state.invFilter = el.dataset.filter || "all";
+        renderInvestigate();
+        return;
+      }
+      if (action === "triage-open") {
+        const scanId = el.dataset.scan;
+        if (scanId) openInvestigate(scanId);
+        return;
+      }
+      if (action === "inv-accept") {
+        submitInvestigateAccept();
+        return;
+      }
+      if (action === "inv-ack") {
+        return;
+      }
       if (action === "overview") {
         state.pane = "overview";
         state.overviewKey = el.dataset.key;
+        state.securityHistory = null;
         showOnlyProject(el.dataset.key);
-        const image = el.dataset.key.indexOf("image:") === 0;
+        const group = collectGroups().find((item) => item.key === el.dataset.key);
+        const image = group ? group.image : el.dataset.key.indexOf("image:") === 0;
         state.target = image ? "image" : "repo";
         kindOpen.add(state.target);
         scansMenuOpen = true;
@@ -3442,17 +4343,14 @@
       }
     }
 
-    function fillGroupPickers() {
-      fillPicker("gitlab", document.querySelector("#group-repo-choice"), document.querySelector("#group-repo-pick"));
-      fillPicker("registry", document.querySelector("#group-image-choice"), document.querySelector("#group-image-pick"));
-    }
-
-    function appendLine(selector, value) {
-      if (!value) return;
-      const box = document.querySelector(selector);
-      const lines = box.value.split("\n").map((line) => line.trim()).filter(Boolean);
-      if (!lines.includes(value)) lines.push(value);
-      box.value = lines.join("\n");
+    function fillGroupProjectOptions(selected) {
+      const select = document.querySelector("#group-project-slugs");
+      if (!select) return;
+      const chosen = new Set((selected || []).map((item) => item.slug || item));
+      select.innerHTML = (state.projects || []).map((item) =>
+        '<option value="' + esc(item.slug) + '"' + (chosen.has(item.slug) ? " selected" : "") + ">"
+        + esc(item.name) + " (" + esc(item.slug) + ")</option>"
+      ).join("");
     }
 
     document.querySelector("#repo-source").addEventListener("change", (event) => {
@@ -3462,12 +4360,6 @@
     document.querySelector("#image-source").addEventListener("change", () => syncLaunch());
     document.querySelector("#connection-kind").addEventListener("change", syncConnectionKind);
     document.querySelector("#connection-cancel").addEventListener("click", resetConnectionForm);
-    document.querySelector("#group-repo-add").addEventListener("click", () => {
-      appendLine("#group-repos", document.querySelector("#group-repo-choice").value);
-    });
-    document.querySelector("#group-image-add").addEventListener("click", () => {
-      appendLine("#group-images", document.querySelector("#group-image-choice").value);
-    });
     resetConnectionForm();
 
     document.querySelector("#connection-form").addEventListener("submit", async (event) => {
@@ -3602,6 +4494,7 @@
       const payload = imageMode
         ? {target: "image", image: scan.image, tools: ["trivy"], force: true}
         : {target: "repo", repo: scan.repo, tools: scan.tools, requested_sha: scan.requested_sha || "", force: true};
+      if (scan.project_slug) payload.project = scan.project_slug;
       try {
         const response = await api("/api/scans", {
           method: "POST",
@@ -3631,30 +4524,50 @@
 
     document.querySelector("#scan-form").addEventListener("submit", async (event) => {
       event.preventDefault();
-      const imageMode = state.target === "image";
-      const tools = imageMode
-        ? ["trivy"]
-        : [...document.querySelectorAll("input[name=tool]:checked")].map((el) => el.value);
       const msg = document.querySelector("#form-msg");
       msg.className = "";
       msg.textContent = "Scan queued.";
-      let imageName = document.querySelector("#image-ref").value.trim();
-      const registryId = document.querySelector("#image-source").value;
-      if (imageMode && registryId) {
-        const source = connections.find((item) => String(item.id) === registryId);
-        const prefix = registryPrefix(source ? source.base_url : "");
-        if (prefix && !imageName.startsWith(prefix + "/")) imageName = prefix + "/" + imageName.replace(/^\/+/, "");
+      const adhoc = Boolean(currentUser && currentUser.role === "admin" && document.querySelector("#adhoc-scan").checked);
+      let payload;
+      if (!adhoc) {
+        const slug = document.querySelector("#scan-project").value;
+        const selected = selectedScanTarget();
+        if (!slug || !selected) {
+          msg.className = "bad";
+          msg.textContent = "Choose a project and a target.";
+          return;
+        }
+        const imageMode = selected.kind === "image";
+        state.target = imageMode ? "image" : "repo";
+        const tools = imageMode
+          ? ["trivy"]
+          : [...document.querySelectorAll("input[name=tool]:checked")].map((el) => el.value);
+        payload = imageMode
+          ? {project: slug, target: "image", image: selected.target, tools}
+          : {project: slug, target: "repo", repo: selected.target, tools};
+      } else {
+        const imageMode = state.target === "image";
+        const tools = imageMode
+          ? ["trivy"]
+          : [...document.querySelectorAll("input[name=tool]:checked")].map((el) => el.value);
+        let imageName = document.querySelector("#image-ref").value.trim();
+        const registryId = document.querySelector("#image-source").value;
+        if (imageMode && registryId) {
+          const source = connections.find((item) => String(item.id) === registryId);
+          const prefix = registryPrefix(source ? source.base_url : "");
+          if (prefix && !imageName.startsWith(prefix + "/")) imageName = prefix + "/" + imageName.replace(/^\/+/, "");
+        }
+        const gitlabId = document.querySelector("#repo-source").value;
+        const repoUrl = gitlabId ? document.querySelector("#repo-project").value : document.querySelector("#repo").value;
+        if (!imageMode && gitlabId && !repoUrl) {
+          msg.className = "bad";
+          msg.textContent = "Choose a GitLab project.";
+          return;
+        }
+        payload = imageMode
+          ? {target: "image", image: imageName, tools}
+          : {target: "repo", repo: repoUrl, tools};
       }
-      const gitlabId = document.querySelector("#repo-source").value;
-      const repoUrl = gitlabId ? document.querySelector("#repo-project").value : document.querySelector("#repo").value;
-      if (!imageMode && gitlabId && !repoUrl) {
-        msg.className = "bad";
-        msg.textContent = "Choose a GitLab project.";
-        return;
-      }
-      const payload = imageMode
-        ? {target: "image", image: imageName, tools}
-        : {target: "repo", repo: repoUrl, tools};
       const response = await api("/api/scans", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
@@ -3669,6 +4582,70 @@
       showQueuedScan(body);
     });
 
+    document.querySelector("#scan-project").addEventListener("change", () => {
+      fillScanTargetOptions();
+      syncLaunch();
+    });
+    document.querySelector("#scan-target").addEventListener("change", () => syncLaunch());
+    document.querySelector("#adhoc-scan").addEventListener("change", () => syncLaunch());
+
+    document.addEventListener("change", (event) => {
+      const ack = event.target.closest("#inv-ack");
+      if (ack) {
+        state.invAck = ack.checked;
+        const btn = document.querySelector('[data-action="inv-accept"]');
+        const data = state.investigate;
+        if (btn && data) {
+          btn.disabled = !(data.readiness && data.readiness.ready_for_gate && state.invAck && data.can_accept_risk);
+        }
+        return;
+      }
+      const field = event.target.closest(".inv-status, .inv-assignee");
+      if (!field || !event.target.closest("#investigate-panel")) return;
+      const tr = field.closest("tr");
+      if (!tr) return;
+      const index = Number(tr.dataset.index);
+      if (Number.isNaN(index) || index < 0) return;
+      if (field.classList.contains("inv-status")) {
+        // Re-render progressive fields, then save.
+        const data = state.investigate;
+        if (!data) return;
+        const row = (data.findings || [])[index];
+        if (!row) return;
+        const key = row.finding_key;
+        if (!data.dispositions[key]) data.dispositions[key] = {};
+        data.dispositions[key].status = field.value;
+        if (field.value !== "true_positive" && field.value !== "needs_review") {
+          data.dispositions[key].assignee_username = "";
+        }
+        const keepAck = state.invAck;
+        const keepFilter = state.invFilter;
+        const gateReason = (document.querySelector("#inv-gate-reason") || {}).value || "";
+        renderInvestigate();
+        state.invAck = keepAck;
+        state.invFilter = keepFilter;
+        const ackBox = document.querySelector("#inv-ack");
+        if (ackBox) ackBox.checked = keepAck;
+        const gate = document.querySelector("#inv-gate-reason");
+        if (gate) gate.value = gateReason;
+      }
+      saveInvestigateRow(index);
+    });
+
+    document.addEventListener("input", (event) => {
+      const reason = event.target.closest(".inv-reason");
+      if (!reason || !event.target.closest("#investigate-panel")) return;
+      const tr = reason.closest("tr");
+      if (!tr) return;
+      const index = Number(tr.dataset.index);
+      if (Number.isNaN(index) || index < 0) return;
+      const key = tr.dataset.findingKey || String(index);
+      clearTimeout(invReasonTimers[key]);
+      invReasonTimers[key] = setTimeout(() => {
+        saveInvestigateRow(index);
+      }, 400);
+    });
+
     function groupLines(value) {
       return String(value || "").split(/\n+/).map((item) => item.trim()).filter(Boolean);
     }
@@ -3676,6 +4653,103 @@
     function selectedGroup() {
       return state.groups.find((group) => group.id === state.groupId) || null;
     }
+
+    async function loadProjects() {
+      const box = document.querySelector("#project-error");
+      const response = await api("/api/projects");
+      if (!response.ok) {
+        if (box) {
+          box.hidden = false;
+          box.textContent = "Could not load projects.";
+        }
+        return;
+      }
+      if (box) box.hidden = true;
+      const body = await response.json();
+      state.projects = Array.isArray(body) ? body : [];
+      fillScanProjectOptions();
+      fillScanTargetOptions();
+      renderProjects();
+    }
+
+    function renderProjects() {
+      const list = document.querySelector("#project-list");
+      if (!list) return;
+      if (!state.projects.length) {
+        list.innerHTML = '<div class="empty"><strong>No projects yet</strong>Create a project, attach a repo and/or image, and link it to a group.</div>';
+        return;
+      }
+      const body = state.projects.map((project) => {
+        const targets = (project.targets || []).map((item) => item.kind + ": " + item.target).join(" · ");
+        const actions = project.can_edit
+          ? ' <button type="button" class="ghost" data-action="project-edit" data-slug="' + esc(project.slug) + '">Edit</button> <button type="button" class="ghost" data-action="project-delete" data-slug="' + esc(project.slug) + '">Delete</button>'
+          : "";
+        return "<tr><td><b>" + esc(project.name) + '</b><div class="meta">' + esc(project.slug) + "</div></td><td>" + esc(targets || "—") + "</td><td>" + (project.group_ids || []).length + "</td><td>" + actions + "</td></tr>";
+      }).join("");
+      list.innerHTML = '<div class="dash-panel"><table class="dash-table"><thead><tr><th>Project</th><th>Targets</th><th>Groups</th><th></th></tr></thead><tbody>' + body + "</tbody></table></div>";
+    }
+
+    function fillProjectGroupOptions(selectedIds) {
+      const select = document.querySelector("#project-groups");
+      if (!select) return;
+      const chosen = new Set((selectedIds || []).map(Number));
+      select.innerHTML = (state.groups || []).map((group) =>
+        '<option value="' + group.id + '"' + (chosen.has(group.id) ? " selected" : "") + ">" + esc(group.name) + "</option>"
+      ).join("");
+    }
+
+    async function showProjectForm(project) {
+      const form = document.querySelector("#project-form");
+      const box = document.querySelector("#project-error");
+      if (!state.groups.length) await loadGroups();
+      form.hidden = false;
+      form.dataset.slug = project ? project.slug : "";
+      document.querySelector("#project-form-title").textContent = project ? "Edit " + project.name : "New project";
+      document.querySelector("#project-name").value = project ? project.name : "";
+      document.querySelector("#project-slug").value = project ? project.slug : "";
+      document.querySelector("#project-description").value = project ? (project.description || "") : "";
+      document.querySelector("#project-repos").value = project
+        ? (project.targets || []).filter((item) => item.kind === "repo").map((item) => item.target).join("\n")
+        : "";
+      document.querySelector("#project-images").value = project
+        ? (project.targets || []).filter((item) => item.kind === "image").map((item) => item.target).join("\n")
+        : "";
+      fillProjectGroupOptions(project ? (project.group_ids || []) : []);
+      if (box) box.hidden = true;
+    }
+
+    document.querySelector("#project-new").addEventListener("click", () => showProjectForm(null));
+    document.querySelector("#project-cancel").addEventListener("click", () => {
+      document.querySelector("#project-form").hidden = true;
+    });
+    document.querySelector("#project-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const box = document.querySelector("#project-error");
+      const slug = document.querySelector("#project-form").dataset.slug;
+      const payload = {
+        name: document.querySelector("#project-name").value,
+        slug: document.querySelector("#project-slug").value,
+        description: document.querySelector("#project-description").value,
+        repos: groupLines(document.querySelector("#project-repos").value),
+        images: groupLines(document.querySelector("#project-images").value),
+        group_ids: [...document.querySelector("#project-groups").selectedOptions].map((option) => Number(option.value))
+      };
+      const response = await api(slug ? "/api/projects/" + encodeURIComponent(slug) : "/api/projects", {
+        method: slug ? "PUT" : "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(payload)
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        box.hidden = false;
+        box.textContent = body.error || "Could not save the project.";
+        return;
+      }
+      box.hidden = true;
+      document.querySelector("#project-form").hidden = true;
+      await loadProjects();
+      fillScanProjectOptions();
+    });
 
     async function loadGroups() {
       const box = document.querySelector("#group-error");
@@ -3712,10 +4786,12 @@
 
     function groupReport(group) {
       const rows = (group.projects || []).map((project) => {
-        const items = state.scans.filter((item) => projectKey(item) === project.key)
+        const key = project.slug || project.key || "";
+        const items = state.scans.filter((item) => projectKey(item) === key)
           .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
         const latest = items[0];
-        if (!latest) return '<tr><td><b>' + esc(project.target) + '</b></td><td colspan="6">No scan yet</td></tr>';
+        const label = project.name || project.slug || project.target || key;
+        if (!latest) return '<tr><td><b>' + esc(label) + '</b></td><td colspan="6">No scan yet</td></tr>';
         const trust = dashTrust(latest);
         const tally = dashCode(latest);
         const code = trust === "ok"
@@ -3729,7 +4805,7 @@
           const before = dashCode(previous);
           row.delta = {critical: tally.critical - before.critical, high: tally.high - before.high};
         }
-        return '<tr data-action="open" data-id="' + esc(latest.id) + '"><td><b>' + esc(project.target) + "</b></td><td>" + esc((latest.created_at || "").replace(" UTC", "")) + "</td><td>" + esc(latest.owner || "") + "</td><td>" + code + "</td><td>" + esc(sonarText) + "</td><td>" + esc(dashGate(row)) + "</td><td>" + esc(dashChange(row)) + " " + retryButton(latest) + "</td></tr>";
+        return '<tr data-action="open" data-id="' + esc(latest.id) + '"><td><b>' + esc(label) + "</b></td><td>" + esc((latest.created_at || "").replace(" UTC", "")) + "</td><td>" + esc(latest.owner || "") + "</td><td>" + code + "</td><td>" + esc(sonarText) + "</td><td>" + esc(dashGate(row)) + "</td><td>" + esc(dashChange(row)) + " " + retryButton(latest) + "</td></tr>";
       }).join("");
       const events = (group.events || []).map((event) => "<li>" + esc((event.created_at || "").replace("T", " ").slice(0, 16)) + " · " + esc(event.actor) + " " + esc(event.action) + (event.detail ? " · " + esc(event.detail) : "") + "</li>").join("");
       return '<div class="dash-panel"><h2>' + esc(group.name) + '</h2><p class="meta">' + esc(group.description || "Latest scan of each project in this group.") + '</p><table class="dash-table"><thead><tr><th>Project</th><th>Latest scan</th><th>Who ran it</th><th>Code</th><th>SonarQube</th><th>Gate</th><th>Since previous</th></tr></thead><tbody>' + rows + "</tbody></table>" + (events ? "<h2>Recent changes</h2><ul>" + events + "</ul>" : "") + "</div>";
@@ -3808,10 +4884,10 @@
       document.querySelector("#group-form-title").textContent = group ? "Edit " + group.name : "New group";
       document.querySelector("#group-name").value = group ? group.name : "";
       document.querySelector("#group-description").value = group ? (group.description || "") : "";
-      document.querySelector("#group-repos").value = group ? (group.projects || []).filter((item) => item.kind === "repo").map((item) => item.target).join("\n") : "";
-      document.querySelector("#group-images").value = group ? (group.projects || []).filter((item) => item.kind === "image").map((item) => item.target).join("\n") : "";
       document.querySelector("#group-member-q").value = "";
       document.querySelector("#group-member-list").hidden = true;
+      if (!state.projects.length) await loadProjects();
+      fillGroupProjectOptions(group ? (group.projects || []) : []);
       const loaded = await loadGroupPeople();
       if (!loaded) {
         box.hidden = false;
@@ -3827,7 +4903,6 @@
         chosenMembers = chosenMembers.map((item) => item.username === currentUser.username ? groupPerson(item.username, true, true, item.role) : item);
       }
       renderChosenMembers();
-      fillGroupPickers();
     }
 
     document.querySelector("#group-new").addEventListener("click", () => showGroupForm(null));
@@ -3845,8 +4920,7 @@
       const payload = {
         name: document.querySelector("#group-name").value,
         description: document.querySelector("#group-description").value,
-        repos: groupLines(document.querySelector("#group-repos").value),
-        images: groupLines(document.querySelector("#group-images").value),
+        project_slugs: [...document.querySelector("#group-project-slugs").selectedOptions].map((option) => option.value),
         members: chosenMembers.map((item) => ({username: item.username, lead: item.lead}))
       };
       const id = document.querySelector("#group-form").dataset.id;

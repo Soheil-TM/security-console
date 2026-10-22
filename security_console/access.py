@@ -61,10 +61,9 @@ def can_scan_project(
 
 
 def project_key(scan: dict[str, Any]) -> str:
-    """Group scans the same way the reports list groups them.
+    """Legacy target key from repo URL or image name.
 
-    An image scan keys on the image name. A repository scan keys on the Git
-    URL with a trailing ``.git`` and slashes removed.
+    Prefer ``scan_project_ref`` when grouping by first-class projects.
     """
 
     image = str(scan.get("image") or "")
@@ -73,6 +72,15 @@ def project_key(scan: dict[str, Any]) -> str:
         return "image:" + image.lower()
     key = repo[:-4] if repo.lower().endswith(".git") else repo
     return key.rstrip("/").lower()
+
+
+def scan_project_ref(scan: dict[str, Any]) -> str:
+    """Stable project identity: slug when known, otherwise the legacy key."""
+
+    slug = str(scan.get("project_slug") or "").strip().lower()
+    if slug:
+        return slug
+    return project_key(scan)
 
 
 def can_view_scan(
@@ -84,15 +92,22 @@ def can_view_scan(
     """Return whether this account may read the scan.
 
     Admins see every scan. Everyone else sees a scan only when its project
-    is in one of their groups and at least one of its tools is allowed.
-    The owner records who started it and does not grant access. A guest scan
-    from the public page is open to admins only.
+    slug or legacy target key is in one of their groups and at least one of
+    its tools is allowed. The owner records who started it and does not grant
+    access. A guest scan from the public page is open to admins only.
     """
 
     if scan.get("guest") and user.get("role") != "admin":
         return False
     if user.get("role") != "admin":
-        if project_key(scan) not in (group_keys or set()):
+        keys = group_keys or set()
+        slug = str(scan.get("project_slug") or "").strip().lower()
+        legacy = project_key(scan)
+        if slug and slug in keys:
+            pass
+        elif legacy in keys:
+            pass
+        else:
             return False
     allowed = access_map(user)
     tools = [tool for tool in scan.get("tools") or [] if tool in TOOLS]
@@ -127,7 +142,7 @@ def recent_per_project(
         )
         if shown is None:
             continue
-        key = project_key(item)
+        key = scan_project_ref(item)
         taken = counts.get(key, 0)
         if taken >= limit:
             continue
@@ -136,22 +151,64 @@ def recent_per_project(
     return visible
 
 
+def severity_bucket(value: Any) -> str:
+    """Map tool-specific severity labels onto Critical/High/Medium/Low/Info."""
+
+    name = str(value or "").upper()
+    if name in {"BLOCKER", "CRITICAL", "EMERGENCY", "ALERT"}:
+        return "critical"
+    if name in {"HIGH", "MAJOR", "ERROR"}:
+        return "high"
+    if name in {"MEDIUM", "MINOR", "WARNING", "WARN"}:
+        return "medium"
+    if name == "LOW":
+        return "low"
+    return "info"
+
+
+def expand_sonar_findings(sonar: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Project Sonar issues and hotspots into the shared finding row shape."""
+
+    if not isinstance(sonar, dict):
+        return []
+    rows: list[dict[str, Any]] = []
+    for item in sonar.get("issues") or []:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            {
+                "tool": "sonar",
+                "severity": str(item.get("severity") or "INFO"),
+                "check": str(item.get("rule") or ""),
+                "path": str(item.get("file") or ""),
+                "line": item.get("line"),
+                "message": str(item.get("message") or ""),
+            }
+        )
+    for item in sonar.get("hotspot_list") or []:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            {
+                "tool": "sonar",
+                "severity": str(
+                    item.get("vulnerabilityProbability") or "INFO"
+                ),
+                "check": str(item.get("rule") or ""),
+                "path": str(item.get("file") or ""),
+                "line": item.get("line"),
+                "message": str(item.get("message") or ""),
+            }
+        )
+    return rows
+
+
 def severity_counts(findings: list[dict[str, Any]]) -> dict[str, int]:
     """Bucket finding severities for the dashboard cards."""
 
     counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
     for row in findings:
-        severity = str(row.get("severity") or "").upper()
-        if severity in {"CRITICAL", "ERROR"}:
-            counts["critical"] += 1
-        elif severity == "HIGH":
-            counts["high"] += 1
-        elif severity in {"MEDIUM", "WARNING"}:
-            counts["medium"] += 1
-        elif severity == "LOW":
-            counts["low"] += 1
-        else:
-            counts["info"] += 1
+        counts[severity_bucket(row.get("severity"))] += 1
     return counts
 
 
@@ -172,6 +229,13 @@ def present_scan(
         for row in scan.get("findings") or []
         if allowed.get(str(row.get("tool") or ""))
     ]
+    sonar = scan.get("sonar") if allowed.get("sonar") else None
+    if allowed.get("sonar") and not any(
+        str(row.get("tool") or "") == "sonar" for row in findings
+    ):
+        findings = findings + expand_sonar_findings(
+            sonar if isinstance(sonar, dict) else None
+        )
     shown: dict[str, Any] = {
         "id": scan.get("id"),
         "target": scan.get("target") or "repo",
@@ -191,8 +255,14 @@ def present_scan(
         "finished_at": scan.get("finished_at") or "",
         "finding_count": len(findings),
         "severity": severity_counts(findings),
-        "sonar": scan.get("sonar") if allowed.get("sonar") else None,
+        "sonar": sonar,
+        "project_ref": scan_project_ref(scan),
     }
+    if scan.get("project_id") is not None:
+        shown["project_id"] = int(scan["project_id"])
+    if scan.get("project_slug"):
+        shown["project_slug"] = scan.get("project_slug")
+        shown["project_name"] = scan.get("project_name") or scan.get("project_slug")
     position = scan.get("queue_position")
     if position is not None:
         shown["queue_position"] = position

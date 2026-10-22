@@ -92,13 +92,36 @@ SCHEMA = (
     )
     """,
     """
+    CREATE TABLE IF NOT EXISTS projects (
+        id bigserial PRIMARY KEY,
+        slug text NOT NULL UNIQUE,
+        name text NOT NULL,
+        description text NOT NULL DEFAULT '',
+        created_by bigint REFERENCES users (id) ON DELETE SET NULL,
+        created_at timestamptz NOT NULL DEFAULT now()
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS project_targets (
+        project_id bigint NOT NULL
+            REFERENCES projects (id) ON DELETE CASCADE,
+        kind text NOT NULL CHECK (kind IN ('repo', 'image')),
+        target text NOT NULL,
+        target_key text NOT NULL,
+        PRIMARY KEY (project_id, kind, target_key)
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS project_targets_key
+        ON project_targets (target_key)
+    """,
+    """
     CREATE TABLE IF NOT EXISTS group_projects (
         group_id bigint NOT NULL
             REFERENCES project_groups (id) ON DELETE CASCADE,
-        project_key text NOT NULL,
-        kind text NOT NULL CHECK (kind IN ('repo', 'image')),
-        target text NOT NULL,
-        PRIMARY KEY (group_id, project_key)
+        project_id bigint NOT NULL
+            REFERENCES projects (id) ON DELETE CASCADE,
+        PRIMARY KEY (group_id, project_id)
     )
     """,
     """
@@ -145,6 +168,7 @@ SCHEMA = (
         target text NOT NULL CHECK (target IN ('repo', 'image')),
         repo text NOT NULL DEFAULT '',
         image text NOT NULL DEFAULT '',
+        project_id bigint REFERENCES projects (id) ON DELETE SET NULL,
         tools jsonb NOT NULL DEFAULT '[]'::jsonb,
         status text NOT NULL
             CHECK (status IN ('queued', 'running', 'done', 'failed')),
@@ -168,6 +192,65 @@ SCHEMA = (
     """
     CREATE INDEX IF NOT EXISTS scans_status_created
         ON scans (status, priority DESC, created_at)
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS risk_acceptances (
+        id bigserial PRIMARY KEY,
+        project_key text NOT NULL,
+        baseline_scan_id text NOT NULL,
+        current_scan_id text NOT NULL,
+        commit_sha text NOT NULL DEFAULT '',
+        accepted_by text NOT NULL,
+        accepted_by_user_id bigint REFERENCES users (id) ON DELETE SET NULL,
+        reason text NOT NULL,
+        remaining_keys jsonb NOT NULL DEFAULT '[]'::jsonb,
+        baseline_severity jsonb NOT NULL DEFAULT '{}'::jsonb,
+        current_severity jsonb NOT NULL DEFAULT '{}'::jsonb,
+        fixed_count integer NOT NULL DEFAULT 0,
+        new_count integer NOT NULL DEFAULT 0,
+        remaining_count integer NOT NULL DEFAULT 0,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        revoked_at timestamptz
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS risk_acceptances_project_time
+        ON risk_acceptances (project_key, created_at DESC)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS risk_acceptances_project_commit
+        ON risk_acceptances (project_key, commit_sha)
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS finding_dispositions (
+        id bigserial PRIMARY KEY,
+        project_key text NOT NULL,
+        finding_key text NOT NULL,
+        status text NOT NULL
+            CHECK (status IN (
+                'true_positive',
+                'false_positive',
+                'accepted_risk',
+                'needs_review'
+            )),
+        reason text NOT NULL DEFAULT '',
+        assignee_user_id bigint REFERENCES users (id) ON DELETE SET NULL,
+        updated_by text NOT NULL DEFAULT '',
+        updated_by_user_id bigint REFERENCES users (id) ON DELETE SET NULL,
+        scan_id text NOT NULL DEFAULT '',
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now(),
+        UNIQUE (project_key, finding_key)
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS finding_dispositions_project
+        ON finding_dispositions (project_key)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS finding_dispositions_assignee
+        ON finding_dispositions (assignee_user_id)
+        WHERE assignee_user_id IS NOT NULL
     """,
 )
 
@@ -425,6 +508,20 @@ MIGRATIONS = (
         ADD COLUMN IF NOT EXISTS created_at timestamptz
         NOT NULL DEFAULT now()
     """,
+    """
+    ALTER TABLE scans
+        ADD COLUMN IF NOT EXISTS project_id bigint
+        REFERENCES projects (id) ON DELETE SET NULL
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS scans_project_id
+        ON scans (project_id)
+    """,
+    """
+    ALTER TABLE risk_acceptances
+        ADD COLUMN IF NOT EXISTS triage_snapshot jsonb
+        NOT NULL DEFAULT '{}'::jsonb
+    """,
 )
 
 
@@ -437,7 +534,174 @@ def prepare_database() -> None:
             conn.execute(statement)
         for statement in MIGRATIONS:
             conn.execute(statement)
+        _migrate_legacy_group_projects(conn)
         conn.commit()
+
+
+def _column_exists(
+    conn: psycopg.Connection[dict[str, Any]],
+    table: str,
+    column: str,
+) -> bool:
+    row = conn.execute(
+        """
+        SELECT 1 AS found
+        FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = %s
+          AND column_name = %s
+        LIMIT 1
+        """,
+        (table, column),
+    ).fetchone()
+    return row is not None
+
+
+def _slugify_base(value: str) -> str:
+    """Build a URL-safe slug stem from a name or target path."""
+
+    text = value.strip().lower()
+    for sep in ("/", ":", ".", "_", " "):
+        text = text.replace(sep, "-")
+    cleaned = "".join(ch if ch.isalnum() or ch == "-" else "" for ch in text)
+    while "--" in cleaned:
+        cleaned = cleaned.replace("--", "-")
+    cleaned = cleaned.strip("-")
+    return cleaned[:60] or "project"
+
+
+def _unique_slug(
+    conn: psycopg.Connection[dict[str, Any]],
+    base: str,
+    taken: set[str],
+) -> str:
+    stem = _slugify_base(base)
+    candidate = stem
+    index = 2
+    while candidate in taken:
+        suffix = f"-{index}"
+        candidate = (stem[: max(1, 60 - len(suffix))] + suffix).strip("-")
+        index += 1
+    taken.add(candidate)
+    return candidate
+
+
+def _migrate_legacy_group_projects(
+    conn: psycopg.Connection[dict[str, Any]],
+) -> None:
+    """Turn legacy group_projects (key/kind/target) into projects + links."""
+
+    if not _column_exists(conn, "group_projects", "project_key"):
+        return
+    rows = [
+        dict(row)
+        for row in conn.execute(
+            """
+            SELECT group_id, project_key, kind, target
+            FROM group_projects
+            ORDER BY group_id, kind, target
+            """
+        ).fetchall()
+    ]
+    existing_slugs = {
+        str(row["slug"])
+        for row in conn.execute("SELECT slug FROM projects").fetchall()
+    }
+    key_to_project: dict[str, int] = {
+        str(row["target_key"]): int(row["project_id"])
+        for row in conn.execute(
+            "SELECT target_key, project_id FROM project_targets"
+        ).fetchall()
+    }
+    links: set[tuple[int, int]] = set()
+    for row in rows:
+        target_key = str(row.get("project_key") or "")
+        if not target_key:
+            continue
+        project_id = key_to_project.get(target_key)
+        if project_id is None:
+            kind = str(row.get("kind") or "repo")
+            target = str(row.get("target") or "")
+            leaf = target.rsplit("/", 1)[-1]
+            if leaf.lower().endswith(".git"):
+                leaf = leaf[:-4]
+            if kind == "image":
+                leaf = target.split("/")[-1] or target
+            slug = _unique_slug(conn, leaf or target_key, existing_slugs)
+            created = conn.execute(
+                """
+                INSERT INTO projects (slug, name, description)
+                VALUES (%s, %s, %s)
+                RETURNING id
+                """,
+                (slug, leaf or slug, "Migrated from group attachment."),
+            ).fetchone()
+            if created is None:
+                raise RuntimeError("project migration insert failed")
+            project_id = int(created["id"])
+            conn.execute(
+                """
+                INSERT INTO project_targets (project_id, kind, target, target_key)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT DO NOTHING
+                """,
+                (project_id, kind, target, target_key),
+            )
+            key_to_project[target_key] = project_id
+            conn.execute(
+                """
+                UPDATE risk_acceptances
+                SET project_key = %s
+                WHERE project_key = %s
+                """,
+                (slug, target_key),
+            )
+            conn.execute(
+                """
+                UPDATE scans AS s
+                SET project_id = %s
+                WHERE s.project_id IS NULL
+                  AND (
+                    (s.target = 'image' AND lower('image:' || s.image) = %s)
+                    OR (
+                        s.target = 'repo'
+                        AND lower(
+                            rtrim(
+                                CASE
+                                    WHEN right(lower(s.repo), 4) = '.git'
+                                    THEN left(s.repo, length(s.repo) - 4)
+                                    ELSE s.repo
+                                END,
+                                '/'
+                            )
+                        ) = %s
+                    )
+                  )
+                """,
+                (project_id, target_key, target_key),
+            )
+        links.add((int(row["group_id"]), project_id))
+    conn.execute(
+        """
+        CREATE TABLE group_projects_new (
+            group_id bigint NOT NULL
+                REFERENCES project_groups (id) ON DELETE CASCADE,
+            project_id bigint NOT NULL
+                REFERENCES projects (id) ON DELETE CASCADE,
+            PRIMARY KEY (group_id, project_id)
+        )
+        """
+    )
+    for group_id, project_id in sorted(links):
+        conn.execute(
+            """
+            INSERT INTO group_projects_new (group_id, project_id)
+            VALUES (%s, %s)
+            """,
+            (group_id, project_id),
+        )
+    conn.execute("DROP TABLE group_projects")
+    conn.execute("ALTER TABLE group_projects_new RENAME TO group_projects")
 
 
 def _stamp(value: Any) -> str:
@@ -474,6 +738,17 @@ def _parse_stamp(value: Any) -> datetime | None:
         return None
 
 
+_SCAN_SELECT = """
+    SELECT s.id, s.target, s.repo, s.image, s.project_id, s.tools, s.status,
+           s.phase, s.error, s.failure_reason, s.owner, s.guest, s.guest_ip,
+           s.private, s.requested_sha, s.commit_sha, s.findings, s.sonar,
+           s.priority, s.created_at, s.started_at, s.finished_at,
+           p.slug AS project_slug, p.name AS project_name
+    FROM scans AS s
+    LEFT JOIN projects AS p ON p.id = s.project_id
+"""
+
+
 def scan_from_row(row: dict[str, Any]) -> dict[str, Any]:
     """Turn a scans table row into the in-memory scan dict the API uses."""
 
@@ -506,6 +781,13 @@ def scan_from_row(row: dict[str, Any]) -> dict[str, Any]:
         "finished_at": _stamp(row.get("finished_at")),
         "started_at": _stamp(row.get("started_at")),
     }
+    project_id = row.get("project_id")
+    if project_id is not None:
+        item["project_id"] = int(project_id)
+    slug = str(row.get("project_slug") or "")
+    if slug:
+        item["project_slug"] = slug
+        item["project_name"] = str(row.get("project_name") or slug)
     guest = str(row.get("guest") or "")
     if guest:
         item["guest"] = guest
@@ -519,14 +801,7 @@ def list_scan_rows() -> list[dict[str, Any]]:
 
     with connect() as conn:
         rows = conn.execute(
-            """
-            SELECT id, target, repo, image, tools, status, phase, error,
-                   failure_reason, owner, guest, guest_ip, private,
-                   requested_sha, commit_sha, findings, sonar, priority,
-                   created_at, started_at, finished_at
-            FROM scans
-            ORDER BY created_at DESC
-            """
+            _SCAN_SELECT + " ORDER BY s.created_at DESC"
         ).fetchall()
         conn.commit()
     return [scan_from_row(dict(row)) for row in rows]
@@ -537,14 +812,7 @@ def get_scan_row(scan_id: str) -> dict[str, Any] | None:
 
     with connect() as conn:
         row = conn.execute(
-            """
-            SELECT id, target, repo, image, tools, status, phase, error,
-                   failure_reason, owner, guest, guest_ip, private,
-                   requested_sha, commit_sha, findings, sonar, priority,
-                   created_at, started_at, finished_at
-            FROM scans
-            WHERE id = %s
-            """,
+            _SCAN_SELECT + " WHERE s.id = %s",
             (scan_id,),
         ).fetchone()
         conn.commit()
@@ -570,17 +838,19 @@ def upsert_scan(item: dict[str, Any]) -> None:
     created = _parse_stamp(item.get("created_at")) or datetime.now(UTC)
     started = _parse_stamp(item.get("started_at"))
     finished = _parse_stamp(item.get("finished_at"))
+    project_id = item.get("project_id")
+    project_value = int(project_id) if project_id is not None else None
     with connect() as conn:
         conn.execute(
             """
             INSERT INTO scans (
-                id, target, repo, image, tools, status, phase, error,
+                id, target, repo, image, project_id, tools, status, phase, error,
                 failure_reason, owner, guest, guest_ip, private,
                 requested_sha, commit_sha, findings, sonar, priority,
                 created_at, started_at, finished_at
             )
             VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s,
                 %s, %s, %s
@@ -589,6 +859,7 @@ def upsert_scan(item: dict[str, Any]) -> None:
                 target = EXCLUDED.target,
                 repo = EXCLUDED.repo,
                 image = EXCLUDED.image,
+                project_id = EXCLUDED.project_id,
                 tools = EXCLUDED.tools,
                 status = EXCLUDED.status,
                 phase = EXCLUDED.phase,
@@ -612,6 +883,7 @@ def upsert_scan(item: dict[str, Any]) -> None:
                 str(item.get("target") or "repo"),
                 str(item.get("repo") or ""),
                 str(item.get("image") or ""),
+                project_value,
                 Jsonb(list(item.get("tools") or [])),
                 str(item.get("status") or "queued"),
                 str(item.get("phase") or ""),
@@ -675,15 +947,14 @@ def claim_next_queued() -> dict[str, Any] | None:
                     ELSE 'clone'
                 END
             WHERE id = %s
-            RETURNING id, target, repo, image, tools, status, phase, error,
-                      failure_reason, owner, guest, guest_ip, private,
-                      requested_sha, commit_sha, findings, sonar, priority,
-                      created_at, started_at, finished_at
+            RETURNING id
             """,
             (scan_id,),
         ).fetchone()
         conn.commit()
-    return scan_from_row(dict(updated)) if updated else None
+    if updated is None:
+        return None
+    return get_scan_row(str(updated["id"]))
 
 
 def fail_running_scans(message: str) -> list[str]:
@@ -1255,20 +1526,55 @@ def require_password_change(username: str, password_hash: str) -> None:
 
 
 def group_project_keys(user_id: int) -> set[str]:
-    """Return every project key in groups this account belongs to."""
+    """Return project slugs and target keys this account may access.
+
+    Slugs identify first-class projects. Target keys keep legacy scan matching
+    and GitLab/registry filters working against concrete repo/image refs.
+    """
 
     with connect() as conn:
-        rows = conn.execute(
+        slug_rows = conn.execute(
             """
-            SELECT DISTINCT p.project_key
-            FROM group_projects AS p
-            JOIN group_members AS m ON m.group_id = p.group_id
+            SELECT DISTINCT pr.slug
+            FROM group_projects AS gp
+            JOIN group_members AS m ON m.group_id = gp.group_id
+            JOIN projects AS pr ON pr.id = gp.project_id
+            WHERE m.user_id = %s
+            """,
+            (user_id,),
+        ).fetchall()
+        target_rows = conn.execute(
+            """
+            SELECT DISTINCT t.target_key
+            FROM group_projects AS gp
+            JOIN group_members AS m ON m.group_id = gp.group_id
+            JOIN project_targets AS t ON t.project_id = gp.project_id
             WHERE m.user_id = %s
             """,
             (user_id,),
         ).fetchall()
         conn.commit()
-    return {str(row["project_key"]) for row in rows}
+    keys = {str(row["slug"]) for row in slug_rows}
+    keys.update(str(row["target_key"]) for row in target_rows)
+    return keys
+
+
+def user_project_slugs(user_id: int) -> set[str]:
+    """Return only the project slugs this account can see via groups."""
+
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT DISTINCT pr.slug
+            FROM group_projects AS gp
+            JOIN group_members AS m ON m.group_id = gp.group_id
+            JOIN projects AS pr ON pr.id = gp.project_id
+            WHERE m.user_id = %s
+            """,
+            (user_id,),
+        ).fetchall()
+        conn.commit()
+    return {str(row["slug"]) for row in rows}
 
 
 def _group_ids_for(
@@ -1309,10 +1615,11 @@ def _load_group(
         return None
     projects = conn.execute(
         """
-        SELECT project_key, kind, target
-        FROM group_projects
-        WHERE group_id = %s
-        ORDER BY kind, target
+        SELECT pr.id, pr.slug, pr.name, pr.description
+        FROM group_projects AS gp
+        JOIN projects AS pr ON pr.id = gp.project_id
+        WHERE gp.group_id = %s
+        ORDER BY pr.name
         """,
         (group_id,),
     ).fetchall()
@@ -1387,7 +1694,7 @@ def insert_group(
     name: str,
     description: str,
     created_by: int,
-    projects: list[dict[str, str]],
+    project_ids: list[int],
     members: list[tuple[int, bool]],
     actor: str,
     detail: str,
@@ -1406,7 +1713,7 @@ def insert_group(
         if row is None:
             raise RuntimeError("group insert did not return an id")
         group_id = int(row["id"])
-        _write_group_children(conn, group_id, projects, members)
+        _write_group_children(conn, group_id, project_ids, members)
         _write_group_event(conn, group_id, actor, "created", detail)
         conn.commit()
     return group_id
@@ -1416,7 +1723,7 @@ def update_group(
     group_id: int,
     name: str,
     description: str,
-    projects: list[dict[str, str]],
+    project_ids: list[int],
     members: list[tuple[int, bool]],
     actor: str,
     detail: str,
@@ -1440,7 +1747,7 @@ def update_group(
             "DELETE FROM group_members WHERE group_id = %s",
             (group_id,),
         )
-        _write_group_children(conn, group_id, projects, members)
+        _write_group_children(conn, group_id, project_ids, members)
         _write_group_event(conn, group_id, actor, "updated", detail)
         conn.commit()
 
@@ -1459,21 +1766,17 @@ def delete_group(group_id: int) -> None:
 def _write_group_children(
     conn: psycopg.Connection[dict[str, Any]],
     group_id: int,
-    projects: list[dict[str, str]],
+    project_ids: list[int],
     members: list[tuple[int, bool]],
 ) -> None:
-    for project in projects:
+    for project_id in project_ids:
         conn.execute(
             """
-            INSERT INTO group_projects (group_id, project_key, kind, target)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO group_projects (group_id, project_id)
+            VALUES (%s, %s)
+            ON CONFLICT DO NOTHING
             """,
-            (
-                group_id,
-                project["key"],
-                project["kind"],
-                project["target"],
-            ),
+            (group_id, int(project_id)),
         )
     for user_id, lead in members:
         conn.execute(
@@ -1648,6 +1951,649 @@ def user_leads_a_group(user_id: int) -> bool:
             LIMIT 1
             """,
             (user_id,),
+        ).fetchone()
+        conn.commit()
+    return row is not None
+
+
+def user_leads_project(user_id: int, project_key: str) -> bool:
+    """Return whether this account leads a group that owns the project slug."""
+
+    with connect() as conn:
+        row = conn.execute(
+            """
+            SELECT 1 AS found
+            FROM group_members AS m
+            JOIN group_projects AS gp ON gp.group_id = m.group_id
+            JOIN projects AS pr ON pr.id = gp.project_id
+            WHERE m.user_id = %s AND m.lead = true AND pr.slug = %s
+            LIMIT 1
+            """,
+            (user_id, project_key),
+        ).fetchone()
+        conn.commit()
+    return row is not None
+
+
+def user_leads_any_of_groups(user_id: int, group_ids: list[int]) -> bool:
+    """Return whether the user leads at least one of the given groups."""
+
+    if not group_ids:
+        return False
+    with connect() as conn:
+        row = conn.execute(
+            """
+            SELECT 1 AS found
+            FROM group_members
+            WHERE user_id = %s AND lead = true AND group_id = ANY(%s)
+            LIMIT 1
+            """,
+            (user_id, group_ids),
+        ).fetchone()
+        conn.commit()
+    return row is not None
+
+
+def _project_from_row(
+    row: dict[str, Any],
+    targets: list[dict[str, Any]],
+    group_ids: list[int] | None = None,
+) -> dict[str, Any]:
+    return {
+        "id": int(row["id"]),
+        "slug": str(row["slug"]),
+        "name": str(row["name"]),
+        "description": str(row.get("description") or ""),
+        "created_by": row.get("created_by"),
+        "created_at": _stamp(row.get("created_at")),
+        "targets": [
+            {
+                "kind": str(item["kind"]),
+                "target": str(item["target"]),
+                "key": str(item["target_key"]),
+            }
+            for item in targets
+        ],
+        "group_ids": list(group_ids or []),
+    }
+
+
+def _load_project(
+    conn: psycopg.Connection[dict[str, Any]],
+    project_id: int,
+) -> dict[str, Any] | None:
+    row = conn.execute(
+        """
+        SELECT id, slug, name, description, created_by, created_at
+        FROM projects
+        WHERE id = %s
+        """,
+        (project_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    targets = conn.execute(
+        """
+        SELECT kind, target, target_key
+        FROM project_targets
+        WHERE project_id = %s
+        ORDER BY kind, target
+        """,
+        (project_id,),
+    ).fetchall()
+    groups = conn.execute(
+        """
+        SELECT group_id
+        FROM group_projects
+        WHERE project_id = %s
+        ORDER BY group_id
+        """,
+        (project_id,),
+    ).fetchall()
+    return _project_from_row(
+        dict(row),
+        [dict(item) for item in targets],
+        [int(item["group_id"]) for item in groups],
+    )
+
+
+def list_projects(user_id: int | None) -> list[dict[str, Any]]:
+    """Return every project, or only those linked to the user's groups."""
+
+    with connect() as conn:
+        if user_id is None:
+            rows = conn.execute(
+                """
+                SELECT id FROM projects ORDER BY name
+                """
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT DISTINCT pr.id
+                FROM projects AS pr
+                JOIN group_projects AS gp ON gp.project_id = pr.id
+                JOIN group_members AS m ON m.group_id = gp.group_id
+                WHERE m.user_id = %s
+                ORDER BY pr.id
+                """,
+                (user_id,),
+            ).fetchall()
+        loaded = [
+            project
+            for row in rows
+            if (project := _load_project(conn, int(row["id"]))) is not None
+        ]
+        loaded.sort(key=lambda item: str(item.get("name") or "").lower())
+        conn.commit()
+    return loaded
+
+
+def get_project_by_slug(slug: str) -> dict[str, Any] | None:
+    """Return one project by slug, or None."""
+
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT id FROM projects WHERE slug = %s",
+            (slug,),
+        ).fetchone()
+        if row is None:
+            conn.commit()
+            return None
+        loaded = _load_project(conn, int(row["id"]))
+        conn.commit()
+    return loaded
+
+
+def get_project_by_id(project_id: int) -> dict[str, Any] | None:
+    """Return one project by id, or None."""
+
+    with connect() as conn:
+        loaded = _load_project(conn, project_id)
+        conn.commit()
+    return loaded
+
+
+def projects_by_slugs(slugs: list[str]) -> list[dict[str, Any]]:
+    """Return projects whose slugs are in the list."""
+
+    if not slugs:
+        return []
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT id FROM projects WHERE slug = ANY(%s)
+            """,
+            (slugs,),
+        ).fetchall()
+        loaded = [
+            project
+            for row in rows
+            if (project := _load_project(conn, int(row["id"]))) is not None
+        ]
+        conn.commit()
+    return loaded
+
+
+def insert_project(
+    *,
+    slug: str,
+    name: str,
+    description: str,
+    created_by: int,
+    targets: list[dict[str, str]],
+    group_ids: list[int],
+) -> dict[str, Any]:
+    """Create a project with targets and group links."""
+
+    with connect() as conn:
+        row = conn.execute(
+            """
+            INSERT INTO projects (slug, name, description, created_by)
+            VALUES (%s, %s, %s, %s)
+            RETURNING id
+            """,
+            (slug, name, description, created_by),
+        ).fetchone()
+        if row is None:
+            raise RuntimeError("project insert did not return an id")
+        project_id = int(row["id"])
+        _write_project_children(conn, project_id, targets, group_ids)
+        loaded = _load_project(conn, project_id)
+        conn.commit()
+    if loaded is None:
+        raise RuntimeError("project insert could not be reloaded")
+    return loaded
+
+
+def update_project(
+    project_id: int,
+    *,
+    slug: str,
+    name: str,
+    description: str,
+    targets: list[dict[str, str]],
+    group_ids: list[int],
+) -> dict[str, Any] | None:
+    """Replace a project's fields, targets, and group links."""
+
+    with connect() as conn:
+        conn.execute(
+            """
+            UPDATE projects
+            SET slug = %s, name = %s, description = %s
+            WHERE id = %s
+            """,
+            (slug, name, description, project_id),
+        )
+        conn.execute(
+            "DELETE FROM project_targets WHERE project_id = %s",
+            (project_id,),
+        )
+        conn.execute(
+            "DELETE FROM group_projects WHERE project_id = %s",
+            (project_id,),
+        )
+        _write_project_children(conn, project_id, targets, group_ids)
+        loaded = _load_project(conn, project_id)
+        conn.commit()
+    return loaded
+
+
+def delete_project(project_id: int) -> None:
+    """Delete a project. Group links and targets go with it."""
+
+    with connect() as conn:
+        conn.execute("DELETE FROM projects WHERE id = %s", (project_id,))
+        conn.commit()
+
+
+def _write_project_children(
+    conn: psycopg.Connection[dict[str, Any]],
+    project_id: int,
+    targets: list[dict[str, str]],
+    group_ids: list[int],
+) -> None:
+    for item in targets:
+        conn.execute(
+            """
+            INSERT INTO project_targets (project_id, kind, target, target_key)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT DO NOTHING
+            """,
+            (
+                project_id,
+                item["kind"],
+                item["target"],
+                item["key"],
+            ),
+        )
+    for group_id in group_ids:
+        conn.execute(
+            """
+            INSERT INTO group_projects (group_id, project_id)
+            VALUES (%s, %s)
+            ON CONFLICT DO NOTHING
+            """,
+            (int(group_id), project_id),
+        )
+
+
+def project_match_keys(project: dict[str, Any]) -> set[str]:
+    """Slug plus every target key that belongs to this project."""
+
+    keys = {str(project.get("slug") or "")}
+    for item in project.get("targets") or []:
+        key = str(item.get("key") or "")
+        if key:
+            keys.add(key)
+    return {key for key in keys if key}
+
+
+_ACCEPTANCE_SELECT = """
+    SELECT id, project_key, baseline_scan_id, current_scan_id,
+           commit_sha, accepted_by, reason, remaining_keys,
+           baseline_severity, current_severity,
+           fixed_count, new_count, remaining_count,
+           triage_snapshot, created_at, revoked_at
+    FROM risk_acceptances
+"""
+
+
+def _acceptance_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    remaining = row.get("remaining_keys") or []
+    if isinstance(remaining, str):
+        remaining = json.loads(remaining)
+    baseline_severity = row.get("baseline_severity") or {}
+    if isinstance(baseline_severity, str):
+        baseline_severity = json.loads(baseline_severity)
+    current_severity = row.get("current_severity") or {}
+    if isinstance(current_severity, str):
+        current_severity = json.loads(current_severity)
+    snapshot = row.get("triage_snapshot") or {}
+    if isinstance(snapshot, str):
+        snapshot = json.loads(snapshot)
+    return {
+        "id": int(row["id"]),
+        "project_key": str(row.get("project_key") or ""),
+        "baseline_scan_id": str(row.get("baseline_scan_id") or ""),
+        "current_scan_id": str(row.get("current_scan_id") or ""),
+        "commit_sha": str(row.get("commit_sha") or ""),
+        "accepted_by": str(row.get("accepted_by") or ""),
+        "reason": str(row.get("reason") or ""),
+        "remaining_keys": list(remaining),
+        "baseline_severity": dict(baseline_severity),
+        "current_severity": dict(current_severity),
+        "fixed_count": int(row.get("fixed_count") or 0),
+        "new_count": int(row.get("new_count") or 0),
+        "remaining_count": int(row.get("remaining_count") or 0),
+        "triage_snapshot": dict(snapshot) if isinstance(snapshot, dict) else {},
+        "created_at": _stamp(row.get("created_at")),
+        "revoked_at": _stamp(row.get("revoked_at")),
+        "active": row.get("revoked_at") is None,
+    }
+
+
+def insert_risk_acceptance(
+    *,
+    project_key: str,
+    baseline_scan_id: str,
+    current_scan_id: str,
+    commit_sha: str,
+    accepted_by: str,
+    accepted_by_user_id: int,
+    reason: str,
+    remaining_keys: list[str],
+    baseline_severity: dict[str, int],
+    current_severity: dict[str, int],
+    fixed_count: int,
+    new_count: int,
+    remaining_count: int,
+    triage_snapshot: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Store one risk acceptance and return it."""
+
+    with connect() as conn:
+        row = conn.execute(
+            """
+            INSERT INTO risk_acceptances (
+                project_key, baseline_scan_id, current_scan_id, commit_sha,
+                accepted_by, accepted_by_user_id, reason, remaining_keys,
+                baseline_severity, current_severity,
+                fixed_count, new_count, remaining_count, triage_snapshot
+            )
+            VALUES (
+                %s, %s, %s, %s,
+                %s, %s, %s, %s,
+                %s, %s,
+                %s, %s, %s, %s
+            )
+            RETURNING id, project_key, baseline_scan_id, current_scan_id,
+                      commit_sha, accepted_by, reason, remaining_keys,
+                      baseline_severity, current_severity,
+                      fixed_count, new_count, remaining_count,
+                      triage_snapshot, created_at, revoked_at
+            """,
+            (
+                project_key,
+                baseline_scan_id,
+                current_scan_id,
+                commit_sha,
+                accepted_by,
+                accepted_by_user_id,
+                reason,
+                Jsonb(remaining_keys),
+                Jsonb(baseline_severity),
+                Jsonb(current_severity),
+                fixed_count,
+                new_count,
+                remaining_count,
+                Jsonb(triage_snapshot or {}),
+            ),
+        ).fetchone()
+        conn.commit()
+    if row is None:
+        raise RuntimeError("risk acceptance insert did not return a row")
+    return _acceptance_from_row(dict(row))
+
+
+def list_risk_acceptances(project_key: str, *, limit: int = 20) -> list[dict[str, Any]]:
+    """Return recent acceptances for one project, newest first."""
+
+    with connect() as conn:
+        rows = conn.execute(
+            _ACCEPTANCE_SELECT
+            + """
+            WHERE project_key = %s
+            ORDER BY created_at DESC
+            LIMIT %s
+            """,
+            (project_key, max(1, min(limit, 100))),
+        ).fetchall()
+        conn.commit()
+    return [_acceptance_from_row(dict(row)) for row in rows]
+
+
+def latest_active_acceptance(
+    project_key: str, *, commit_sha: str = ""
+) -> dict[str, Any] | None:
+    """Return the newest non-revoked acceptance, optionally for one commit."""
+
+    with connect() as conn:
+        if commit_sha:
+            row = conn.execute(
+                _ACCEPTANCE_SELECT
+                + """
+                WHERE project_key = %s
+                  AND revoked_at IS NULL
+                  AND lower(commit_sha) = lower(%s)
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (project_key, commit_sha),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                _ACCEPTANCE_SELECT
+                + """
+                WHERE project_key = %s AND revoked_at IS NULL
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (project_key,),
+            ).fetchone()
+        conn.commit()
+    return _acceptance_from_row(dict(row)) if row else None
+
+
+def revoke_risk_acceptance(acceptance_id: int) -> None:
+    """Mark one acceptance as revoked."""
+
+    with connect() as conn:
+        conn.execute(
+            """
+            UPDATE risk_acceptances
+            SET revoked_at = now()
+            WHERE id = %s AND revoked_at IS NULL
+            """,
+            (acceptance_id,),
+        )
+        conn.commit()
+
+
+def _disposition_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": int(row["id"]),
+        "project_key": str(row.get("project_key") or ""),
+        "finding_key": str(row.get("finding_key") or ""),
+        "status": str(row.get("status") or ""),
+        "reason": str(row.get("reason") or ""),
+        "assignee_user_id": (
+            int(row["assignee_user_id"])
+            if row.get("assignee_user_id") is not None
+            else None
+        ),
+        "assignee_username": str(row.get("assignee_username") or ""),
+        "updated_by": str(row.get("updated_by") or ""),
+        "updated_by_user_id": (
+            int(row["updated_by_user_id"])
+            if row.get("updated_by_user_id") is not None
+            else None
+        ),
+        "scan_id": str(row.get("scan_id") or ""),
+        "created_at": _stamp(row.get("created_at")),
+        "updated_at": _stamp(row.get("updated_at")),
+    }
+
+
+def list_dispositions(project_key: str) -> dict[str, dict[str, Any]]:
+    """Return dispositions for one project keyed by finding_key."""
+
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT d.id, d.project_key, d.finding_key, d.status, d.reason,
+                   d.assignee_user_id, d.updated_by, d.updated_by_user_id,
+                   d.scan_id, d.created_at, d.updated_at,
+                   u.username AS assignee_username
+            FROM finding_dispositions AS d
+            LEFT JOIN users AS u ON u.id = d.assignee_user_id
+            WHERE d.project_key = %s
+            """,
+            (project_key,),
+        ).fetchall()
+        conn.commit()
+    return {
+        str(row["finding_key"]): _disposition_from_row(dict(row)) for row in rows
+    }
+
+
+def upsert_disposition(
+    *,
+    project_key: str,
+    finding_key: str,
+    status: str,
+    reason: str,
+    assignee_user_id: int | None,
+    updated_by: str,
+    updated_by_user_id: int,
+    scan_id: str,
+) -> dict[str, Any]:
+    """Insert or replace one finding disposition."""
+
+    with connect() as conn:
+        row = conn.execute(
+            """
+            INSERT INTO finding_dispositions (
+                project_key, finding_key, status, reason, assignee_user_id,
+                updated_by, updated_by_user_id, scan_id, updated_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, now())
+            ON CONFLICT (project_key, finding_key) DO UPDATE SET
+                status = EXCLUDED.status,
+                reason = EXCLUDED.reason,
+                assignee_user_id = EXCLUDED.assignee_user_id,
+                updated_by = EXCLUDED.updated_by,
+                updated_by_user_id = EXCLUDED.updated_by_user_id,
+                scan_id = EXCLUDED.scan_id,
+                updated_at = now()
+            RETURNING id, project_key, finding_key, status, reason,
+                      assignee_user_id, updated_by, updated_by_user_id,
+                      scan_id, created_at, updated_at
+            """,
+            (
+                project_key,
+                finding_key,
+                status,
+                reason,
+                assignee_user_id,
+                updated_by,
+                updated_by_user_id,
+                scan_id,
+            ),
+        ).fetchone()
+        username = ""
+        if row is not None and row.get("assignee_user_id") is not None:
+            user = conn.execute(
+                "SELECT username FROM users WHERE id = %s",
+                (int(row["assignee_user_id"]),),
+            ).fetchone()
+            if user is not None:
+                username = str(user["username"] or "")
+        conn.commit()
+    if row is None:
+        raise RuntimeError("disposition upsert did not return a row")
+    loaded = dict(row)
+    loaded["assignee_username"] = username
+    return _disposition_from_row(loaded)
+
+
+def list_project_assignees(project_key: str) -> list[dict[str, Any]]:
+    """Return distinct members of groups that own this project slug."""
+
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT DISTINCT u.id, u.username, u.first_name, u.last_name, u.role
+            FROM projects AS pr
+            JOIN group_projects AS gp ON gp.project_id = pr.id
+            JOIN group_members AS m ON m.group_id = gp.group_id
+            JOIN users AS u ON u.id = m.user_id
+            WHERE pr.slug = %s AND u.disabled = false
+            ORDER BY u.username
+            """,
+            (project_key,),
+        ).fetchall()
+        conn.commit()
+    return [
+        {
+            "id": int(row["id"]),
+            "username": str(row["username"]),
+            "first_name": str(row.get("first_name") or ""),
+            "last_name": str(row.get("last_name") or ""),
+            "role": str(row.get("role") or ""),
+        }
+        for row in rows
+    ]
+
+
+def list_my_assignments(user_id: int) -> list[dict[str, Any]]:
+    """Return open TP / Needs Review dispositions assigned to this user."""
+
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT d.id, d.project_key, d.finding_key, d.status, d.reason,
+                   d.assignee_user_id, d.updated_by, d.updated_by_user_id,
+                   d.scan_id, d.created_at, d.updated_at,
+                   u.username AS assignee_username
+            FROM finding_dispositions AS d
+            LEFT JOIN users AS u ON u.id = d.assignee_user_id
+            WHERE d.assignee_user_id = %s
+              AND d.status IN ('true_positive', 'needs_review')
+            ORDER BY d.updated_at DESC
+            LIMIT 100
+            """,
+            (user_id,),
+        ).fetchall()
+        conn.commit()
+    return [_disposition_from_row(dict(row)) for row in rows]
+
+
+def user_in_project_groups(user_id: int, project_key: str) -> bool:
+    """Return whether the user is a member of a group that owns the project."""
+
+    with connect() as conn:
+        row = conn.execute(
+            """
+            SELECT 1 AS found
+            FROM projects AS pr
+            JOIN group_projects AS gp ON gp.project_id = pr.id
+            JOIN group_members AS m ON m.group_id = gp.group_id
+            WHERE pr.slug = %s AND m.user_id = %s
+            LIMIT 1
+            """,
+            (project_key, user_id),
         ).fetchone()
         conn.commit()
     return row is not None

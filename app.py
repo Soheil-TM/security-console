@@ -12,7 +12,7 @@ from pathlib import Path
 from secrets import token_urlsafe
 from typing import Any
 
-from flask import Flask, Response, g, jsonify, render_template, request
+from flask import Flask, Response, g, jsonify, make_response, render_template, request
 
 from security_console import db
 from security_console.access import (
@@ -50,7 +50,12 @@ from security_console.guest import (
 )
 from security_console.images import valid_image_ref
 from security_console.integrations import credentials_for
-from security_console.queue import QUEUE_CAP, attach_queue_position, start_dispatcher
+from security_console.queue import (
+    QUEUE_CAP,
+    attach_queue_position,
+    bind_store,
+    start_dispatcher,
+)
 from security_console.repos import normalize_commit_sha, valid_repo
 from security_console.sonar_proxy import install_sonar_proxy
 from security_console.sonar_setup import read_public_status, run_setup
@@ -244,8 +249,11 @@ def execute_scan(scan_id: str) -> None:
 
 @app.get("/")
 @app.get("/login")
-def index() -> str:
-    return render_template("index.html", sonar_url="/sonar/")
+def index() -> Response:
+    response = make_response(render_template("index.html", sonar_url="/sonar/"))
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    return response
 
 
 @app.post("/api/scans")
@@ -264,11 +272,54 @@ def create_scan() -> View:
     ]
     image = ""
     repo = ""
+    project_id = None
+    project_slug = ""
+    project_name = ""
+    project_ref = str(body.get("project") or "").strip().lower()
+    linked = None
+    if project_ref:
+        linked = db.get_project_by_slug(project_ref)
+        if linked is None:
+            return jsonify({"error": "Project not found."}), 404
+        kind_targets = [
+            item
+            for item in linked.get("targets") or []
+            if item.get("kind") == target
+        ]
+        if not kind_targets:
+            return jsonify(
+                {"error": "This project has no " + target + " target."}
+            ), 400
+        want = (
+            (body.get("image") or "").strip()
+            if target == "image"
+            else (body.get("repo") or "").strip()
+        )
+        chosen = None
+        if want:
+            for item in kind_targets:
+                if str(item.get("target") or "") == want:
+                    chosen = item
+                    break
+            if chosen is None:
+                return jsonify(
+                    {"error": "That target is not part of this project."}
+                ), 400
+        else:
+            chosen = kind_targets[0]
+        if target == "image":
+            image = str(chosen.get("target") or "")
+        else:
+            repo = str(chosen.get("target") or "")
+        project_id = int(linked["id"])
+        project_slug = str(linked["slug"])
+        project_name = str(linked.get("name") or project_slug)
     requested_sha = normalize_commit_sha(body.get("requested_sha"))
     if requested_sha is None:
         return jsonify({"error": "Commit SHA is invalid."}), 400
     if target == "image":
-        image = (body.get("image") or "").strip()
+        if not project_ref:
+            image = (body.get("image") or "").strip()
         if not valid_image_ref(image):
             return jsonify(
                 {"error": "Image name is invalid. Use a name like nginx:1.27."}
@@ -277,15 +328,28 @@ def create_scan() -> View:
             return jsonify({"error": "Image scans run with Trivy only."}), 400
         if requested_sha:
             return jsonify({"error": "Image scans do not take a commit."}), 400
+        if not project_ref and user.get("role") != "admin":
+            return jsonify(
+                {"error": "Select a project, or ask an admin to scan ad-hoc."}
+            ), 403
     else:
-        repo = (body.get("repo") or "").strip()
+        if not project_ref:
+            repo = (body.get("repo") or "").strip()
         if not valid_repo(repo):
             return jsonify(
                 {"error": "Repository URL must start with http or https."}
             ), 400
         if not tools:
             return jsonify({"error": "Select at least one tool."}), 400
-    scan_key = project_key({"target": target, "repo": repo, "image": image})
+        if not project_ref and user.get("role") != "admin":
+            return jsonify(
+                {"error": "Select a project, or ask an admin to scan ad-hoc."}
+            ), 403
+    scan_key = (
+        project_slug
+        if project_slug
+        else project_key({"target": target, "repo": repo, "image": image})
+    )
     try:
         group_keys = (
             set()
@@ -358,6 +422,10 @@ def create_scan() -> View:
             "failure_reason": "",
             "priority": 0,
         }
+        if project_id is not None:
+            item["project_id"] = project_id
+            item["project_slug"] = project_slug
+            item["project_name"] = project_name
         scans[scan_id] = item
         save_scan(item)
         shown = present_scan(
@@ -623,6 +691,7 @@ def boot() -> None:
             "do not expose this port on an untrusted network",
             file=sys.stderr,
         )
+    bind_store(lock, scans, save_scan)
     start_dispatcher(execute_scan)
 
 

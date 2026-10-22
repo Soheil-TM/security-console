@@ -164,11 +164,17 @@ def install_auth(app: Flask) -> None:
 
     from security_console.groups import install_groups
     from security_console.integrations import install_integrations
+    from security_console.investigate import install_investigate
+    from security_console.projects import install_projects
+    from security_console.risk import install_risk
     from security_console.users import install_users
 
     install_users(app)
     install_groups(app)
+    install_projects(app)
     install_integrations(app)
+    install_risk(app)
+    install_investigate(app)
 
 
 def _call_db(app: Flask, action: Callable[[], Reply]) -> Reply:
@@ -200,6 +206,8 @@ def _guard_request() -> Reply | None:
         if not _csrf_ok():
             return jsonify({"error": "Request rejected."}), 403
         return None
+    if request.method == "GET" and request.path == "/api/security/gate":
+        return _gate_guard()
     if not request.path.startswith("/api/"):
         return None
     user = _current_user()
@@ -236,6 +244,31 @@ def _guard_request() -> Reply | None:
             tools and not _tools_allowed(user, tools)
         ):
             return jsonify({"error": "You do not have permission."}), 403
+    return None
+
+
+def _gate_guard() -> Reply | None:
+    """Allow the push-gate check with a gate token or a normal signed-in session."""
+
+    from security_console.secrets import read_secret, same_secret
+
+    expected = read_secret("GATE_TOKEN", "GATE_TOKEN_FILE")
+    header = request.headers.get("Authorization", "")
+    presented = (
+        header[7:].strip()
+        if header.lower().startswith("bearer ")
+        else request.headers.get("X-Gate-Token", "").strip()
+    )
+    if expected and same_secret(presented, expected):
+        g.user = {"role": "admin", "username": "gate", "id": 0}
+        return None
+    user = _current_user()
+    if user is None:
+        return jsonify({"error": "You are not signed in."}), 401
+    g.user = user
+    expired = _reject_expired_session()
+    if expired is not None:
+        return expired
     return None
 
 

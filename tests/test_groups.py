@@ -67,13 +67,12 @@ def test_a_developer_can_scan_only_a_group_project() -> None:
     )
 
 
-def test_parse_group_keeps_a_repo_and_its_lead() -> None:
+def test_parse_group_keeps_project_slugs_and_lead() -> None:
     parsed, error = parse_group(
         {
             "name": "  Mace   eBPF ",
             "description": "Kernel work",
-            "repos": ["https://github.com/org/mace.git"],
-            "images": [],
+            "project_slugs": [],
             "members": [{"username": "ada", "lead": True}],
         }
     )
@@ -81,7 +80,7 @@ def test_parse_group_keeps_a_repo_and_its_lead() -> None:
     assert error == ""
     assert parsed is not None
     assert parsed["name"] == "Mace eBPF"
-    assert parsed["projects"][0]["key"] == "https://github.com/org/mace"
+    assert parsed["project_ids"] == []
     assert parsed["members"] == [{"username": "ada", "lead": True}]
 
 
@@ -89,12 +88,11 @@ def test_parse_group_accepts_a_group_without_a_project() -> None:
     parsed, error = parse_group(
         {
             "name": "Empty",
-            "repos": [],
-            "images": [],
+            "project_slugs": [],
             "members": [{"username": "ada", "lead": True}],
         }
     )
 
     assert error == ""
     assert parsed is not None
-    assert parsed["projects"] == []
+    assert parsed["project_ids"] == []

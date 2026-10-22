@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import threading
-import time
 from collections.abc import Callable
 from typing import Any
 
@@ -17,6 +16,25 @@ _POLL_SECONDS = 1.5
 _stop = threading.Event()
 _thread: threading.Thread | None = None
 
+# Bound by the console process so the worker never imports ``app`` as a
+# second module (``python /app/app.py`` runs as ``__main__``).
+_lock: threading.Lock | None = None
+_scans: dict[str, dict[str, Any]] | None = None
+_save: Callable[[dict[str, Any]], None] | None = None
+
+
+def bind_store(
+    lock: threading.Lock,
+    scans: dict[str, dict[str, Any]],
+    save: Callable[[dict[str, Any]], None],
+) -> None:
+    """Attach the console's in-memory scan map used after a DB claim."""
+
+    global _lock, _scans, _save
+    _lock = lock
+    _scans = scans
+    _save = save
+
 
 def start_dispatcher(run_scan: Callable[[str], None]) -> None:
     """Start the background loop that claims queued scans. Idempotent."""
@@ -24,6 +42,8 @@ def start_dispatcher(run_scan: Callable[[str], None]) -> None:
     global _thread
     if _thread is not None and _thread.is_alive():
         return
+    if _lock is None or _scans is None or _save is None:
+        raise RuntimeError("scan queue store is not bound")
     _stop.clear()
 
     def loop() -> None:
@@ -53,19 +73,18 @@ def stop_dispatcher() -> None:
 
 
 def _claim_into_memory() -> dict[str, Any] | None:
-    """Claim the next queued row and sync the in-memory map in app."""
+    """Claim the next queued row and sync the bound in-memory map."""
 
-    # Imported late so tests can set app.scans before the loop runs.
-    import app as console
-
+    if _lock is None or _scans is None or _save is None:
+        raise RuntimeError("scan queue store is not bound")
     claimed = db.claim_next_queued()
     if claimed is None:
         return None
-    with console.lock:
-        current = console.scans.get(claimed["id"]) or {}
+    with _lock:
+        current = _scans.get(claimed["id"]) or {}
         merged = {**current, **claimed}
-        console.scans[claimed["id"]] = merged
-        console.save_scan(merged)
+        _scans[claimed["id"]] = merged
+        _save(merged)
     return merged
 
 

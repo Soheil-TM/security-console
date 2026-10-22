@@ -827,7 +827,7 @@
     .dash-status { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 999px; font-size: 12px; font-weight: 650; background: #eef2f6; }
     .dash-status.done { background: #e8f6ef; color: #146c43; }
     .dash-status.failed { background: #fde8e8; color: #9f1239; }
-    .dash-status.running { background: #e0f2fe; color: #075985; }
+    .dash-status.running, .dash-status.queued { background: #e0f2fe; color: #075985; }
     .dash-table .pass { color: #146c43; font-weight: 700; }
     .dash-table .fail { color: var(--critical); font-weight: 700; }
     html.dark .dash-stat, html.dark .dash-admin, html.dark .dash-panel { background: #1b2c3d; color: var(--ink); border-color: #31475f; }
@@ -838,7 +838,8 @@
     html.dark .dash-status { background: #243648; color: #d5e4f0; }
     html.dark .dash-status.done { background: #12382c; color: #86efac; }
     html.dark .dash-status.failed { background: #3f1d28; color: #fda4af; }
-    html.dark .dash-status.running { background: #153246; color: #7dd3fc; }
+    html.dark .dash-status.running,
+    html.dark .dash-status.queued { background: #153246; color: #7dd3fc; }
     html.dark .dash-table .pass { color: #86efac; }
     html.dark .sonar-card {
       background: var(--card);
@@ -874,7 +875,7 @@
       background: #e2e8f0; color: #334155;
     }
     .badge.done { background: #d1fae5; color: #065f46; }
-    .badge.running {
+    .badge.running, .badge.queued {
       background: #fef3c7; color: #92400e;
       animation: badge-glow 1.8s ease-in-out infinite;
     }
@@ -882,6 +883,7 @@
     html.dark .badge { background: #2c4258; color: var(--ink); }
     html.dark .badge.done { background: #143528; color: #6ee7b7; }
     html.dark .badge.running { background: #3a2c14; color: #fcd34d; }
+    html.dark .badge.queued { background: #153246; color: #7dd3fc; }
     html.dark .badge.failed { background: #3f1d24; color: #fda4af; }
     .scan-actions { display: flex; align-items: center; gap: 8px; flex: none; }
     button.retry {
@@ -1839,7 +1841,17 @@
       ["low", "LOW", "Low", "#689f38"],
       ["info", "INFO", "Info", "#0288d1"]
     ];
-    const STATUS = {running: "Running", done: "Done", failed: "Failed"};
+    const STATUS = {queued: "Queued", running: "Running", done: "Done", failed: "Failed"};
+
+    function scanIsActive(item) {
+      return item && (item.status === "running" || item.status === "queued");
+    }
+
+    function queueLabel(item) {
+      if (!item || item.status !== "queued") return "";
+      const spot = Number(item.queue_position) || 0;
+      return spot > 0 ? "Queued · position " + spot : "Queued";
+    }
 
     function publicSonarUrl(value) {
       if (!value) return "/sonar/";
@@ -2436,7 +2448,7 @@
     }
 
     function scanIsFailed(item) {
-      if (!item || item.status === "running") return false;
+      if (!item || scanIsActive(item)) return false;
       const total = (item.findings || []).length || item.finding_count || 0;
       if (total > 0) return false;
       if (item.status === "failed") return true;
@@ -2444,7 +2456,7 @@
     }
 
     function canRetry(scan) {
-      if (!scan || scan.status === "running") return false;
+      if (!scan || scanIsActive(scan)) return false;
       if (!currentUser || currentUser.role === "viewer") return false;
       const failed = scan.status === "failed"
         || scan.failure_reason === "clone_failed"
@@ -2476,7 +2488,7 @@
     function historyTone(item) {
       if (scanIsFailed(item)) return " failed";
       if (item.status === "done") return " done";
-      if (item.status === "running") return " running";
+      if (item.status === "running" || item.status === "queued") return " running";
       return "";
     }
 
@@ -2674,7 +2686,7 @@
     }
 
     function dashTrust(item) {
-      if (!item || item.status === "running") return "running";
+      if (!item || scanIsActive(item)) return "running";
       if (item.status === "failed") return "failed";
       if (item.failure_reason === "clone_failed" || item.failure_reason === "sha_mismatch") return "failed";
       const sonar = dashSonar(item);
@@ -2843,8 +2855,10 @@
       recent.className = "dash-panel";
       recent.innerHTML = '<h2>Latest scans</h2><table class="dash-table"><thead><tr><th>When</th><th>Project</th><th>Status</th></tr></thead><tbody>' + scoped.map((item) => {
         const failed = dashTrust(item) === "failed";
-        const label = item.status === "running" ? "Running" : (failed ? "Failed" : "Finished");
-        const kind = item.status === "running" ? "running" : (failed ? "failed" : "done");
+        const label = item.status === "queued"
+          ? queueLabel(item)
+          : (item.status === "running" ? "Running" : (failed ? "Failed" : "Finished"));
+        const kind = scanIsActive(item) ? (item.status === "queued" ? "queued" : "running") : (failed ? "failed" : "done");
         return '<tr data-action="open" data-id="' + esc(item.id) + '"><td>' + esc((item.created_at || "").replace(" UTC", "")) + "</td><td>" + esc(scanTitle(item)) + '</td><td><span class="dash-status ' + kind + '">' + esc(label) + "</span> " + (failed ? retryButton(item) : "") + "</td></tr>";
       }).join("") + "</tbody></table>";
     }
@@ -2859,7 +2873,9 @@
       const subtitle = isImageScan(scan) ? "Image" : scan.repo;
       const failed = scanIsFailed(scan);
       const badge = failed ? "failed" : scan.status;
-      const label = failed ? "Failed" : (STATUS[scan.status] || scan.status);
+      const label = failed
+        ? "Failed"
+        : (scan.status === "queued" ? (queueLabel(scan) || "Queued") : (STATUS[scan.status] || scan.status));
       document.querySelector("#scan-head").innerHTML = '<div class="scan-head"><div><h1>' + esc(scanTitle(scan)) + '</h1><div class="repo">' + esc(subtitle) + '</div><div class="meta">' + esc(tools) + " · " + esc((scan.created_at || "").replace(" UTC", "")) + (scan.finished_at ? " to " + esc(scan.finished_at.replace(" UTC", "")) : "") + '</div></div><div class="scan-actions"><span class="badge ' + esc(badge) + '">' + esc(label) + "</span>" + retryButton(scan) + "</div></div>";
       const error = document.querySelector("#scan-error");
       const problem = failed ? String(scan.error || "").trim() : scanErrorText(scan);
@@ -2915,11 +2931,11 @@
         box.innerHTML = "";
         return;
       }
-      if (state.tool === "sonar" && !sonar && !(wants && scan.status === "running")) {
+      if (state.tool === "sonar" && !sonar && !(wants && scanIsActive(scan))) {
         box.innerHTML = '<div class="sonar-card"><div class="empty"><strong>This scan has no SonarQube result</strong>Check SonarQube above and run it again.</div></div>';
         return;
       }
-      if (!sonar && !(wants && scan.status === "running")) {
+      if (!sonar && !(wants && scanIsActive(scan))) {
         box.innerHTML = "";
         return;
       }
@@ -3014,9 +3030,11 @@
       });
       state.groups = [...groups.values()].sort(compareGroups);
       document.querySelector("#shown").textContent = rows.length + " findings in " + state.groups.length + " rules";
-      if (state.scan && state.scan.status === "running" && !rows.length) {
-        const phase = state.scan.phase || "scan";
-        document.querySelector("#findings").innerHTML = '<div class="empty"><strong>Running ' + esc(phase) + '</strong>The table fills when the result is ready.</div>';
+      if (state.scan && scanIsActive(state.scan) && !rows.length) {
+        const waiting = state.scan.status === "queued"
+          ? queueLabel(state.scan)
+          : ("Running " + (state.scan.phase || "scan"));
+        document.querySelector("#findings").innerHTML = '<div class="empty"><strong>' + esc(waiting) + '</strong>The table fills when the result is ready.</div>';
         return;
       }
       if (!state.groups.length) {
@@ -3074,10 +3092,10 @@
     function syncScan() {
       const scan = state.scan;
       const sonar = (scan && scan.sonar) || {};
-      const stamp = scan ? [scan.id, scan.status, (scan.findings || []).length, scan.finished_at, scan.error, scan.phase || "", sonar.quality_gate || "", sonar.error || "", (sonar.issues || []).length, (sonar.hotspot_list || []).length].join("|") : "";
-      const running = state.scans.some((item) => item.status === "running");
-      document.querySelector("#go").disabled = running;
-      document.querySelector("#progress").hidden = !running;
+      const stamp = scan ? [scan.id, scan.status, scan.queue_position || "", (scan.findings || []).length, scan.finished_at, scan.error, scan.phase || "", sonar.quality_gate || "", sonar.error || "", (sonar.issues || []).length, (sonar.hotspot_list || []).length].join("|") : "";
+      const active = state.scans.some((item) => scanIsActive(item));
+      document.querySelector("#go").disabled = false;
+      document.querySelector("#progress").hidden = !active;
       if (stamp === scanStamp) return;
       if (!scan || scan.id !== state.seenId) {
         state.seenId = scan && scan.id;
@@ -3095,13 +3113,15 @@
         renderSummary();
         paintFilters();
         renderFindings();
-        if (scan.status === "running") {
+        if (scanIsActive(scan)) {
           const msg = document.querySelector("#form-msg");
           msg.className = "";
-          msg.textContent = scan.phase ? "Running " + scan.phase + "..." : "Running...";
+          msg.textContent = scan.status === "queued"
+            ? (queueLabel(scan) || "Queued...")
+            : (scan.phase ? "Running " + scan.phase + "..." : "Running...");
         }
       }
-      if (state.pendingMsg && scan && scan.id === state.pendingMsg && scan.status !== "running") {
+      if (state.pendingMsg && scan && scan.id === state.pendingMsg && !scanIsActive(scan)) {
         const msg = document.querySelector("#form-msg");
         const failed = scanIsFailed(scan);
         msg.className = failed ? "bad" : "";
@@ -3558,8 +3578,12 @@
       msg.className = "";
       if (body.reused && body.reuse_reason === "recent") {
         msg.textContent = "A report from the last 24 hours already covers this. Opening it.";
+      } else if (body.reused && body.reuse_reason === "queued") {
+        msg.textContent = "That scan is already in the queue. Opening it.";
       } else if (body.reused && body.reuse_reason === "running") {
         msg.textContent = "That scan is already running. Opening it.";
+      } else if (body.status === "queued") {
+        msg.textContent = queueLabel(body) || "Scan queued.";
       } else {
         msg.textContent = imageMode ? "Scanning image..." : "Cloning and scanning...";
       }
@@ -3872,8 +3896,8 @@
       } catch (err) {
         if (currentUser) document.querySelector("#form-msg").textContent = "Lost contact with the console.";
       }
-      const running = state.scans.some((item) => item.status === "running");
-      setTimeout(tick, running ? 3000 : 5000);
+      const active = state.scans.some((item) => scanIsActive(item));
+      setTimeout(tick, active ? 3000 : 5000);
     }
 
     document.addEventListener("click", (event) => {
@@ -4445,6 +4469,7 @@
     }
 
     function guestStatus(scan) {
+      if (scan.status === "queued") return queueLabel(scan) || "Queued";
       return STATUS[scan.status] || scan.status || "";
     }
 
@@ -4458,7 +4483,11 @@
       document.querySelector("#guest-list").innerHTML = guest.scans.map((scan) => {
         const on = guest.scan && guest.scan.id === scan.id ? " on" : "";
         const total = scan.finding_count || 0;
-        const detail = scan.status === "done" ? total + " findings" : (scan.status === "running" ? "Running " + (scan.phase || "") : "Failed");
+        const detail = scan.status === "done"
+          ? total + " findings"
+          : (scan.status === "queued"
+            ? (queueLabel(scan) || "Queued")
+            : (scan.status === "running" ? "Running " + (scan.phase || "") : "Failed"));
         return '<button type="button" class="guest-item' + on + '" data-guest-open="' + esc(scan.id) + '"><span><span class="name">' + esc(scanTitle(scan)) + '</span><span class="sub">' + esc(guestWhen(scan)) + " · " + esc(detail) + (scan.private ? " · private" : "") + '</span></span><span class="badge ' + esc(scan.status) + '">' + esc(guestStatus(scan)) + "</span></button>";
       }).join("");
     }
@@ -4493,7 +4522,9 @@
       const tools = (scan.tools || []).map((tool) => TOOL_LABEL[tool] || tool).join(", ");
       const again = scan.status === "failed" ? '<button type="button" class="retry" data-guest-again="1">Scan again</button>' : "";
       let body = "";
-      if (scan.status === "running") {
+      if (scan.status === "queued") {
+        body = '<div class="empty"><strong>' + esc(queueLabel(scan) || "Queued") + "</strong>The report fills in when the scan is done.</div>";
+      } else if (scan.status === "running") {
         body = '<div class="empty"><strong>Running ' + esc(scan.phase || "scan") + "</strong>The report fills in when the scan is done.</div>";
       } else if (scan.status === "failed") {
         body = '<div class="login-error guest-error">' + esc(scan.error || "The scan failed.") + "</div>";
@@ -4531,8 +4562,8 @@
       } catch (err) {
         return;
       }
-      const running = guest.scans.some((item) => item.status === "running");
-      if (running) guest.timer = setTimeout(loadGuestScans, 3000);
+      const active = guest.scans.some((item) => scanIsActive(item));
+      if (active) guest.timer = setTimeout(loadGuestScans, 3000);
     }
 
     function guestBody(force) {
@@ -4576,7 +4607,15 @@
         document.querySelector("#guest-token").value = "";
         document.querySelector("#guest-reg-pass").value = "";
         if (body.reused) {
-          guestMessage(body.reuse_reason === "running" ? "That scan is already running. Opening it." : "You scanned this in the last 24 hours. Opening that report.");
+          guestMessage(
+            body.reuse_reason === "queued"
+              ? "That scan is already in the queue. Opening it."
+              : (body.reuse_reason === "running"
+                ? "That scan is already running. Opening it."
+                : "You scanned this in the last 24 hours. Opening that report.")
+          );
+        } else if (body.status === "queued") {
+          guestMessage(queueLabel(body) || "Scan queued.");
         } else {
           guestMessage("Scan started.");
         }

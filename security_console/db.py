@@ -1,7 +1,8 @@
-"""Postgres storage for console users, sessions, and login attempts."""
+"""Postgres storage for console users, sessions, scans, and login attempts."""
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -9,6 +10,7 @@ from typing import Any
 
 import psycopg
 from psycopg.rows import dict_row
+from psycopg.types.json import Jsonb
 
 from security_console.secrets import read_secret as _read_secret
 
@@ -136,6 +138,36 @@ SCHEMA = (
         created_at timestamptz NOT NULL DEFAULT now(),
         updated_at timestamptz NOT NULL DEFAULT now()
     )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS scans (
+        id text PRIMARY KEY,
+        target text NOT NULL CHECK (target IN ('repo', 'image')),
+        repo text NOT NULL DEFAULT '',
+        image text NOT NULL DEFAULT '',
+        tools jsonb NOT NULL DEFAULT '[]'::jsonb,
+        status text NOT NULL
+            CHECK (status IN ('queued', 'running', 'done', 'failed')),
+        phase text NOT NULL DEFAULT '',
+        error text NOT NULL DEFAULT '',
+        failure_reason text NOT NULL DEFAULT '',
+        owner text NOT NULL DEFAULT '',
+        guest text NOT NULL DEFAULT '',
+        guest_ip text NOT NULL DEFAULT '',
+        private boolean NOT NULL DEFAULT false,
+        requested_sha text NOT NULL DEFAULT '',
+        commit_sha text NOT NULL DEFAULT '',
+        findings jsonb NOT NULL DEFAULT '[]'::jsonb,
+        sonar jsonb,
+        priority integer NOT NULL DEFAULT 0,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        started_at timestamptz,
+        finished_at timestamptz
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS scans_status_created
+        ON scans (status, priority DESC, created_at)
     """,
 )
 
@@ -397,7 +429,7 @@ MIGRATIONS = (
 
 
 def prepare_database() -> None:
-    """Create tables. Existing scan history on disk is left untouched."""
+    """Create tables. Scan rows may also exist as JSON files until migrated."""
 
     ensure_database()
     with connect() as conn:
@@ -406,6 +438,272 @@ def prepare_database() -> None:
         for statement in MIGRATIONS:
             conn.execute(statement)
         conn.commit()
+
+
+def _stamp(value: Any) -> str:
+    """Format a timestamptz the way the scan API has always returned times."""
+
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        moment = value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+        return moment.astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
+    text = str(value).strip()
+    return text
+
+
+def _parse_stamp(value: Any) -> datetime | None:
+    """Parse the console's UTC stamp, or an ISO timestamptz string."""
+
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+    text = str(value).strip()
+    if not text:
+        return None
+    if text.endswith(" UTC"):
+        text = text[: -len(" UTC")]
+        try:
+            return datetime.strptime(text, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
+        except ValueError:
+            return None
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def scan_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    """Turn a scans table row into the in-memory scan dict the API uses."""
+
+    tools = row.get("tools") or []
+    if isinstance(tools, str):
+        tools = json.loads(tools)
+    findings = row.get("findings") or []
+    if isinstance(findings, str):
+        findings = json.loads(findings)
+    sonar = row.get("sonar")
+    if isinstance(sonar, str):
+        sonar = json.loads(sonar)
+    item: dict[str, Any] = {
+        "id": str(row["id"]),
+        "target": str(row.get("target") or "repo"),
+        "repo": str(row.get("repo") or ""),
+        "image": str(row.get("image") or ""),
+        "tools": list(tools),
+        "status": str(row.get("status") or ""),
+        "phase": str(row.get("phase") or ""),
+        "error": str(row.get("error") or ""),
+        "failure_reason": str(row.get("failure_reason") or ""),
+        "owner": str(row.get("owner") or ""),
+        "requested_sha": str(row.get("requested_sha") or ""),
+        "commit_sha": str(row.get("commit_sha") or ""),
+        "findings": list(findings),
+        "sonar": sonar,
+        "priority": int(row.get("priority") or 0),
+        "created_at": _stamp(row.get("created_at")),
+        "finished_at": _stamp(row.get("finished_at")),
+        "started_at": _stamp(row.get("started_at")),
+    }
+    guest = str(row.get("guest") or "")
+    if guest:
+        item["guest"] = guest
+        item["guest_ip"] = str(row.get("guest_ip") or "")
+        item["private"] = bool(row.get("private"))
+    return item
+
+
+def list_scan_rows() -> list[dict[str, Any]]:
+    """Return every stored scan as API dicts, newest first."""
+
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, target, repo, image, tools, status, phase, error,
+                   failure_reason, owner, guest, guest_ip, private,
+                   requested_sha, commit_sha, findings, sonar, priority,
+                   created_at, started_at, finished_at
+            FROM scans
+            ORDER BY created_at DESC
+            """
+        ).fetchall()
+        conn.commit()
+    return [scan_from_row(dict(row)) for row in rows]
+
+
+def get_scan_row(scan_id: str) -> dict[str, Any] | None:
+    """Return one scan, or None."""
+
+    with connect() as conn:
+        row = conn.execute(
+            """
+            SELECT id, target, repo, image, tools, status, phase, error,
+                   failure_reason, owner, guest, guest_ip, private,
+                   requested_sha, commit_sha, findings, sonar, priority,
+                   created_at, started_at, finished_at
+            FROM scans
+            WHERE id = %s
+            """,
+            (scan_id,),
+        ).fetchone()
+        conn.commit()
+    return scan_from_row(dict(row)) if row else None
+
+
+def count_queued_scans() -> int:
+    """Return how many scans are waiting to run."""
+
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT count(*) AS n FROM scans WHERE status = 'queued'"
+        ).fetchone()
+        conn.commit()
+    if row is None:
+        return 0
+    return int(row["n"])
+
+
+def upsert_scan(item: dict[str, Any]) -> None:
+    """Insert or replace one scan row from an API-shaped dict."""
+
+    created = _parse_stamp(item.get("created_at")) or datetime.now(UTC)
+    started = _parse_stamp(item.get("started_at"))
+    finished = _parse_stamp(item.get("finished_at"))
+    with connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO scans (
+                id, target, repo, image, tools, status, phase, error,
+                failure_reason, owner, guest, guest_ip, private,
+                requested_sha, commit_sha, findings, sonar, priority,
+                created_at, started_at, finished_at
+            )
+            VALUES (
+                %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s,
+                %s, %s, %s
+            )
+            ON CONFLICT (id) DO UPDATE SET
+                target = EXCLUDED.target,
+                repo = EXCLUDED.repo,
+                image = EXCLUDED.image,
+                tools = EXCLUDED.tools,
+                status = EXCLUDED.status,
+                phase = EXCLUDED.phase,
+                error = EXCLUDED.error,
+                failure_reason = EXCLUDED.failure_reason,
+                owner = EXCLUDED.owner,
+                guest = EXCLUDED.guest,
+                guest_ip = EXCLUDED.guest_ip,
+                private = EXCLUDED.private,
+                requested_sha = EXCLUDED.requested_sha,
+                commit_sha = EXCLUDED.commit_sha,
+                findings = EXCLUDED.findings,
+                sonar = EXCLUDED.sonar,
+                priority = EXCLUDED.priority,
+                created_at = EXCLUDED.created_at,
+                started_at = EXCLUDED.started_at,
+                finished_at = EXCLUDED.finished_at
+            """,
+            (
+                str(item["id"]),
+                str(item.get("target") or "repo"),
+                str(item.get("repo") or ""),
+                str(item.get("image") or ""),
+                Jsonb(list(item.get("tools") or [])),
+                str(item.get("status") or "queued"),
+                str(item.get("phase") or ""),
+                str(item.get("error") or ""),
+                str(item.get("failure_reason") or ""),
+                str(item.get("owner") or ""),
+                str(item.get("guest") or ""),
+                str(item.get("guest_ip") or ""),
+                bool(item.get("private")),
+                str(item.get("requested_sha") or ""),
+                str(item.get("commit_sha") or ""),
+                Jsonb(list(item.get("findings") or [])),
+                Jsonb(item["sonar"]) if item.get("sonar") is not None else None,
+                int(item.get("priority") or 0),
+                created,
+                started,
+                finished,
+            ),
+        )
+        conn.commit()
+
+
+def delete_scan_row(scan_id: str) -> None:
+    """Remove one scan row."""
+
+    with connect() as conn:
+        conn.execute("DELETE FROM scans WHERE id = %s", (scan_id,))
+        conn.commit()
+
+
+def claim_next_queued() -> dict[str, Any] | None:
+    """Mark the oldest queued scan as running when none is already running."""
+
+    with connect() as conn:
+        busy = conn.execute(
+            "SELECT 1 AS found FROM scans WHERE status = 'running' LIMIT 1"
+        ).fetchone()
+        if busy is not None:
+            conn.commit()
+            return None
+        row = conn.execute(
+            """
+            SELECT id FROM scans
+            WHERE status = 'queued'
+            ORDER BY priority DESC, created_at ASC
+            FOR UPDATE SKIP LOCKED
+            LIMIT 1
+            """
+        ).fetchone()
+        if row is None:
+            conn.commit()
+            return None
+        scan_id = str(row["id"])
+        updated = conn.execute(
+            """
+            UPDATE scans
+            SET status = 'running',
+                started_at = now(),
+                phase = CASE
+                    WHEN target = 'image' THEN 'Trivy'
+                    ELSE 'clone'
+                END
+            WHERE id = %s
+            RETURNING id, target, repo, image, tools, status, phase, error,
+                      failure_reason, owner, guest, guest_ip, private,
+                      requested_sha, commit_sha, findings, sonar, priority,
+                      created_at, started_at, finished_at
+            """,
+            (scan_id,),
+        ).fetchone()
+        conn.commit()
+    return scan_from_row(dict(updated)) if updated else None
+
+
+def fail_running_scans(message: str) -> list[str]:
+    """Mark every running scan failed. Used when the console restarts."""
+
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            UPDATE scans
+            SET status = 'failed',
+                phase = '',
+                error = %s,
+                finished_at = now()
+            WHERE status = 'running'
+            RETURNING id
+            """,
+            (message[:2000],),
+        ).fetchall()
+        conn.commit()
+    return [str(row["id"]) for row in rows]
 
 
 def count_users() -> int:
@@ -1363,4 +1661,12 @@ def reset_auth_tables() -> None:
             "TRUNCATE refresh_tokens, revoked_access, login_attempts, "
             "ingest_attempts, users, app_flags RESTART IDENTITY CASCADE"
         )
+        conn.commit()
+
+
+def reset_scan_table() -> None:
+    """Delete scan rows. Used by queue tests."""
+
+    with connect() as conn:
+        conn.execute("TRUNCATE scans")
         conn.commit()

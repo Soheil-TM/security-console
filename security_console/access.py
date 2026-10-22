@@ -193,6 +193,9 @@ def present_scan(
         "severity": severity_counts(findings),
         "sonar": scan.get("sonar") if allowed.get("sonar") else None,
     }
+    position = scan.get("queue_position")
+    if position is not None:
+        shown["queue_position"] = position
     if not summary:
         shown["findings"] = findings
     return shown
@@ -247,17 +250,17 @@ def find_reusable_scan(
 ) -> tuple[dict[str, Any], str] | None:
     """Return a running or recent scan that covers this request.
 
-    A running scan of the same project is shared. A finished successful scan
-    of the same project is reused when it is under ``REUSE_HOURS`` old and
-    already ran every requested tool. ``force`` skips finished reuse so Retry
-    can start a new scan. Signed-in scans and each guest session reuse only
-    their own scans, given by ``guest``.
+    A running or queued scan of the same project is shared. A finished
+    successful scan of the same project is reused when it is under
+    ``REUSE_HOURS`` old and already ran every requested tool. ``force`` skips
+    finished reuse so Retry can start a new scan. Signed-in scans and each
+    guest session reuse only their own scans, given by ``guest``.
     """
 
     request = {"target": target, "repo": repo, "image": image}
     key = project_key(request)
     clock = now or datetime.now(UTC)
-    newest_running: dict[str, Any] | None = None
+    newest_active: dict[str, Any] | None = None
     newest_done: dict[str, Any] | None = None
     for item in items:
         if (item.get("guest") or "") != guest:
@@ -271,11 +274,11 @@ def find_reusable_scan(
         if not _sha_matches(item, requested_sha):
             continue
         status = item.get("status") or ""
-        if status == "running":
-            if newest_running is None or str(item.get("created_at") or "") > str(
-                newest_running.get("created_at") or ""
+        if status in {"running", "queued"}:
+            if newest_active is None or str(item.get("created_at") or "") > str(
+                newest_active.get("created_at") or ""
             ):
-                newest_running = item
+                newest_active = item
             continue
         if force or status != "done":
             continue
@@ -288,8 +291,29 @@ def find_reusable_scan(
             newest_done.get("created_at") or ""
         ):
             newest_done = item
-    if newest_running is not None:
-        return newest_running, "running"
+    if newest_active is not None:
+        reason = "queued" if newest_active.get("status") == "queued" else "running"
+        return newest_active, reason
     if newest_done is not None:
         return newest_done, "recent"
+    return None
+
+
+def queue_position(item: dict[str, Any], items: list[dict[str, Any]]) -> int | None:
+    """Return 1-based place among queued scans, or None when not queued."""
+
+    if (item.get("status") or "") != "queued":
+        return None
+
+    def sort_key(scan: dict[str, Any]) -> tuple[int, str]:
+        return (-int(scan.get("priority") or 0), str(scan.get("created_at") or ""))
+
+    queued = sorted(
+        (scan for scan in items if (scan.get("status") or "") == "queued"),
+        key=sort_key,
+    )
+    scan_id = item.get("id")
+    for index, scan in enumerate(queued, start=1):
+        if scan.get("id") == scan_id:
+            return index
     return None

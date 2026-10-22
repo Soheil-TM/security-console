@@ -243,3 +243,47 @@ def test_sonar_token_file_is_private_and_removed(
     assert token_path.stat().st_mode & 0o777 == 0o444
     _remove_sonar_token("abc123def456")
     assert not directory.exists()
+
+
+def test_a_failed_pull_uses_the_local_image(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from security_console.runner import _ensure_image
+
+    class _Missing(Exception):
+        pass
+
+    monkeypatch.setattr("security_console.runner._image_not_found", lambda: _Missing)
+
+    class _Images:
+        def __init__(self, *, pull_fails: bool, local: bool) -> None:
+            self.pull_fails = pull_fails
+            self.local = local
+            self.calls: list[str] = []
+
+        def pull(self, ref: str) -> None:
+            self.calls.append("pull")
+            if self.pull_fails:
+                raise RuntimeError("lookup registry-1.docker.io: i/o timeout")
+
+        def get(self, ref: str) -> object:
+            self.calls.append("get")
+            if not self.local:
+                raise _Missing(ref)
+            return object()
+
+    class _Client:
+        def __init__(self, images: _Images) -> None:
+            self.images = images
+
+    online = _Images(pull_fails=False, local=False)
+    _ensure_image(_Client(online), TRIVY_IMAGE)
+    assert online.calls == ["pull"]
+
+    cached = _Images(pull_fails=True, local=True)
+    _ensure_image(_Client(cached), TRIVY_IMAGE)
+    assert cached.calls == ["pull", "get"]
+
+    missing = _Images(pull_fails=True, local=False)
+    with pytest.raises(RuntimeError, match="i/o timeout"):
+        _ensure_image(_Client(missing), TRIVY_IMAGE)

@@ -179,6 +179,49 @@ def test_a_running_scan_of_the_same_project_is_shared() -> None:
     assert found[1] == "running"
 
 
+def test_a_queued_scan_of_the_same_project_is_shared() -> None:
+    from security_console.access import queue_position
+
+    user = {
+        "username": "ada",
+        "role": "developer",
+        "allow_semgrep": True,
+        "allow_checkov": True,
+        "allow_sonar": False,
+        "allow_trivy": False,
+    }
+    queued = {
+        "id": "q00000000001",
+        "target": "repo",
+        "repo": "https://example.com/app.git",
+        "image": "",
+        "tools": ["semgrep", "checkov"],
+        "status": "queued",
+        "findings": [],
+        "created_at": "2026-10-15 10:00:00 UTC",
+        "owner": "other",
+        "priority": 0,
+    }
+    later = dict(queued, id="q00000000002", created_at="2026-10-15 10:01:00 UTC")
+    keys = {project_key(queued)}
+
+    found = find_reusable_scan(
+        user,
+        [queued],
+        target="repo",
+        repo="https://example.com/app.git",
+        image="",
+        tools=["semgrep"],
+        group_keys=keys,
+    )
+
+    assert found is not None
+    assert found[0]["id"] == "q00000000001"
+    assert found[1] == "queued"
+    assert queue_position(queued, [queued, later]) == 1
+    assert queue_position(later, [queued, later]) == 2
+
+
 def test_a_recent_successful_scan_is_reused_for_twenty_four_hours() -> None:
     user = {
         "username": "ada",

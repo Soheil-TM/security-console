@@ -165,6 +165,9 @@ def present_guest_scan(scan: dict[str, Any], *, summary: bool) -> dict[str, Any]
         "finding_count": len(findings),
         "severity": severity_counts(findings),
     }
+    position = scan.get("queue_position")
+    if position is not None:
+        shown["queue_position"] = position
     if not summary:
         shown["findings"] = findings
     return shown

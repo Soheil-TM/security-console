@@ -1,6 +1,6 @@
 # Security console
 
-A web page for running Semgrep, Checkov, and Trivy, and for reading a SonarQube summary and Falco alerts. Sign-in uses an HttpOnly cookie. Passwords are not stored in the source.
+A web page for running Semgrep, Checkov, and Trivy, and for reading a SonarQube summary. Sign-in uses an HttpOnly cookie. Passwords are not stored in the source.
 
 ## Start on any server
 
@@ -13,7 +13,7 @@ cd security-console
 docker compose up -d --build
 ```
 
-The page opens on port 8091. This Compose file is local development: `CONSOLE_ENV=development` and plain HTTP. The first account is `admin` with password `admin`. The server rejects every user API call except reading the session, refreshing it, logging out, and changing the password until that password is replaced. The Falco ingest webhook is separate and still uses its own token. The new password must be at least 12 characters, typed twice. Do not expose port 8091 to an untrusted network before that change. Restarting the process or signing in again does not clear the requirement, and an existing database is never reset to password `admin`.
+The page opens on port 8091. This Compose file is local development: `CONSOLE_ENV=development` and plain HTTP. The first account is `admin` with password `admin`. The server rejects every user API call except reading the session, refreshing it, logging out, and changing the password until that password is replaced. The new password must be at least 12 characters, typed twice. Do not expose port 8091 to an untrusted network before that change. Restarting the process or signing in again does not clear the requirement, and an existing database is never reset to password `admin`.
 
 The console container does not mount the Docker socket. A scanner service on the same machine does, and it only accepts approved scan jobs from the console. Semgrep, Checkov, Trivy, and the Sonar scanner each start a short-lived container from that service.
 
@@ -25,7 +25,6 @@ Create these files and keep them out of git, or run `./scripts/init-secrets.sh`:
 
 - `secrets/console_db_password.txt`
 - `secrets/console_jwt_key.txt` — at least 32 characters
-- `secrets/falco_ingest_token.txt`
 - `secrets/scanner_token.txt` — shared by the console and the scanner service
 - `secrets/sonar_db_password.txt` — SonarQube's Postgres password
 - `secrets/sonar-db.env` — the same password, for the SonarQube process
@@ -48,18 +47,8 @@ docker compose -f docker-compose.yml -f docker-compose.production.yml up -d --bu
 Do not add `docker-compose.override.yml` to that list. Compose appends port lists, so the development publish would sit beside the production one. The production command sets `CONSOLE_ENV=production` and `COOKIE_SECURE=1`, and the rendered console port is `127.0.0.1:8091:8080`. The process refuses to start in production when `COOKIE_SECURE` is not `1`. Put TLS on the proxy. Point `TRUSTED_PROXIES` at the proxy address the console sees, and configure the proxy to set `X-Forwarded-For` to the client address. The console ignores that header from every other address. It does not turn cookie security on or off from `X-Forwarded-Proto`.
 
 ```nginx
-log_format console_no_agent '$remote_addr - [$time_local] "$request" '
-    '$status $body_bytes_sent';
-
 server {
     listen 443 ssl;
-    location /api/falco {
-        access_log /var/log/nginx/access.log console_no_agent;
-        proxy_pass http://127.0.0.1:8091;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-For $remote_addr;
-        proxy_set_header X-Forwarded-Proto https;
-    }
     location / {
         proxy_pass http://127.0.0.1:8091;
         proxy_set_header Host $host;
@@ -68,8 +57,6 @@ server {
     }
 }
 ```
-
-The `/api/falco` log format omits `$http_user_agent`, `$http_authorization`, and `$http_x_falco_token`. Falco 0.45 can only send the ingest token as the User-Agent. A sensor that can set headers should send `X-Falco-Token` or `Authorization: Bearer` instead. When either of those headers is present, the User-Agent is not accepted as the token. Failed ingest calls are limited to 5 per minute per address, and all ingest calls are limited to 120 per minute.
 
 Keep port 8080 inside the container unpublished except through that proxy. Put TLS on that proxy as well. SonarQube is reached through the console at `/sonar/`, so the proxy does not need a separate port 9000.
 
@@ -85,15 +72,13 @@ The first password is `admin` only so a controlled first install can sign in. Ch
 
 ### Residual risks
 
-These three limits are still present after the application controls above. Passing the test suite does not remove them.
+These limits are still present after the application controls above. Passing the test suite does not remove them.
 
 **Scanner Docker socket.** The worker process mounts `/var/run/docker.sock`. A compromise of that process is a compromise of the Docker host, because the socket can create a privileged container. Do not publish port 8092, and do not treat the current split as a production sandbox. The current layout is acceptable only when the Docker host is dedicated to this console and is not shared with unrelated production containers.
 
 Operational mitigation: run the scanner daemon on its own virtual machine, with its own Docker daemon, and point `SCANNER_URL` at that machine over a management network that users cannot reach. Keep the socket on that virtual machine only. This repository does not create the virtual machine. Where a separate machine is not available yet, run the scanner under rootless Docker (`dockerd-rootless-setuptool.sh`, socket owned by an unprivileged user). A container started from that daemon does not receive host root. Rootless mode still exposes every container that daemon runs, so it is the weaker of the two options.
 
 **Git address pinning depends on libcurl.** Clone disables HTTP redirects and passes `http.curloptResolve` for each address that was accepted. That option is honored when Git is built with libcurl, which is the normal Debian and Ubuntu `git` package. A Git build that ignores it resolves the name again at connect time, so DNS rebinding is not fully closed. Confirm the worker image's Git with `git version --build-options` and look for `libcurl`. Do not describe the pin as a complete rebinding control.
-
-**Falco 0.45 sends the ingest token in the User-Agent.** The application prefers `X-Falco-Token` or `Authorization: Bearer` and uses the User-Agent only when both are absent. Falco 0.45 cannot set those headers, so any proxy, ingress, or load balancer that logs `$http_user_agent` stores the credential. The nginx example on this page uses `log_format console_no_agent` for `location /api/falco` and omits `$http_user_agent`, `$http_authorization`, and `$http_x_falco_token`. Apply the same omission on every other hop that logs that location. When the sensor can set a header, send `X-Falco-Token` and stop putting the token in the User-Agent.
 
 **Cloud metadata from a scanner container.** `extra_hosts` pins `metadata.google.internal` and `metadata.google` to loopback. It does not stop a raw connection to `169.254.169.254`. Block that address on the Docker host, in the `DOCKER-USER` chain, so forwarded container traffic is dropped before it leaves the bridge:
 
@@ -115,6 +100,5 @@ Command-line `-D` properties outrank `sonar-project.properties`. The scanner com
 ```bash
 DATABASE_URL=postgresql://console:console@127.0.0.1:5432/security_console_db \
 CONSOLE_JWT_KEY=test-jwt-key-must-be-32-characters \
-FALCO_INGEST_TOKEN=falco-test-token \
 pytest
 ```

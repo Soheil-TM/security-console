@@ -1271,37 +1271,6 @@
     }
     html.dark .empty strong { color: var(--ink); }
 
-    .alert {
-      background: white; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
-      margin-bottom: 8px; box-shadow: var(--shadow); border-inline-start: 4px solid var(--c, var(--info));
-    }
-    .alert.critical { --c: var(--critical); }
-    .alert.high { --c: var(--high); }
-    .alert.medium { --c: var(--medium); }
-    .alert.low { --c: var(--low); }
-    .alert.info { --c: var(--info); }
-    .alert-top { display: flex; gap: 8px; align-items: center; }
-    .alert-top strong { direction: ltr; unicode-bidi: isolate; }
-    .alert time, .host { margin-left: auto; color: var(--muted); font-size: 12px; direction: ltr; }
-    .alert p {
-      margin: 6px 0 0; direction: ltr; text-align: left; font-size: 12.5px; color: #243246;
-      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-    }
-    html.dark .alert {
-      background: var(--card);
-      color: var(--ink);
-      border-color: var(--line);
-    }
-    html.dark .alert:hover { background: #243648; }
-    html.dark .alert p,
-    html.dark .alert time,
-    html.dark .host { color: #c5d5e4; }
-    html.dark .alert-top strong { color: var(--ink); }
-    html.dark .falco-more li { border-top-color: var(--line); color: var(--ink); }
-    .alert.open p { display: block; -webkit-line-clamp: unset; }
-    .alert { cursor: pointer; }
-    .falco-more { margin: 8px 0 0; padding: 0; list-style: none; }
-    .falco-more li { padding: 6px 0; border-top: 1px solid #e6edf4; direction: ltr; text-align: left; font-size: 12px; }
     .filters { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
     .filters input { max-width: 320px; height: 36px; }
 

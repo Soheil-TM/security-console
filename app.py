@@ -23,7 +23,6 @@ from security_console.access import (
     project_key,
     recent_per_project,
 )
-from security_console.alerts import alert_from_payload
 from security_console.auth import (
     ConfigError,
     client_ip,
@@ -65,13 +64,11 @@ View = Response | tuple[Response, int]
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 256 * 1024
 DATA = Path(os.environ.get("DATA_DIR", "/data"))
-MAX_ALERTS = 300
 RESTART_ERROR = "The console restarted during the scan."
 
 lock = threading.Lock()
 scans: dict[str, dict[str, Any]] = {}
 guest_secrets: dict[str, dict[str, str]] = {}
-alerts: list[dict[str, Any]] = []
 
 
 def utcnow() -> str:
@@ -80,10 +77,6 @@ def utcnow() -> str:
 
 def load_state() -> None:
     DATA.mkdir(parents=True, exist_ok=True)
-    alert_file = DATA / "alerts.json"
-    if alert_file.exists():
-        with suppress(json.JSONDecodeError):
-            alerts.extend(json.loads(alert_file.read_text())[-MAX_ALERTS:])
     scan_dir = DATA / "scans"
     scan_dir.mkdir(parents=True, exist_ok=True)
     _migrate_scan_files(scan_dir)
@@ -158,11 +151,6 @@ def save_scan(item: dict[str, Any]) -> None:
     path.write_text(json.dumps(item, ensure_ascii=False))
     with suppress(psycopg.Error):
         db.upsert_scan(item)
-
-
-def save_alerts() -> None:
-    text = json.dumps(alerts[-MAX_ALERTS:], ensure_ascii=False)
-    (DATA / "alerts.json").write_text(text)
 
 
 def _with_queue_fields(item: dict[str, Any]) -> dict[str, Any]:
@@ -609,30 +597,6 @@ def get_guest_scan(scan_id: str) -> View:
             return jsonify({"error": "Not found"}), 404
         item = _with_queue_fields(item)
     return jsonify(present_guest_scan(item, summary=False))
-
-
-@app.post("/api/falco")
-def ingest_falco() -> Response:
-    payload = request.get_json(silent=True)
-    if payload is None:
-        raw = request.get_data(as_text=True).strip()
-        try:
-            payload = json.loads(raw) if raw else {}
-        except json.JSONDecodeError:
-            payload = {"output": raw[:2000]}
-    if not isinstance(payload, dict):
-        payload = {"output": ""}
-    alert = alert_from_payload(payload, utcnow())
-    with lock:
-        alerts.append(alert)
-        del alerts[:-MAX_ALERTS]
-        save_alerts()
-    return jsonify({"ok": True})
-
-
-@app.get("/api/falco")
-def list_falco() -> Response:
-    return jsonify(list(reversed(alerts[-100:])))
 
 
 @app.get("/api/sonar/setup")

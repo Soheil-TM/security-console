@@ -71,18 +71,6 @@ SCHEMA = (
         ON login_attempts (ip, attempted_at)
     """,
     """
-    CREATE TABLE IF NOT EXISTS ingest_attempts (
-        id bigserial PRIMARY KEY,
-        ip text NOT NULL,
-        succeeded boolean NOT NULL,
-        attempted_at timestamptz NOT NULL DEFAULT now()
-    )
-    """,
-    """
-    CREATE INDEX IF NOT EXISTS ingest_attempts_ip_time
-        ON ingest_attempts (ip, attempted_at)
-    """,
-    """
     CREATE TABLE IF NOT EXISTS project_groups (
         id bigserial PRIMARY KEY,
         name text NOT NULL UNIQUE,
@@ -1253,45 +1241,6 @@ def recent_failures(ip: str) -> int:
     if row is None:
         return 0
     return int(row["n"])
-
-
-def recent_ingest(ip: str, *, failures_only: bool) -> int:
-    """Count Falco ingest calls for this address during the last minute."""
-
-    cutoff = datetime.now(UTC) - timedelta(minutes=1)
-    query = """
-        SELECT count(*) AS n
-        FROM ingest_attempts
-        WHERE ip = %s AND attempted_at > %s
-    """
-    params: list[Any] = [ip, cutoff]
-    if failures_only:
-        query += " AND succeeded = false"
-    with connect() as conn:
-        row = conn.execute(query, params).fetchone()
-        conn.commit()
-    if row is None:
-        return 0
-    return int(row["n"])
-
-
-def record_ingest(ip: str, succeeded: bool) -> None:
-    """Store one Falco ingest call and drop rows older than a day."""
-
-    cutoff = datetime.now(UTC) - timedelta(days=1)
-    with connect() as conn:
-        conn.execute(
-            """
-            INSERT INTO ingest_attempts (ip, succeeded)
-            VALUES (%s, %s)
-            """,
-            (ip, succeeded),
-        )
-        conn.execute(
-            "DELETE FROM ingest_attempts WHERE attempted_at < %s",
-            (cutoff,),
-        )
-        conn.commit()
 
 
 def record_attempt(ip: str, succeeded: bool) -> None:
@@ -2605,7 +2554,7 @@ def reset_auth_tables() -> None:
     with connect() as conn:
         conn.execute(
             "TRUNCATE refresh_tokens, revoked_access, login_attempts, "
-            "ingest_attempts, users, app_flags RESTART IDENTITY CASCADE"
+            "users, app_flags RESTART IDENTITY CASCADE"
         )
         conn.commit()
 

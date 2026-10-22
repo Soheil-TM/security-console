@@ -1,10 +1,7 @@
 """Cookie sessions for the console API.
 
 Access tokens are short-lived JWTs. Refresh tokens are random values stored
-only as a hash. Both live in HttpOnly cookies. Falco may send its ingest
-token in ``X-Falco-Token`` or ``Authorization: Bearer``. Falco 0.45 cannot
-set those headers, so the User-Agent value is still accepted when neither
-header is present.
+only as a hash. Both live in HttpOnly cookies.
 """
 
 from __future__ import annotations
@@ -27,7 +24,6 @@ from jwt import InvalidTokenError
 
 from security_console import db
 from security_console.access import access_map, can_open_sonar_ui
-from security_console.secrets import same_secret
 
 Reply = Response | tuple[Response, int]
 
@@ -49,8 +45,6 @@ _EXPIRY_ERROR = {
         f"Your session reached the {_ABSOLUTE_HOURS} hour limit. Sign in again."
     ),
 }
-_FALCO_FAILURE_LIMIT = 5
-_FALCO_TOTAL_LIMIT = 120
 _BOOTSTRAP_PASSWORD = "admin"
 _BOOTSTRAP_FLAG = "bootstrap_admin_v1"
 # While the first password is still in place the session may only refresh,
@@ -126,12 +120,6 @@ def jwt_key() -> str:
     return db.read_secret("CONSOLE_JWT_KEY", "CONSOLE_JWT_KEY_FILE")
 
 
-def falco_token() -> str:
-    """Return the shared ingest token, or an empty string when unset."""
-
-    return db.read_secret("FALCO_INGEST_TOKEN", "FALCO_INGEST_TOKEN_FILE")
-
-
 def install_auth(app: Flask) -> None:
     """Attach login routes and deny API calls that have no valid session."""
 
@@ -194,8 +182,6 @@ def _guard() -> Reply | None:
 
 
 def _guard_request() -> Reply | None:
-    if request.path == "/api/falco" and request.method == "POST":
-        return _falco_post()
     if request.method == "GET" and request.path in {"/", "/login"}:
         return None
     if request.path.startswith("/api/guest/"):
@@ -804,50 +790,6 @@ def _decode(token: str) -> dict[str, Any] | None:
     if not isinstance(claims, dict):
         return None
     return claims
-
-
-def _falco_post() -> Response | None:
-    """Admit one Falco event. Failures and bursts share a per-address limit."""
-
-    ip = client_ip()
-    failures = db.recent_ingest(ip, failures_only=True)
-    total = db.recent_ingest(ip, failures_only=False)
-    if failures >= _FALCO_FAILURE_LIMIT or total >= _FALCO_TOTAL_LIMIT:
-        db.record_ingest(ip, False)
-        current_app.logger.info("falco rate limit ip=%s", ip)
-        response = jsonify({"error": "Too many requests. Wait one minute."})
-        response.status_code = 429
-        return response
-    if not _falco_authorized():
-        db.record_ingest(ip, False)
-        response = jsonify({"error": "Not authorized."})
-        response.status_code = 401
-        return response
-    db.record_ingest(ip, True)
-    return None
-
-
-def _presented_falco_token() -> str:
-    """Return the ingest token from a header, or from User-Agent as a fallback.
-
-    A dedicated header wins. The User-Agent is used only when that header is
-    absent, which is what Falco 0.45 can send.
-    """
-
-    header = request.headers.get("X-Falco-Token", "").strip()
-    if header:
-        return header
-    authorization = request.headers.get("Authorization", "")
-    if authorization.startswith("Bearer "):
-        bearer = authorization[7:].strip()
-        if bearer:
-            return bearer
-    return request.headers.get("User-Agent", "")
-
-
-def _falco_authorized() -> bool:
-    expected = falco_token()
-    return same_secret(_presented_falco_token(), expected)
 
 
 def _csrf_ok() -> bool:

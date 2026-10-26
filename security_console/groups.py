@@ -1,4 +1,4 @@
-"""Project groups. A lead shares one project's scans with the team."""
+"""Project groups. A lead shares projects with the team."""
 
 from __future__ import annotations
 
@@ -10,9 +10,6 @@ from flask import Flask, Response, g, jsonify, request
 from psycopg.errors import UniqueViolation
 
 from security_console import db
-from security_console.access import project_key
-from security_console.images import valid_image_ref
-from security_console.repos import valid_repo
 
 Reply = Response | tuple[Response, int]
 _MAX_NAME = 80
@@ -77,7 +74,7 @@ def parse_group(body: Any) -> tuple[dict[str, Any] | None, str]:
     return {
         "name": name,
         "description": description,
-        "projects": projects,
+        "project_ids": projects,
         "members": members,
     }, ""
 
@@ -97,9 +94,9 @@ def public_group(
         "can_edit": can_edit,
         "projects": [
             {
-                "kind": item["kind"],
-                "target": item["target"],
-                "key": item["project_key"],
+                "id": int(item["id"]),
+                "slug": item["slug"],
+                "name": item["name"],
             }
             for item in group.get("projects") or []
         ],
@@ -169,7 +166,7 @@ def _create_group(app: Flask) -> Reply:
             parsed["name"],
             parsed["description"],
             int(user["id"]),
-            parsed["projects"],
+            parsed["project_ids"],
             members,
             str(user.get("username") or ""),
             parsed["name"],
@@ -200,7 +197,7 @@ def _update_group(app: Flask, group_id: int) -> Reply:
             group_id,
             parsed["name"],
             parsed["description"],
-            parsed["projects"],
+            parsed["project_ids"],
             members,
             str(g.user.get("username") or ""),
             parsed["name"],
@@ -271,34 +268,46 @@ def _resolve_members(
 
 def _projects(
     body: dict[str, Any],
-) -> tuple[list[dict[str, str]], str]:
-    repos = _lines(body.get("repos"))
-    images = _lines(body.get("images"))
-    if isinstance(repos, str):
-        return [], repos
-    if isinstance(images, str):
-        return [], images
-    projects: list[dict[str, str]] = []
-    seen: set[str] = set()
-    for repo in repos:
-        if not valid_repo(repo):
-            return [], "Repository URL must start with http or https."
-        key = project_key({"repo": repo, "image": ""})
-        if key in seen:
-            return [], "That project is listed twice."
-        seen.add(key)
-        projects.append({"kind": "repo", "target": repo, "key": key})
-    for image in images:
-        if not valid_image_ref(image):
-            return [], "Image name is invalid. Use a name like nginx:1.27."
-        key = project_key({"target": "image", "image": image, "repo": ""})
-        if key in seen:
-            return [], "That project is listed twice."
-        seen.add(key)
-        projects.append({"kind": "image", "target": image, "key": key})
-    if len(projects) > _MAX_PROJECTS:
+) -> tuple[list[int], str]:
+    """Resolve attached first-class projects from slugs or ids."""
+
+    slugs = body.get("project_slugs")
+    ids = body.get("project_ids")
+    resolved: list[int] = []
+    seen: set[int] = set()
+    if slugs is not None:
+        if not isinstance(slugs, list) or not all(
+            isinstance(item, str) for item in slugs
+        ):
+            return [], "A project is invalid."
+        cleaned = [" ".join(item.split()).lower() for item in slugs if item.strip()]
+        found = {item["slug"]: item for item in db.projects_by_slugs(cleaned)}
+        for slug in cleaned:
+            project = found.get(slug)
+            if project is None:
+                return [], "Unknown project: " + slug
+            project_id = int(project["id"])
+            if project_id in seen:
+                return [], "That project is listed twice."
+            seen.add(project_id)
+            resolved.append(project_id)
+    if ids is not None:
+        if not isinstance(ids, list):
+            return [], "A project is invalid."
+        for item in ids:
+            try:
+                project_id = int(item)
+            except (TypeError, ValueError):
+                return [], "A project is invalid."
+            if project_id in seen:
+                continue
+            if db.get_project_by_id(project_id) is None:
+                return [], "Unknown project."
+            seen.add(project_id)
+            resolved.append(project_id)
+    if len(resolved) > _MAX_PROJECTS:
         return [], "A group can hold 30 projects."
-    return projects, ""
+    return resolved, ""
 
 
 def _member_names(
@@ -325,19 +334,6 @@ def _member_names(
     if len(members) > _MAX_MEMBERS:
         return [], "A group can hold 50 members."
     return members, ""
-
-
-def _lines(value: Any) -> list[str] | str:
-    if value is None:
-        return []
-    if isinstance(value, str):
-        rows = value.splitlines()
-    elif isinstance(value, list) and all(isinstance(item, str) for item in value):
-        rows = value
-    else:
-        return "A project is invalid."
-    cleaned = [" ".join(item.split()) for item in rows]
-    return [item for item in cleaned if item]
 
 
 def _has_control(value: str) -> bool:

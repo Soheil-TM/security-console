@@ -19,7 +19,6 @@ write_if_missing() {
 
 write_if_missing secrets/console_db_password.txt 18
 write_if_missing secrets/console_jwt_key.txt 32
-write_if_missing secrets/falco_ingest_token.txt 18
 write_if_missing secrets/scanner_token.txt 24
 write_if_missing secrets/sonar_db_password.txt 18
 

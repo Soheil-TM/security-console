@@ -34,7 +34,7 @@ export function LoginPage() {
         <div className="max-w-md">
           <p className="text-sm text-teal-200">پلتفرم بررسی امنیت</p>
           <h1 className="mt-3 text-4xl font-black leading-tight">
-            دید زنده روی اسکن‌ها، هشدارها و دسترسی تیم
+            دید زنده روی اسکن‌ها، یافته‌ها و دسترسی تیم
           </h1>
           <p className="mt-4 text-slate-300">
             Semgrep، Checkov و SonarQube از یک داشبورد. هر کاربر فقط گزارش ابزارهایی را می‌بیند که برایش باز شده است.

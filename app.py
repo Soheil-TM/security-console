@@ -12,7 +12,7 @@ from pathlib import Path
 from secrets import token_urlsafe
 from typing import Any
 
-from flask import Flask, Response, g, jsonify, render_template, request
+from flask import Flask, Response, g, jsonify, make_response, render_template, request
 
 from security_console import db
 from security_console.access import (
@@ -23,7 +23,6 @@ from security_console.access import (
     project_key,
     recent_per_project,
 )
-from security_console.alerts import alert_from_payload
 from security_console.auth import (
     ConfigError,
     client_ip,
@@ -50,6 +49,12 @@ from security_console.guest import (
 )
 from security_console.images import valid_image_ref
 from security_console.integrations import credentials_for
+from security_console.queue import (
+    QUEUE_CAP,
+    attach_queue_position,
+    bind_store,
+    start_dispatcher,
+)
 from security_console.repos import normalize_commit_sha, valid_repo
 from security_console.sonar_proxy import install_sonar_proxy
 from security_console.sonar_setup import read_public_status, run_setup
@@ -59,12 +64,11 @@ View = Response | tuple[Response, int]
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 256 * 1024
 DATA = Path(os.environ.get("DATA_DIR", "/data"))
-MAX_ALERTS = 300
+RESTART_ERROR = "The console restarted during the scan."
 
 lock = threading.Lock()
 scans: dict[str, dict[str, Any]] = {}
 guest_secrets: dict[str, dict[str, str]] = {}
-alerts: list[dict[str, Any]] = []
 
 
 def utcnow() -> str:
@@ -73,52 +77,99 @@ def utcnow() -> str:
 
 def load_state() -> None:
     DATA.mkdir(parents=True, exist_ok=True)
-    alert_file = DATA / "alerts.json"
-    if alert_file.exists():
-        with suppress(json.JSONDecodeError):
-            alerts.extend(json.loads(alert_file.read_text())[-MAX_ALERTS:])
     scan_dir = DATA / "scans"
     scan_dir.mkdir(parents=True, exist_ok=True)
+    _migrate_scan_files(scan_dir)
+    try:
+        db.fail_running_scans(RESTART_ERROR)
+        for item in db.list_scan_rows():
+            if guest_expired(item):
+                db.delete_scan_row(str(item["id"]))
+                (scan_dir / f"{item['id']}.json").unlink(missing_ok=True)
+                continue
+            scans[str(item["id"])] = item
+    except psycopg.Error:
+        app.logger.exception("scan table unavailable; falling back to files")
+        for path in scan_dir.glob("*.json"):
+            try:
+                item = json.loads(path.read_text())
+            except json.JSONDecodeError:
+                continue
+            if guest_expired(item):
+                path.unlink(missing_ok=True)
+                continue
+            if item.get("status") == "running":
+                item["status"] = "failed"
+                item["error"] = RESTART_ERROR
+                path.write_text(json.dumps(item, ensure_ascii=False))
+            scans[item["id"]] = item
+
+
+def _migrate_scan_files(scan_dir: Path) -> None:
+    """Copy JSON scan files into Postgres when the row is missing."""
+
     for path in scan_dir.glob("*.json"):
         try:
             item = json.loads(path.read_text())
         except json.JSONDecodeError:
+            continue
+        scan_id = str(item.get("id") or "")
+        if not scan_id:
             continue
         if guest_expired(item):
             path.unlink(missing_ok=True)
             continue
         if item.get("status") == "running":
             item["status"] = "failed"
-            item["error"] = "The console restarted during the scan."
+            item["error"] = RESTART_ERROR
+            item["phase"] = ""
+            item["finished_at"] = item.get("finished_at") or utcnow()
             path.write_text(json.dumps(item, ensure_ascii=False))
-        scans[item["id"]] = item
+        try:
+            if db.get_scan_row(scan_id) is None:
+                db.upsert_scan(item)
+        except psycopg.Error:
+            app.logger.exception("could not migrate scan %s", scan_id)
+            return
 
 
 def prune_guest_scans() -> None:
     """Drop guest scans past their keep time. Call with ``lock`` held."""
 
     for scan_id, item in list(scans.items()):
-        if item.get("status") != "running" and guest_expired(item):
+        if item.get("status") in {"running", "queued"}:
+            continue
+        if guest_expired(item):
             scans.pop(scan_id, None)
             (DATA / "scans" / f"{scan_id}.json").unlink(missing_ok=True)
+            with suppress(psycopg.Error):
+                db.delete_scan_row(scan_id)
 
 
 def save_scan(item: dict[str, Any]) -> None:
     path = DATA / "scans" / f"{item['id']}.json"
     path.write_text(json.dumps(item, ensure_ascii=False))
+    with suppress(psycopg.Error):
+        db.upsert_scan(item)
 
 
-def save_alerts() -> None:
-    text = json.dumps(alerts[-MAX_ALERTS:], ensure_ascii=False)
-    (DATA / "alerts.json").write_text(text)
+def _with_queue_fields(item: dict[str, Any]) -> dict[str, Any]:
+    return attach_queue_position(item, list(scans.values()))
 
 
 def execute_scan(scan_id: str) -> None:
-    item = scans[scan_id]
+    with lock:
+        item = scans.get(scan_id)
+        if item is None:
+            return
 
     def on_phase(phase: str) -> None:
-        item["phase"] = phase
-        save_scan(item)
+        with lock:
+            current = scans.get(scan_id)
+            if current is None:
+                return
+            current["phase"] = phase
+            save_scan(current)
 
     try:
         try:
@@ -128,10 +179,15 @@ def execute_scan(scan_id: str) -> None:
                 secrets = credentials_for(item)
         except psycopg.Error:
             app.logger.error("integration lookup failed")
-            item["status"] = "failed"
-            item["error"] = "Sign-in is unavailable."
-            item["phase"] = ""
-            item["finished_at"] = utcnow()
+            with lock:
+                current = scans.get(scan_id)
+                if current is None:
+                    return
+                current["status"] = "failed"
+                current["error"] = "Sign-in is unavailable."
+                current["phase"] = ""
+                current["finished_at"] = utcnow()
+                save_scan(current)
             return
         outcome = dispatch_scan(
             {
@@ -145,36 +201,47 @@ def execute_scan(scan_id: str) -> None:
             },
             on_phase,
         )
-        item["findings"] = outcome.get("findings") or []
-        item["sonar"] = outcome.get("sonar")
-        item["status"] = outcome.get("status") or "failed"
-        item["error"] = outcome.get("error") or ""
-        item["commit_sha"] = outcome.get("commit_sha") or ""
-        item["failure_reason"] = outcome.get("failure_reason") or ""
-        item["requested_sha"] = (
-            outcome.get("requested_sha") or item.get("requested_sha") or ""
-        )
-        item["phase"] = ""
-        item["finished_at"] = utcnow()
+        with lock:
+            current = scans.get(scan_id)
+            if current is None:
+                return
+            current["findings"] = outcome.get("findings") or []
+            current["sonar"] = outcome.get("sonar")
+            current["status"] = outcome.get("status") or "failed"
+            current["error"] = outcome.get("error") or ""
+            current["commit_sha"] = outcome.get("commit_sha") or ""
+            current["failure_reason"] = outcome.get("failure_reason") or ""
+            current["requested_sha"] = (
+                outcome.get("requested_sha") or current.get("requested_sha") or ""
+            )
+            current["phase"] = ""
+            current["finished_at"] = utcnow()
+            save_scan(current)
     except Exception as exc:
-        item["status"] = "failed"
-        item["phase"] = ""
         text = str(exc)
         for value in locals().get("secrets", {}).values():
             if value and value in text:
                 text = text.replace(value, "***")
-        item["error"] = text[-2000:]
-        item["commit_sha"] = item.get("commit_sha") or ""
-        item["failure_reason"] = item.get("failure_reason") or ""
-        item["finished_at"] = utcnow()
-    finally:
-        save_scan(item)
+        with lock:
+            current = scans.get(scan_id)
+            if current is None:
+                return
+            current["status"] = "failed"
+            current["phase"] = ""
+            current["error"] = text[-2000:]
+            current["commit_sha"] = current.get("commit_sha") or ""
+            current["failure_reason"] = current.get("failure_reason") or ""
+            current["finished_at"] = utcnow()
+            save_scan(current)
 
 
 @app.get("/")
 @app.get("/login")
-def index() -> str:
-    return render_template("index.html", sonar_url="/sonar/")
+def index() -> Response:
+    response = make_response(render_template("index.html", sonar_url="/sonar/"))
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    return response
 
 
 @app.post("/api/scans")
@@ -193,11 +260,54 @@ def create_scan() -> View:
     ]
     image = ""
     repo = ""
+    project_id = None
+    project_slug = ""
+    project_name = ""
+    project_ref = str(body.get("project") or "").strip().lower()
+    linked = None
+    if project_ref:
+        linked = db.get_project_by_slug(project_ref)
+        if linked is None:
+            return jsonify({"error": "Project not found."}), 404
+        kind_targets = [
+            item
+            for item in linked.get("targets") or []
+            if item.get("kind") == target
+        ]
+        if not kind_targets:
+            return jsonify(
+                {"error": "This project has no " + target + " target."}
+            ), 400
+        want = (
+            (body.get("image") or "").strip()
+            if target == "image"
+            else (body.get("repo") or "").strip()
+        )
+        chosen = None
+        if want:
+            for item in kind_targets:
+                if str(item.get("target") or "") == want:
+                    chosen = item
+                    break
+            if chosen is None:
+                return jsonify(
+                    {"error": "That target is not part of this project."}
+                ), 400
+        else:
+            chosen = kind_targets[0]
+        if target == "image":
+            image = str(chosen.get("target") or "")
+        else:
+            repo = str(chosen.get("target") or "")
+        project_id = int(linked["id"])
+        project_slug = str(linked["slug"])
+        project_name = str(linked.get("name") or project_slug)
     requested_sha = normalize_commit_sha(body.get("requested_sha"))
     if requested_sha is None:
         return jsonify({"error": "Commit SHA is invalid."}), 400
     if target == "image":
-        image = (body.get("image") or "").strip()
+        if not project_ref:
+            image = (body.get("image") or "").strip()
         if not valid_image_ref(image):
             return jsonify(
                 {"error": "Image name is invalid. Use a name like nginx:1.27."}
@@ -206,15 +316,28 @@ def create_scan() -> View:
             return jsonify({"error": "Image scans run with Trivy only."}), 400
         if requested_sha:
             return jsonify({"error": "Image scans do not take a commit."}), 400
+        if not project_ref and user.get("role") != "admin":
+            return jsonify(
+                {"error": "Select a project, or ask an admin to scan ad-hoc."}
+            ), 403
     else:
-        repo = (body.get("repo") or "").strip()
+        if not project_ref:
+            repo = (body.get("repo") or "").strip()
         if not valid_repo(repo):
             return jsonify(
                 {"error": "Repository URL must start with http or https."}
             ), 400
         if not tools:
             return jsonify({"error": "Select at least one tool."}), 400
-    scan_key = project_key({"target": target, "repo": repo, "image": image})
+        if not project_ref and user.get("role") != "admin":
+            return jsonify(
+                {"error": "Select a project, or ask an admin to scan ad-hoc."}
+            ), 403
+    scan_key = (
+        project_slug
+        if project_slug
+        else project_key({"target": target, "repo": repo, "image": image})
+    )
     try:
         group_keys = (
             set()
@@ -232,9 +355,10 @@ def create_scan() -> View:
         return jsonify({"error": "You do not have permission."}), 403
     force = bool(body.get("force"))
     with lock:
+        items = list(scans.values())
         reusable = find_reusable_scan(
             user,
-            list(scans.values()),
+            items,
             target=target,
             repo=repo,
             image=image,
@@ -246,15 +370,26 @@ def create_scan() -> View:
         if reusable is not None:
             item, reason = reusable
             shown = present_scan(
-                user, item, summary=False, group_keys=group_keys
+                user,
+                _with_queue_fields(item),
+                summary=False,
+                group_keys=group_keys,
             )
             if shown is None:
                 return jsonify({"error": "You do not have permission."}), 403
             shown["reused"] = True
             shown["reuse_reason"] = reason
             return jsonify(shown), 200
-        if any(item["status"] == "running" for item in scans.values()):
-            return jsonify({"error": "A scan is already running."}), 409
+        queued_count = sum(1 for row in items if row.get("status") == "queued")
+        if queued_count >= QUEUE_CAP:
+            return jsonify(
+                {
+                    "error": (
+                        "Too many scans are waiting. "
+                        "Try again when the queue is shorter."
+                    )
+                }
+            ), 429
         scan_id = uuid.uuid4().hex[:12]
         item = {
             "id": scan_id,
@@ -262,10 +397,10 @@ def create_scan() -> View:
             "repo": repo,
             "image": image,
             "tools": tools,
-            "status": "running",
+            "status": "queued",
             "findings": [],
             "sonar": None,
-            "phase": "Trivy" if target == "image" else "clone",
+            "phase": "",
             "error": "",
             "created_at": utcnow(),
             "finished_at": "",
@@ -273,11 +408,21 @@ def create_scan() -> View:
             "requested_sha": requested_sha,
             "commit_sha": "",
             "failure_reason": "",
+            "priority": 0,
         }
+        if project_id is not None:
+            item["project_id"] = project_id
+            item["project_slug"] = project_slug
+            item["project_name"] = project_name
         scans[scan_id] = item
         save_scan(item)
-    threading.Thread(target=execute_scan, args=(scan_id,), daemon=True).start()
-    return jsonify(item), 202
+        shown = present_scan(
+            user,
+            _with_queue_fields(item),
+            summary=False,
+            group_keys=group_keys,
+        )
+    return jsonify(shown or _with_queue_fields(item)), 202
 
 
 @app.get("/api/images")
@@ -301,9 +446,11 @@ def list_scans() -> Response:
     except psycopg.Error:
         app.logger.error("group lookup failed")
         return jsonify({"error": "Sign-in is unavailable."}), 503
+    with lock:
+        items = [_with_queue_fields(item) for item in scans.values()]
     visible = recent_per_project(
         user,
-        list(scans.values()),
+        items,
         summary=summary,
         group_keys=group_keys,
     )
@@ -313,9 +460,11 @@ def list_scans() -> Response:
 @app.get("/api/scans/<scan_id>")
 def get_scan(scan_id: str) -> View:
     user = getattr(g, "user", None) or {}
-    item = scans.get(scan_id)
-    if not item:
-        return jsonify({"error": "Not found"}), 404
+    with lock:
+        item = scans.get(scan_id)
+        if not item:
+            return jsonify({"error": "Not found"}), 404
+        item = _with_queue_fields(item)
     try:
         group_keys = _group_keys(user)
     except psycopg.Error:
@@ -363,9 +512,10 @@ def create_guest_scan() -> Response:
     ip = client_ip()
     with lock:
         prune_guest_scans()
+        items = list(scans.values())
         reusable = find_reusable_scan(
             {"role": "admin"},
-            list(scans.values()),
+            items,
             target=fields["target"],
             repo=fields["repo"],
             image=fields["image"],
@@ -375,31 +525,37 @@ def create_guest_scan() -> Response:
         )
         if reusable is not None:
             item, reason = reusable
-            shown = present_guest_scan(item, summary=False)
+            shown = present_guest_scan(_with_queue_fields(item), summary=False)
             shown["reused"] = True
             shown["reuse_reason"] = reason
             return _guest_reply(shown, 200, cookie)
-        recent = guest_recent_count(list(scans.values()), guest, ip)
+        recent = guest_recent_count(items, guest, ip)
         if recent >= GUEST_HOURLY_LIMIT:
             return _guest_reply(
                 {"error": "Too many scans this hour. Sign in or try again later."},
                 429,
                 cookie,
             )
-        if any(item["status"] == "running" for item in scans.values()):
+        queued_count = sum(1 for row in items if row.get("status") == "queued")
+        if queued_count >= QUEUE_CAP:
             return _guest_reply(
-                {"error": "The scanner is busy. Try again in a minute."},
-                409,
+                {
+                    "error": (
+                        "Too many scans are waiting. "
+                        "Try again when the queue is shorter."
+                    )
+                },
+                429,
                 cookie,
             )
         scan_id = uuid.uuid4().hex[:12]
         item = {
             "id": scan_id,
             **fields,
-            "status": "running",
+            "status": "queued",
             "findings": [],
             "sonar": None,
-            "phase": "Trivy" if fields["target"] == "image" else "clone",
+            "phase": "",
             "error": "",
             "created_at": utcnow(),
             "finished_at": "",
@@ -410,22 +566,24 @@ def create_guest_scan() -> Response:
             "requested_sha": "",
             "commit_sha": "",
             "failure_reason": "",
+            "priority": 0,
         }
         scans[scan_id] = item
         guest_secrets[scan_id] = one_time
         save_scan(item)
-    threading.Thread(target=execute_scan, args=(scan_id,), daemon=True).start()
-    return _guest_reply(present_guest_scan(item, summary=False), 202, cookie)
+        shown = present_guest_scan(_with_queue_fields(item), summary=False)
+    return _guest_reply(shown, 202, cookie)
 
 
 @app.get("/api/guest/scans")
 def list_guest_scans() -> Response:
     guest = _guest_key()
-    mine = [
-        item
-        for item in scans.values()
-        if guest and item.get("guest") == guest and not guest_expired(item)
-    ]
+    with lock:
+        mine = [
+            _with_queue_fields(item)
+            for item in scans.values()
+            if guest and item.get("guest") == guest and not guest_expired(item)
+        ]
     mine.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
     return jsonify([present_guest_scan(item, summary=True) for item in mine[:20]])
 
@@ -433,34 +591,12 @@ def list_guest_scans() -> Response:
 @app.get("/api/guest/scans/<scan_id>")
 def get_guest_scan(scan_id: str) -> View:
     guest = _guest_key()
-    item = scans.get(scan_id)
-    if not guest or not item or item.get("guest") != guest:
-        return jsonify({"error": "Not found"}), 404
-    return jsonify(present_guest_scan(item, summary=False))
-
-
-@app.post("/api/falco")
-def ingest_falco() -> Response:
-    payload = request.get_json(silent=True)
-    if payload is None:
-        raw = request.get_data(as_text=True).strip()
-        try:
-            payload = json.loads(raw) if raw else {}
-        except json.JSONDecodeError:
-            payload = {"output": raw[:2000]}
-    if not isinstance(payload, dict):
-        payload = {"output": ""}
-    alert = alert_from_payload(payload, utcnow())
     with lock:
-        alerts.append(alert)
-        del alerts[:-MAX_ALERTS]
-        save_alerts()
-    return jsonify({"ok": True})
-
-
-@app.get("/api/falco")
-def list_falco() -> Response:
-    return jsonify(list(reversed(alerts[-100:])))
+        item = scans.get(scan_id)
+        if not guest or not item or item.get("guest") != guest:
+            return jsonify({"error": "Not found"}), 404
+        item = _with_queue_fields(item)
+    return jsonify(present_guest_scan(item, summary=False))
 
 
 @app.get("/api/sonar/setup")
@@ -497,9 +633,8 @@ def _group_keys(user: dict[str, Any]) -> set[str] | None:
 
 
 def boot() -> None:
-    """Load saved scans, then refuse to serve until login storage is ready."""
+    """Prepare storage, load scans, then start the queue dispatcher."""
 
-    load_state()
     try:
         validate_runtime_config()
     except ConfigError as exc:
@@ -510,6 +645,7 @@ def boot() -> None:
     except Exception as exc:
         print(f"auth startup failed: {type(exc).__name__}", file=sys.stderr)
         raise SystemExit(1) from None
+    load_state()
     if scanner_url() and len(scanner_token()) < 16:
         print("scanner token is not configured", file=sys.stderr)
         raise SystemExit(1)
@@ -519,6 +655,8 @@ def boot() -> None:
             "do not expose this port on an untrusted network",
             file=sys.stderr,
         )
+    bind_store(lock, scans, save_scan)
+    start_dispatcher(execute_scan)
 
 
 if os.environ.get("CONSOLE_SKIP_BOOT") != "1":

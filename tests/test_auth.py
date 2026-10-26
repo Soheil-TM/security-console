@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -55,14 +54,6 @@ def client() -> FlaskClient:
     @app.get("/api/images")
     def list_images() -> Response:
         return jsonify([])
-
-    @app.get("/api/falco")
-    def list_falco() -> Response:
-        return jsonify([])
-
-    @app.post("/api/falco")
-    def ingest_falco() -> Response:
-        return jsonify({"ok": True})
 
     install_auth(app)
     return app.test_client()
@@ -205,19 +196,6 @@ def test_refresh_replaces_the_session(client: FlaskClient) -> None:
     assert me.status_code == 200
 
 
-def test_falco_ingest_is_rate_limited(client: FlaskClient) -> None:
-    codes = [
-        client.post(
-            "/api/falco",
-            json={"output": "x"},
-            headers={"User-Agent": "not-the-token"},
-        ).status_code
-        for _ in range(8)
-    ]
-
-    assert 429 in codes
-
-
 def test_password_gate_blocks_alternate_methods_and_paths(
     client: FlaskClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -233,7 +211,6 @@ def test_password_gate_blocks_alternate_methods_and_paths(
         "/api//scans",
         "/api/scans/abc123def456",
         "/api/images",
-        "/api/falco",
         "/api/users",
         "/api/users/1",
     )
@@ -247,39 +224,6 @@ def test_password_gate_blocks_alternate_methods_and_paths(
                 headers={"X-CSRF-Token": csrf},
             )
             assert response.status_code == 403, (method, path)
-
-
-def test_falco_ingest_requires_the_shared_token(client: FlaskClient) -> None:
-    rejected = client.post("/api/falco", json={"rule": "test"})
-    accepted = client.post(
-        "/api/falco",
-        json={"rule": "test"},
-        headers={"User-Agent": os.environ["FALCO_INGEST_TOKEN"]},
-    )
-    header = client.post(
-        "/api/falco",
-        json={"rule": "test"},
-        headers={"X-Falco-Token": os.environ["FALCO_INGEST_TOKEN"]},
-    )
-    bearer = client.post(
-        "/api/falco",
-        json={"rule": "test"},
-        headers={"Authorization": "Bearer " + os.environ["FALCO_INGEST_TOKEN"]},
-    )
-    ignored_agent = client.post(
-        "/api/falco",
-        json={"rule": "test"},
-        headers={
-            "X-Falco-Token": "wrong-token",
-            "User-Agent": os.environ["FALCO_INGEST_TOKEN"],
-        },
-    )
-
-    assert rejected.status_code == 401
-    assert accepted.status_code == 200
-    assert header.status_code == 200
-    assert bearer.status_code == 200
-    assert ignored_agent.status_code == 401
 
 
 def test_login_rate_limit(client: FlaskClient) -> None:
@@ -453,7 +397,6 @@ _SENSITIVE = (
     ("POST", "/api/scans"),
     ("GET", "/api/scans/abc123def456"),
     ("GET", "/api/images"),
-    ("GET", "/api/falco"),
     ("GET", "/api/users"),
     ("GET", "/api/sonar/setup"),
     ("POST", "/api/sonar/setup"),
@@ -512,7 +455,6 @@ def test_password_gate_blocks_sensitive_routes_until_the_change(
     assert client.get("/api/scans").status_code == 200
     assert client.get("/api/scans/abc123def456").status_code == 200
     assert client.get("/api/images").status_code == 200
-    assert client.get("/api/falco").status_code == 200
     started = client.post(
         "/api/scans",
         json={"repo": "https://example.com/app.git", "tools": ["semgrep"]},

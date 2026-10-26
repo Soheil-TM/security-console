@@ -559,7 +559,7 @@ def _run(
     )
     if unsafe:
         raise RuntimeError("scanner container was rejected")
-    client.images.pull(spec["image"])
+    _ensure_image(client, spec["image"])
     kwargs = dict(spec)
     image = kwargs.pop("image")
     container = client.containers.run(image, **kwargs)
@@ -727,6 +727,18 @@ def _client() -> Any:
     import docker
 
     return docker.from_env()
+
+
+def _ensure_image(client: Any, ref: str) -> None:
+    """Pull a pinned scanner image. A local copy is used when the registry fails."""
+
+    try:
+        client.images.pull(ref)
+    except Exception as pull_error:
+        try:
+            client.images.get(ref)
+        except _image_not_found():
+            raise pull_error from None
 
 
 def _image_not_found() -> type[BaseException]:

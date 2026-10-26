@@ -7,7 +7,6 @@ import { useAuth } from "../auth";
 export function PortalPage() {
   const { user } = useAuth();
   const [scans, setScans] = useState([]);
-  const [alerts, setAlerts] = useState([]);
   const [open, setOpen] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -18,12 +17,8 @@ export function PortalPage() {
   const allowed = TOOLS.filter((tool) => user?.access?.[tool.id]);
 
   async function load() {
-    const [scanResponse, alertResponse] = await Promise.all([
-      api("/api/scans?summary=1"),
-      api("/api/falco"),
-    ]);
+    const scanResponse = await api("/api/scans?summary=1");
     setScans(await readJson(scanResponse));
-    setAlerts(await readJson(alertResponse));
   }
 
   useEffect(() => {
@@ -90,11 +85,10 @@ export function PortalPage() {
             : "فقط بررسی‌هایی که خودت شروع کرده‌ای، برای ابزارهای مجاز، اینجاست."}
         </p>
       </div>
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <Stat label="بررسی‌ها" value={totals.count} />
         <Stat label="یافته‌ها" value={totals.findings} />
         <Stat label="بحرانی" value={totals.critical} />
-        <Stat label="هشدار Falco" value={alerts.length} />
       </section>
       {error && <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-700 dark:text-rose-200">{error}</div>}
       {canStart && (
@@ -165,19 +159,6 @@ export function PortalPage() {
             </div>
           );
         })}
-      </section>
-      <section className="panel p-4">
-        <h2 className="font-bold">آخرین هشدارهای میزبان</h2>
-        <ul className="mt-3 space-y-2">
-          {alerts.slice(0, 5).map((alert, index) => (
-            <li key={`${alert.time}-${index}`} className="rounded-xl bg-slate-50 px-3 py-2 text-sm dark:bg-white/5">
-              <span className="font-semibold">{alert.priority}</span>
-              <span className="mx-2 text-slate-400">·</span>
-              {alert.rule || alert.output}
-            </li>
-          ))}
-          {alerts.length === 0 && <li className="text-sm text-slate-500">هشداری نرسیده است.</li>}
-        </ul>
       </section>
     </div>
   );

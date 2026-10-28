@@ -372,6 +372,11 @@ def sonar_spec(
             "-Dsonar.qualitygate.wait=true",
             "-Dsonar.qualitygate.timeout=480",
             "-Dsonar.scm.disabled=true",
+            # Keep the Node analysis bridge lean on small hosts.
+            "-Dsonar.exclusions=**/node_modules/**,**/dist/**,**/.git/**,**/vendor/**,**/coverage/**",
+            "-Dsonar.javascript.node.maxspace=2048",
+            # SCA dependency gathering OOMs/hangs under the scanner cgroup.
+            "-Dsonar.sca.disabled=true",
             "-Dsonar.scanner.proxyHost=",
             "-Dsonar.scanner.proxyPort=",
             "-Dsonar.scanner.proxyUser=",
@@ -396,10 +401,13 @@ def sonar_spec(
             "TMPDIR": "/tmp",
         },
         working_dir="/usr/src",
-        mem_limit="896m",
+        # JS/CSS analysis starts a Node bridge beside the JVM; 896m starved it
+        # (bridge 300s timeout). Match Checkov's headroom; keep Java at 384m.
+        mem_limit="2048m",
         read_only=False,
         user=_user_for("sonar"),
     )
+    spec["nano_cpus"] = 2_000_000_000
     spec["labels"] = {
         "security-console.role": "scanner",
         "security-console.tool": "sonar",

@@ -179,10 +179,19 @@
     .rp-children .rp.overview .name { color: #1d4f9c; }
     .rp-children .rp.on { outline: 2px solid #0f766e; outline-offset: -2px; }
     html.dark .report-tree { background: var(--card); }
+    /* Base .rp is white in light mode — never leave that on dark text. */
+    html.dark .rp {
+      background: #1b2c3d;
+      color: #e8eef5;
+    }
     html.dark .rp-group:nth-child(odd) > .rp { background: #1b2c3d; }
     html.dark .rp-group:nth-child(even) > .rp { background: #243648; }
     html.dark .rp-group > .rp:hover { background: #2c4258; }
     html.dark .rp-children { background: #152232; }
+    html.dark .rp-children .rp {
+      background: #1b2c3d;
+      color: #e8eef5;
+    }
     html.dark .rp-children .rp.done { background: #143528; }
     html.dark .rp-children .rp.done .name { color: #6ee7b7; }
     html.dark .rp-children .rp.failed {
@@ -311,17 +320,22 @@
     }
     .inv-filters button.on { background: var(--teal); color: #042f2e; border-color: var(--teal); }
     .inv-sticky {
-      position: sticky;
-      bottom: 0;
       margin-top: 16px;
       padding: 14px 16px;
       border: 1px solid var(--line);
-      border-radius: 12px 12px 0 0;
+      border-radius: 12px;
       background: var(--card);
-      box-shadow: 0 -8px 24px rgba(0,0,0,.12);
       display: grid;
       gap: 10px;
-      z-index: 2;
+    }
+    html.dark .inv-sticky {
+      background: #1b2c3d;
+      color: #e8eef5;
+    }
+    html.dark .inv-sticky textarea {
+      background: #152232;
+      color: #e8eef5;
+      border-color: #334155;
     }
     .inv-sticky-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
     .inv-ack { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; }
@@ -848,7 +862,7 @@
     .scanner:has(input:focus-visible) { outline: 2px solid var(--teal); outline-offset: 2px; }
     .scanner b { display: block; font-size: 14px; }
     .scanner small { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; line-height: 1.45; }
-    #go, #user-new, #user-save, #connection-save, #group-save, #pw-save, #idle-stay, .ghost {
+    #go, #user-new, #user-save, #connection-save, #project-save, #group-save, #pw-save, #idle-stay, .ghost {
       height: 42px;
       border-radius: 8px;
       padding: 0 16px;
@@ -858,11 +872,43 @@
       justify-content: center;
       white-space: nowrap;
     }
-    #go, #user-new, #user-save, #connection-save, #group-save, #pw-save, #idle-stay { background: var(--teal); color: white; border: 0; }
-    #go:hover, #user-new:hover, #user-save:hover, #connection-save:hover, #group-save:hover, #pw-save:hover, #idle-stay:hover { background: var(--teal-2); }
-    #go:disabled, #user-save:disabled, #pw-save:disabled, #idle-stay:disabled { background: #94a3b8; }
+    #go, #user-new, #user-save, #connection-save, #project-save, #group-save, #pw-save, #idle-stay {
+      background: var(--teal);
+      color: #fff;
+      border: 0;
+    }
+    #go:hover, #user-new:hover, #user-save:hover, #connection-save:hover, #project-save:hover, #group-save:hover, #pw-save:hover, #idle-stay:hover {
+      background: var(--teal-2);
+      color: #fff;
+    }
+    #go:disabled, #user-save:disabled, #project-save:disabled, #pw-save:disabled, #idle-stay:disabled {
+      background: #94a3b8;
+      color: #fff;
+    }
     #go:disabled { cursor: progress; }
-    #user-save:disabled, #pw-save:disabled { cursor: not-allowed; }
+    #user-save:disabled, #project-save:disabled, #pw-save:disabled { cursor: not-allowed; }
+    html.dark #go,
+    html.dark #user-new,
+    html.dark #user-save,
+    html.dark #connection-save,
+    html.dark #project-save,
+    html.dark #group-save,
+    html.dark #pw-save,
+    html.dark #idle-stay {
+      background: #0f766e;
+      color: #fff;
+    }
+    html.dark #go:hover,
+    html.dark #user-new:hover,
+    html.dark #user-save:hover,
+    html.dark #connection-save:hover,
+    html.dark #project-save:hover,
+    html.dark #group-save:hover,
+    html.dark #pw-save:hover,
+    html.dark #idle-stay:hover {
+      background: #0d9488;
+      color: #fff;
+    }
     .ghost {
       border: 1px solid #c5d1de;
       background: white;
@@ -1967,11 +2013,24 @@
             </div>
             <label><span class="field-label">Description</span><input id="project-description" maxlength="500"></label>
             <label><span class="field-label">Repositories, one https URL per line</span><textarea id="project-repos" rows="3" dir="ltr"></textarea></label>
+            <div id="project-repo-pick-wrap" hidden style="margin-top:8px">
+              <label><span class="field-label">Or pick from GitLab connections</span>
+                <select id="project-repo-pick" class="field" multiple size="5" dir="ltr"></select>
+              </label>
+              <p class="hint">Hold Ctrl/Cmd to select several. Picked repos are saved together with any URLs you typed above.</p>
+            </div>
             <label><span class="field-label">Images, one name per line</span><textarea id="project-images" rows="2" dir="ltr"></textarea></label>
+            <div id="project-image-pick-wrap" hidden style="margin-top:8px">
+              <label><span class="field-label">Or pick from registry connections</span>
+                <select id="project-image-pick" class="field" multiple size="5" dir="ltr"></select>
+              </label>
+              <p class="hint">Hold Ctrl/Cmd to select several. Picked images are saved together with any names you typed above.</p>
+            </div>
             <label><span class="field-label">Groups that own this project</span>
               <select id="project-groups" class="field" multiple size="4"></select>
             </label>
-            <p class="hint">Leads of the selected groups can edit this project. Members can scan it.</p>
+            <p class="hint">Leads of the selected groups can edit this project. Members can scan it. With no group selected, only admins see the project's scans.</p>
+            <p class="note" id="project-groups-warn" hidden>No groups selected. Only admins will see scans for this project.</p>
             <div style="display:flex;gap:8px;margin-top:12px">
               <button type="submit" id="project-save">Save</button>
               <button type="button" class="ghost" id="project-cancel">Cancel</button>
@@ -2451,7 +2510,10 @@
       if (view === "users" || view === "access") loadAccounts();
       if (view === "sonar-setup") loadSonarSetup();
       if (view === "connections") loadConnections();
-      if (view === "projects") loadProjects();
+      if (view === "projects") {
+        loadProjects();
+        if (!connections.length) loadConnections();
+      }
       if (view === "groups") loadGroups();
       if (view === "triage") {
         loadTriageInbox();
@@ -2799,7 +2861,7 @@
     }
 
     function historyTone(item) {
-      if (scanIsFailed(item)) return " failed";
+      if (scanIsFailed(item) || item.status === "failed") return " failed";
       if (item.status === "done") return " done";
       if (item.status === "running" || item.status === "queued") return " running";
       return "";
@@ -2821,11 +2883,23 @@
       return '<button type="button" class="hist' + on + '" data-action="open" data-id="' + esc(item.id) + '"><span class="hist-top"><i class="dot ' + esc(dot) + '"></i><span class="name">' + esc(historyName(item, total)) + "</span></span>" + (total ? '<span class="mini">' + bar + "</span>" : "") + '<span class="sub">' + esc(scanWhen(item)) + "</span></button>";
     }
 
+    function scanFindingCount(item) {
+      if (!item) return 0;
+      return (item.findings || []).length || item.finding_count || 0;
+    }
+
+    function canOpenInvestigate(item) {
+      if (!currentUser || !item) return false;
+      if (!(item.project_slug || item.project_id)) return false;
+      if (scanIsActive(item)) return false;
+      if (item.status === "done" && !scanIsFailed(item)) return true;
+      return scanIsFailed(item) && scanFindingCount(item) > 0;
+    }
+
     function reportScanRow(item) {
-      const total = (item.findings || []).length || item.finding_count || 0;
+      const total = scanFindingCount(item);
       const on = (state.pane === "report" || state.pane === "investigate") && state.scan && state.scan.id === item.id ? " on" : "";
-      const canInv = item.status === "done" && (item.project_slug || item.project_id) && !scanIsFailed(item);
-      const inv = canInv
+      const inv = canOpenInvestigate(item)
         ? ' <button type="button" class="ghost" data-action="triage-open" data-scan="' + esc(item.id) + '">Investigate</button>'
         : "";
       return '<div class="rp-row" style="display:flex;align-items:center;gap:6px">'
@@ -3734,7 +3808,7 @@
         ? "Failed"
         : (scan.status === "queued" ? (queueLabel(scan) || "Queued") : (STATUS[scan.status] || scan.status));
       const projectScan = Boolean(scan.project_slug || scan.project_id);
-      const canInvestigate = projectScan && scan.status === "done" && !failed && currentUser;
+      const canInvestigate = canOpenInvestigate(scan);
       const invBtn = canInvestigate
         ? (state.pane === "investigate"
           ? '<button type="button" class="ghost" data-action="report-back">Back to report</button>'
@@ -3839,12 +3913,14 @@
       const tally = counts(rows, (row) => row.severity);
       const scan = state.scan;
       const projectScan = Boolean(scan && (scan.project_slug || scan.project_id));
-      const failed = scan ? scanIsFailed(scan) : true;
-      const showProjectHint = !!(scan && !projectScan && scan.status === "done" && !failed && currentUser);
+      const showProjectHint = !!(scan && !projectScan && !scanIsActive(scan) && currentUser);
       const projectHint = showProjectHint
         ? '<p class="note" id="inv-project-hint"><b>Triage needs a Project scan.</b> This report is ad-hoc (no project), so Investigate is hidden. Open <button type="button" class="ghost" data-action="view" data-view="projects">Settings → Projects</button>, add this image/repo, then Start scan from that project.</p>'
         : "";
-      document.querySelector("#summary").innerHTML = projectHint + '<div class="summary">' + donut(tally) + stats(tally, "sev") + "</div>";
+      const triageHint = (projectScan && canOpenInvestigate(scan) && state.pane !== "investigate")
+        ? '<p class="hint" id="inv-fp-hint">To mark a finding as False Positive or Accepted Risk, open <button type="button" class="ghost" data-action="investigate">Investigate</button>. Members fix from Scans → Reports; leads also use Triage and Groups → Report.</p>'
+        : "";
+      document.querySelector("#summary").innerHTML = projectHint + triageHint + '<div class="summary">' + donut(tally) + stats(tally, "sev") + "</div>";
     }
 
     function paintFilters() {
@@ -4660,6 +4736,50 @@
       return String(value || "").split(/\n+/).map((item) => item.trim()).filter(Boolean);
     }
 
+    function uniqueLines(values) {
+      const seen = new Set();
+      const rows = [];
+      values.forEach((item) => {
+        const text = String(item || "").trim();
+        if (!text || seen.has(text)) return;
+        seen.add(text);
+        rows.push(text);
+      });
+      return rows;
+    }
+
+    function selectedOptionValues(select) {
+      if (!select) return [];
+      return [...select.selectedOptions].map((option) => option.value).filter(Boolean);
+    }
+
+    async function fillProjectPickers(project) {
+      if (!connections.length) await loadConnections();
+      const repoPick = document.querySelector("#project-repo-pick");
+      const imagePick = document.querySelector("#project-image-pick");
+      const repoWrap = document.querySelector("#project-repo-pick-wrap");
+      const imageWrap = document.querySelector("#project-image-pick-wrap");
+      if (!repoPick || !imagePick || !repoWrap || !imageWrap) return;
+      await fillPicker("gitlab", repoPick, repoWrap);
+      await fillPicker("registry", imagePick, imageWrap);
+      const repos = new Set(
+        (project && project.targets || [])
+          .filter((item) => item.kind === "repo")
+          .map((item) => item.target)
+      );
+      const images = new Set(
+        (project && project.targets || [])
+          .filter((item) => item.kind === "image")
+          .map((item) => item.target)
+      );
+      [...repoPick.options].forEach((option) => {
+        option.selected = repos.has(option.value);
+      });
+      [...imagePick.options].forEach((option) => {
+        option.selected = images.has(option.value);
+      });
+    }
+
     function selectedGroup() {
       return state.groups.find((group) => group.id === state.groupId) || null;
     }
@@ -4691,12 +4811,23 @@
       }
       const body = state.projects.map((project) => {
         const targets = (project.targets || []).map((item) => item.kind + ": " + item.target).join(" · ");
+        const groupCount = (project.group_ids || []).length;
+        const groupsCell = groupCount
+          ? String(groupCount)
+          : '<span class="meta" title="Only admins see scans until a group is linked">0 — admin only</span>';
         const actions = project.can_edit
           ? ' <button type="button" class="ghost" data-action="project-edit" data-slug="' + esc(project.slug) + '">Edit</button> <button type="button" class="ghost" data-action="project-delete" data-slug="' + esc(project.slug) + '">Delete</button>'
           : "";
-        return "<tr><td><b>" + esc(project.name) + '</b><div class="meta">' + esc(project.slug) + "</div></td><td>" + esc(targets || "—") + "</td><td>" + (project.group_ids || []).length + "</td><td>" + actions + "</td></tr>";
+        return "<tr><td><b>" + esc(project.name) + '</b><div class="meta">' + esc(project.slug) + "</div></td><td>" + esc(targets || "—") + "</td><td>" + groupsCell + "</td><td>" + actions + "</td></tr>";
       }).join("");
       list.innerHTML = '<div class="dash-panel"><table class="dash-table"><thead><tr><th>Project</th><th>Targets</th><th>Groups</th><th></th></tr></thead><tbody>' + body + "</tbody></table></div>";
+    }
+
+    function syncProjectGroupsWarn() {
+      const warn = document.querySelector("#project-groups-warn");
+      const select = document.querySelector("#project-groups");
+      if (!warn || !select) return;
+      warn.hidden = select.selectedOptions.length > 0;
     }
 
     function fillProjectGroupOptions(selectedIds) {
@@ -4718,13 +4849,27 @@
       document.querySelector("#project-name").value = project ? project.name : "";
       document.querySelector("#project-slug").value = project ? project.slug : "";
       document.querySelector("#project-description").value = project ? (project.description || "") : "";
+      fillProjectGroupOptions(project ? (project.group_ids || []) : []);
+      syncProjectGroupsWarn();
+      await fillProjectPickers(project);
+      const pickRepos = new Set(
+        [...document.querySelector("#project-repo-pick").options].map((option) => option.value)
+      );
+      const pickImages = new Set(
+        [...document.querySelector("#project-image-pick").options].map((option) => option.value)
+      );
       document.querySelector("#project-repos").value = project
-        ? (project.targets || []).filter((item) => item.kind === "repo").map((item) => item.target).join("\n")
+        ? (project.targets || [])
+            .filter((item) => item.kind === "repo" && !pickRepos.has(item.target))
+            .map((item) => item.target)
+            .join("\n")
         : "";
       document.querySelector("#project-images").value = project
-        ? (project.targets || []).filter((item) => item.kind === "image").map((item) => item.target).join("\n")
+        ? (project.targets || [])
+            .filter((item) => item.kind === "image" && !pickImages.has(item.target))
+            .map((item) => item.target)
+            .join("\n")
         : "";
-      fillProjectGroupOptions(project ? (project.group_ids || []) : []);
       if (box) box.hidden = true;
     }
 
@@ -4732,17 +4877,31 @@
     document.querySelector("#project-cancel").addEventListener("click", () => {
       document.querySelector("#project-form").hidden = true;
     });
+    document.querySelector("#project-groups").addEventListener("change", syncProjectGroupsWarn);
     document.querySelector("#project-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       const box = document.querySelector("#project-error");
       const slug = document.querySelector("#project-form").dataset.slug;
+      const groupIds = [...document.querySelector("#project-groups").selectedOptions].map((option) => Number(option.value));
+      if (!groupIds.length) {
+        const ok = window.confirm(
+          "No groups selected. Only admins will see scans for this project. Save anyway?"
+        );
+        if (!ok) return;
+      }
       const payload = {
         name: document.querySelector("#project-name").value,
         slug: document.querySelector("#project-slug").value,
         description: document.querySelector("#project-description").value,
-        repos: groupLines(document.querySelector("#project-repos").value),
-        images: groupLines(document.querySelector("#project-images").value),
-        group_ids: [...document.querySelector("#project-groups").selectedOptions].map((option) => Number(option.value))
+        repos: uniqueLines(
+          groupLines(document.querySelector("#project-repos").value)
+            .concat(selectedOptionValues(document.querySelector("#project-repo-pick")))
+        ),
+        images: uniqueLines(
+          groupLines(document.querySelector("#project-images").value)
+            .concat(selectedOptionValues(document.querySelector("#project-image-pick")))
+        ),
+        group_ids: groupIds
       };
       const response = await api(slug ? "/api/projects/" + encodeURIComponent(slug) : "/api/projects", {
         method: slug ? "PUT" : "POST",

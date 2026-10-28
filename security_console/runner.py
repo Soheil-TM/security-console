@@ -346,10 +346,16 @@ def _run_sonar(client: Any, host_path: str, scan_id: str) -> dict[str, Any]:
         except Exception as exc:
             return _empty_sonar(key, _redact(str(exc), token))
         logs = _redact(stdout + "\n" + stderr, token)
-        uploaded = "ANALYSIS SUCCESSFUL" in logs or "QUALITY GATE STATUS" in logs
+        uploaded = any(
+            marker in logs
+            for marker in (
+                "ANALYSIS SUCCESSFUL",
+                "QUALITY GATE STATUS",
+                "EXECUTION SUCCESS",
+            )
+        )
         if not uploaded:
-            tail = "\n".join(logs.splitlines()[-25:])[-1500:]
-            return _empty_sonar(key, tail or f"SonarQube finished with code {code}.")
+            return _empty_sonar(key, _sonar_failure_detail(logs, code))
         try:
             return _fetch_sonar_summary(key, token)
         except Exception as exc:
@@ -362,6 +368,30 @@ _SONAR_LIST_TEXT = 200
 _SONAR_FILE_TEXT = 500
 _SONAR_ISSUE_CAP = 500
 _SONAR_HOTSPOT_CAP = 200
+
+
+def _sonar_failure_detail(logs: str, code: int) -> str:
+    """Prefer the bridge/OOM root line over a truncated stack tail."""
+
+    lines = [line for line in logs.splitlines() if line.strip()]
+    markers = (
+        "NodeCommandException",
+        "Failed to start the bridge server",
+        "OutOfMemoryError",
+        "Java heap space",
+        "ERROR: Error during SonarScanner",
+        "EXECUTION FAILURE",
+        "Error during SonarScanner Engine",
+    )
+    for index, line in enumerate(lines):
+        if any(marker in line for marker in markers):
+            chunk = "\n".join(lines[index : index + 12])
+            return chunk[-1500:]
+    error_lines = [line for line in lines if " ERROR " in line or line.startswith("ERROR")]
+    if error_lines:
+        return "\n".join(error_lines[-20:])[-1500:]
+    tail = "\n".join(lines[-25:])[-1500:]
+    return tail or f"SonarQube finished with code {code}."
 
 
 def _sonar_text(value: Any) -> str:

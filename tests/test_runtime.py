@@ -144,6 +144,9 @@ def test_sonar_receives_only_its_own_token(monkeypatch: pytest.MonkeyPatch) -> N
         "-Dsonar.scanner.proxyUser=",
         "-Dsonar.scanner.proxyPassword=",
         "-Dsonar.scanner.javaOpts=-Xmx384m",
+        "-Dsonar.exclusions=**/node_modules/**,**/dist/**,**/.git/**,**/vendor/**,**/coverage/**",
+        "-Dsonar.javascript.node.maxspace=2048",
+        "-Dsonar.sca.disabled=true",
         "-Dsonar.scanner.truststorePath=/tmp/sonar-truststore",
         "-Dsonar.scanner.truststorePassword=changeit",
         "-Dsonar.scanner.keystorePath=/tmp/sonar-client.p12",
@@ -158,6 +161,9 @@ def test_sonar_receives_only_its_own_token(monkeypatch: pytest.MonkeyPatch) -> N
     assert "sonar.token" not in " ".join(spec["command"])
     assert spec["cap_drop"] == ["ALL"]
     assert uses_docker_socket(spec) is False
+    assert spec["mem_limit"] == "2048m"
+    assert spec["nano_cpus"] == 2_000_000_000
+    assert spec["environment"]["SONAR_SCANNER_JAVA_OPTS"] == "-Xmx384m"
 
 
 def test_host_network_is_rewritten_to_bridge(

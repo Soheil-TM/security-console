@@ -14,7 +14,8 @@ import urllib.error
 import urllib.request
 from collections.abc import Callable
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+import re
 
 import psycopg
 from flask import Flask, Response, g, jsonify, request
@@ -356,14 +357,80 @@ def _probe(current: dict[str, Any]) -> str:
         if status != 200:
             raise RuntimeError("GitLab rejected the token.")
         return "GitLab accepted the token."
-    status, _body = _http(
-        _registry_url(current["base_url"]),
-        headers=_basic(str(current.get("username") or ""), str(current["secret"])),
-        ca_pem=str(current.get("ca_cert") or ""),
+    return _probe_registry(current)
+
+
+def _probe_registry(current: dict[str, Any]) -> str:
+    """Accept Basic /v2/ or GitLab-style Bearer challenge."""
+
+    ca_pem = str(current.get("ca_cert") or "")
+    username = str(current.get("username") or "")
+    secret = str(current.get("secret") or "")
+    url = _registry_url(str(current.get("base_url") or ""))
+    status, _body, challenge = _http_detail(
+        url,
+        headers=_basic(username, secret),
+        ca_pem=ca_pem,
     )
-    if status != 200:
-        raise RuntimeError("The registry rejected the account.")
-    return "Registry accepted the account."
+    if status == 200:
+        return "Registry accepted the account."
+    if status == 401 and challenge:
+        token = _registry_bearer_token(challenge, username, secret, ca_pem)
+        if token:
+            status, _body, _chal = _http_detail(
+                url,
+                headers={"Authorization": "Bearer " + token},
+                ca_pem=ca_pem,
+            )
+            if status == 200:
+                return "Registry accepted the account."
+    raise RuntimeError("The registry rejected the account.")
+
+
+def _registry_bearer_token(
+    challenge: str,
+    username: str,
+    password: str,
+    ca_pem: str,
+) -> str:
+    params = {
+        key: value
+        for key, value in re.findall(r'(\w+)="([^"]*)"', challenge)
+    }
+    realm = params.get("realm") or ""
+    if not realm.startswith("https://") and not realm.startswith("http://"):
+        return ""
+    if clone_pins(_origin(realm)) is None:
+        return ""
+    query = dict(parse_qsl(urlparse(realm).query, keep_blank_values=True))
+    if params.get("service"):
+        query["service"] = params["service"]
+    if params.get("scope"):
+        query["scope"] = params["scope"]
+    elif "scope" not in query:
+        query["scope"] = "registry:catalog:*"
+    if username:
+        query["account"] = username
+    parsed = urlparse(realm)
+    token_url = urlunparse(
+        (
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path,
+            "",
+            urlencode(query),
+            "",
+        )
+    )
+    status, body = _http(
+        token_url,
+        headers=_basic(username, password),
+        ca_pem=ca_pem,
+    )
+    if status != 200 or not isinstance(body, dict):
+        return ""
+    token = str(body.get("token") or body.get("access_token") or "")
+    return token.strip()
 
 
 def _gitlab_projects(current: dict[str, Any]) -> list[dict[str, str]]:
@@ -425,6 +492,16 @@ def _http(
     headers: dict[str, str],
     ca_pem: str,
 ) -> tuple[int, Any]:
+    status, body, _challenge = _http_detail(url, headers=headers, ca_pem=ca_pem)
+    return status, body
+
+
+def _http_detail(
+    url: str,
+    *,
+    headers: dict[str, str],
+    ca_pem: str,
+) -> tuple[int, Any, str]:
     if clone_pins(_origin(url)) is None:
         raise RuntimeError("That address cannot be used.")
     context = _ssl_context(ca_pem)
@@ -440,17 +517,26 @@ def _http(
             raw = response.read(500_000)
             status = int(response.status)
     except urllib.error.HTTPError as exc:
+        challenge = str(exc.headers.get("Www-Authenticate") or "")
         exc.read(2000)
-        return int(exc.code), None
+        return int(exc.code), None, challenge
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        reason = str(
+            exc.reason if isinstance(exc, urllib.error.URLError) else exc
+        )
+        if "CERTIFICATE_VERIFY_FAILED" in reason or "certificate verify failed" in reason.lower():
+            raise RuntimeError(
+                "TLS certificate could not be verified. "
+                "Paste the registry CA certificate in the connection form."
+            ) from exc
         raise RuntimeError("The connection failed.") from exc
     if not raw:
-        return status, None
+        return status, None, ""
     try:
         parsed = json.loads(raw.decode("utf-8"))
     except (UnicodeError, json.JSONDecodeError):
-        return status, None
-    return status, parsed
+        return status, None, ""
+    return status, parsed, ""
 
 
 def _ssl_context(ca_pem: str) -> ssl.SSLContext:

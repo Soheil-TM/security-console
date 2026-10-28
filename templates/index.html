@@ -1430,6 +1430,13 @@
     .public-section { margin-top: 22px; }
     .public-section h2 { font-size: 15px; margin: 0 0 10px; }
     .guest-list { display: grid; gap: 8px; }
+    .guest-row {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--card);
+      overflow: hidden;
+    }
+    .guest-row.open { border-color: var(--teal); }
     .guest-item {
       display: flex;
       align-items: center;
@@ -1437,15 +1444,21 @@
       gap: 12px;
       width: 100%;
       padding: 10px 14px;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: var(--card);
+      border: 0;
+      border-radius: 0;
+      background: transparent;
       color: var(--ink);
       text-align: left;
     }
-    .guest-item:hover, .guest-item.on { border-color: var(--teal); }
+    .guest-item:hover, .guest-item.on { background: color-mix(in srgb, var(--teal) 8%, transparent); }
     .guest-item .sub { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
     .guest-item .name { font-weight: 600; word-break: break-all; }
+    .guest-panel {
+      border-top: 1px solid var(--line);
+      padding: 12px 14px 14px;
+      background: color-mix(in srgb, var(--card) 92%, var(--line));
+    }
+    html.dark .guest-panel { background: #0f1720; }
     .guest-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
     .guest-head h2 { margin: 0 0 4px; font-size: 18px; word-break: break-all; }
     .guest-head .meta { color: var(--muted); font-size: 12px; }
@@ -1453,6 +1466,12 @@
     .guest-sev div { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
     .guest-sev b { display: block; font-size: 20px; }
     .guest-sev span { color: var(--muted); font-size: 12px; }
+    .guest-tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
+    .tool-pill { display: inline-flex; align-items: center; padding: 5px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; border: 1px solid var(--line); }
+    .tool-pill.ok { background: #d1fae5; color: #065f46; border-color: #a7f3d0; }
+    .tool-pill.bad { background: #ffe4e6; color: #9f1239; border-color: #fecdd3; }
+    html.dark .tool-pill.ok { background: #143528; color: #6ee7b7; border-color: #1f4d3a; }
+    html.dark .tool-pill.bad { background: #3f1d24; color: #fda4af; border-color: #5c2430; }
     .guest-error { white-space: pre-wrap; margin-top: 12px; }
     .guest-findings { width: 100%; border-collapse: collapse; direction: ltr; }
     .guest-findings th, .guest-findings td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; font-size: 13px; }
@@ -1549,7 +1568,6 @@
         <h2>Your scans in this browser</h2>
         <div class="guest-list" id="guest-list"></div>
       </section>
-      <section class="public-section public-card" id="guest-result" hidden></section>
     </main>
   </div>
   <div class="login-screen" id="login-screen">
@@ -2749,7 +2767,30 @@
       return '<button type="button" class="retry" data-action="retry" data-id="' + esc(scan.id) + '">Retry</button>';
     }
 
+    function toolStatusLine(scan) {
+      const rows = (scan && scan.tool_results) || [];
+      if (!rows.length) return "";
+      return rows.map((row) => {
+        const label = row.label || TOOL_LABEL[row.tool] || row.tool;
+        return label + " " + (row.status === "ok" ? "OK" : "Failed");
+      }).join(" · ");
+    }
+
+    function toolStatusHtml(scan) {
+      const rows = (scan && scan.tool_results) || [];
+      if (!rows.length) return "";
+      return '<div class="guest-tools">' + rows.map((row) => {
+        const ok = row.status === "ok";
+        const label = row.label || TOOL_LABEL[row.tool] || row.tool;
+        const mark = ok ? "OK" : "Failed";
+        const title = row.error ? ' title="' + esc(row.error) + '"' : "";
+        return '<span class="tool-pill ' + (ok ? "ok" : "bad") + '"' + title + ">" + esc(label) + " · " + mark + "</span>";
+      }).join("") + "</div>";
+    }
+
     function historyName(item, total) {
+      const tools = toolStatusLine(item);
+      if (tools) return tools;
       if (scanIsFailed(item)) {
         const detail = String(item.error || "").trim() && !total ? "Error" : total + " findings";
         return "Failed · " + detail;
@@ -3702,7 +3743,7 @@
       document.querySelector("#scan-head").innerHTML = '<div class="scan-head"><div><h1>' + esc(scanTitle(scan)) + '</h1><div class="repo">' + esc(subtitle) + '</div><div class="meta">' + esc(tools) + " · " + esc((scan.created_at || "").replace(" UTC", "")) + (scan.finished_at ? " to " + esc(scan.finished_at.replace(" UTC", "")) : "") + (scan.project_slug ? " · project " + esc(scan.project_slug) : " · ad-hoc (no project)") + '</div></div><div class="scan-actions"><span class="badge ' + esc(badge) + '">' + esc(label) + "</span>" + invBtn + retryButton(scan) + "</div></div>";
       const error = document.querySelector("#scan-error");
       const problem = failed ? String(scan.error || "").trim() : scanErrorText(scan);
-      error.innerHTML = problem ? '<div class="note">' + esc(problem) + "</div>" : "";
+      error.innerHTML = toolStatusHtml(scan) + (problem ? '<div class="note">' + esc(problem) + "</div>" : "");
       if (state.pane === "investigate") renderInvestigate();
     }
 
@@ -3906,7 +3947,7 @@
     function syncScan() {
       const scan = state.scan;
       const sonar = (scan && scan.sonar) || {};
-      const stamp = scan ? [scan.id, scan.status, scan.queue_position || "", (scan.findings || []).length, scan.finished_at, scan.error, scan.phase || "", sonar.quality_gate || "", sonar.error || "", (sonar.issues || []).length, (sonar.hotspot_list || []).length].join("|") : "";
+      const stamp = scan ? [scan.id, scan.status, scan.queue_position || "", (scan.findings || []).length, scan.finished_at, scan.error, scan.phase || "", sonar.quality_gate || "", sonar.error || "", (sonar.issues || []).length, (sonar.hotspot_list || []).length, toolStatusLine(scan)].join("|") : "";
       const active = state.scans.some((item) => scanIsActive(item));
       document.querySelector("#go").disabled = false;
       document.querySelector("#progress").hidden = !active;
@@ -5524,15 +5565,31 @@
       const wrap = document.querySelector("#guest-mine");
       wrap.hidden = !guest.scans.length;
       document.querySelector("#guest-list").innerHTML = guest.scans.map((scan) => {
-        const on = guest.scan && guest.scan.id === scan.id ? " on" : "";
+        const open = guest.scan && guest.scan.id === scan.id;
+        const on = open ? " on" : "";
+        const rowOn = open ? " open" : "";
         const total = scan.finding_count || 0;
-        const detail = scan.status === "done"
-          ? total + " findings"
-          : (scan.status === "queued"
-            ? (queueLabel(scan) || "Queued")
-            : (scan.status === "running" ? "Running " + (scan.phase || "") : "Failed"));
-        return '<button type="button" class="guest-item' + on + '" data-guest-open="' + esc(scan.id) + '"><span><span class="name">' + esc(scanTitle(scan)) + '</span><span class="sub">' + esc(guestWhen(scan)) + " · " + esc(detail) + (scan.private ? " · private" : "") + '</span></span><span class="badge ' + esc(scan.status) + '">' + esc(guestStatus(scan)) + "</span></button>";
+        const tools = (scan.tool_results || []).map((row) => {
+          const label = row.label || TOOL_LABEL[row.tool] || row.tool;
+          return label + " " + (row.status === "ok" ? "OK" : "Failed");
+        }).join(" · ");
+        const detail = scan.status === "queued"
+          ? (queueLabel(scan) || "Queued")
+          : (scan.status === "running"
+            ? ((tools ? tools + " · " : "") + "Running " + (scan.phase || ""))
+            : ((tools || (scan.status === "done" ? total + " findings" : "Failed"))));
+        const panel = open
+          ? '<div class="guest-panel">' + guestReportHtml(guest.scan) + "</div>"
+          : '<div class="guest-panel" hidden></div>';
+        return '<div class="guest-row' + rowOn + '" data-guest-id="' + esc(scan.id) + '">'
+          + '<button type="button" class="guest-item' + on + '" data-guest-open="' + esc(scan.id) + '" aria-expanded="' + (open ? "true" : "false") + '"><span><span class="name">' + esc(scanTitle(scan)) + '</span><span class="sub">' + esc(guestWhen(scan)) + " · " + esc(detail) + (scan.private ? " · private" : "") + '</span></span><span class="badge ' + esc(scan.status) + '">' + esc(guestStatus(scan)) + "</span></button>"
+          + panel
+          + "</div>";
       }).join("");
+    }
+
+    function guestToolStatus(scan) {
+      return toolStatusHtml(scan);
     }
 
     function guestFindingRows(findings) {
@@ -5556,11 +5613,8 @@
         }).join("");
     }
 
-    function renderGuestResult() {
-      const box = document.querySelector("#guest-result");
-      const scan = guest.scan;
-      box.hidden = !scan;
-      if (!scan) return;
+    function guestReportHtml(scan) {
+      if (!scan) return "";
       const subtitle = isImageScan(scan) ? "Image" : scan.repo;
       const tools = (scan.tools || []).map((tool) => TOOL_LABEL[tool] || tool).join(", ");
       const again = scan.status === "failed" ? '<button type="button" class="retry" data-guest-again="1">Scan again</button>' : "";
@@ -5568,18 +5622,33 @@
       if (scan.status === "queued") {
         body = '<div class="empty"><strong>' + esc(queueLabel(scan) || "Queued") + "</strong>The report fills in when the scan is done.</div>";
       } else if (scan.status === "running") {
-        body = '<div class="empty"><strong>Running ' + esc(scan.phase || "scan") + "</strong>The report fills in when the scan is done.</div>";
-      } else if (scan.status === "failed") {
-        body = '<div class="login-error guest-error">' + esc(scan.error || "The scan failed.") + "</div>";
-      } else {
+        body = guestToolStatus(scan) + '<div class="empty"><strong>Running ' + esc(scan.phase || "scan") + "</strong>The report fills in when the scan is done.</div>";
+      } else if (scan.status === "failed" || scan.status === "done") {
         const tally = scan.severity || counts(scan.findings || [], (row) => row.severity);
         const tiles = SEV.map((item) => "<div><b>" + (tally[item[0]] || 0) + "</b><span>" + item[2] + "</span></div>").join("");
         const rows = guestFindingRows(scan.findings || []);
-        body = '<div class="guest-sev">' + tiles + "</div>" + (rows
+        const statusTools = guestToolStatus(scan);
+        const report = statusTools + '<div class="guest-sev">' + tiles + "</div>" + (rows
           ? '<table class="guest-findings"><thead><tr><th>Severity</th><th>Rule</th><th>Tool</th><th>Count</th></tr></thead><tbody>' + rows + "</tbody></table>"
           : '<div class="empty"><strong>No findings</strong>The scanners did not report anything.</div>');
+        body = (scan.status === "failed"
+          ? '<div class="login-error guest-error">' + esc(scan.error || "The scan failed.") + "</div>"
+          : "") + report;
+      } else {
+        body = '<div class="empty"><strong>' + esc(guestStatus(scan)) + "</strong>The report fills in when the scan is done.</div>";
       }
-      box.innerHTML = '<div class="guest-head"><div><h2>' + esc(scanTitle(scan)) + '</h2><div class="meta">' + esc(subtitle) + "</div><div class=\"meta\">" + esc(tools) + " · " + esc(guestWhen(scan)) + (scan.private ? " · private" : "") + '</div></div><div class="scan-actions"><span class="badge ' + esc(scan.status) + '">' + esc(guestStatus(scan)) + "</span>" + again + "</div></div>" + body;
+      return '<div class="guest-head"><div><h2>' + esc(scanTitle(scan)) + '</h2><div class="meta">' + esc(subtitle) + "</div><div class=\"meta\">" + esc(tools) + " · " + esc(guestWhen(scan)) + (scan.private ? " · private" : "") + '</div></div><div class="scan-actions"><span class="badge ' + esc(scan.status) + '">' + esc(guestStatus(scan)) + "</span>" + again + "</div></div>" + body;
+    }
+
+    function renderGuestResult() {
+      renderGuestList();
+    }
+
+    function scrollOpenGuestRow() {
+      const id = guest.scan && guest.scan.id;
+      if (!id) return;
+      const row = [...document.querySelectorAll(".guest-row")].find((el) => el.dataset.guestId === id);
+      if (row) row.scrollIntoView({behavior: "smooth", block: "nearest"});
     }
 
     async function openGuestScan(id) {
@@ -5587,7 +5656,15 @@
       if (!response.ok) return;
       guest.scan = await response.json();
       renderGuestList();
-      renderGuestResult();
+    }
+
+    function toggleGuestScan(id) {
+      if (guest.scan && guest.scan.id === id) {
+        guest.scan = null;
+        renderGuestList();
+        return;
+      }
+      openGuestScan(id);
     }
 
     async function loadGuestScans() {
@@ -5599,9 +5676,15 @@
         if (currentUser) return;
         guest.scans = Array.isArray(list) ? list : [];
         const shown = guest.scan && guest.scans.find((item) => item.id === guest.scan.id);
-        const changed = shown && (shown.status !== guest.scan.status || shown.phase !== guest.scan.phase);
-        if (changed || (shown && !guest.scan.findings)) await openGuestScan(shown.id);
+        const changed = shown && (
+          shown.status !== guest.scan.status
+          || shown.phase !== guest.scan.phase
+          || toolStatusLine(shown) !== toolStatusLine(guest.scan)
+          || (shown.finding_count || 0) !== (guest.scan.finding_count || 0)
+        );
+        if (changed || (shown && !guest.scan.findings && shown.status !== "queued" && shown.status !== "running")) await openGuestScan(shown.id);
         else renderGuestList();
+        if (shown && (shown.status === "running" || shown.status === "queued")) renderGuestList();
       } catch (err) {
         return;
       }
@@ -5663,9 +5746,9 @@
           guestMessage("Scan started.");
         }
         guest.scan = body;
-        renderGuestResult();
         await loadGuestScans();
-        document.querySelector("#guest-result").scrollIntoView({behavior: "smooth", block: "start"});
+        renderGuestList();
+        scrollOpenGuestRow();
       } catch (err) {
         guestMessage("Lost contact with the console.", true);
       } finally {
@@ -5681,27 +5764,27 @@
       startGuestScan(false);
     });
     document.querySelector("#guest-list").addEventListener("click", (event) => {
-      const item = event.target.closest("[data-guest-open]");
-      if (item) openGuestScan(item.dataset.guestOpen);
-    });
-    document.querySelector("#guest-result").addEventListener("click", (event) => {
-      if (!event.target.closest("[data-guest-again]") || !guest.scan) return;
-      const scan = guest.scan;
-      setGuestTarget(isImageScan(scan) ? "image" : "repo");
-      document.querySelector("#guest-input").value = isImageScan(scan) ? scan.image : scan.repo;
-      if (!isImageScan(scan)) {
-        document.querySelectorAll("#guest-tools input").forEach((input) => {
-          input.checked = (scan.tools || []).includes(input.value);
-        });
-      }
-      if (scan.private) {
-        document.querySelector("#guest-private").open = true;
-        guestMessage("Enter the token again, then press Scan.");
-      } else {
-        startGuestScan(true);
+      const again = event.target.closest("[data-guest-again]");
+      if (again && guest.scan) {
+        const scan = guest.scan;
+        setGuestTarget(isImageScan(scan) ? "image" : "repo");
+        document.querySelector("#guest-input").value = isImageScan(scan) ? scan.image : scan.repo;
+        if (!isImageScan(scan)) {
+          document.querySelectorAll("#guest-tools input").forEach((input) => {
+            input.checked = (scan.tools || []).includes(input.value);
+          });
+        }
+        if (scan.private) {
+          document.querySelector("#guest-private").open = true;
+          guestMessage("Enter the token again, then press Scan.");
+          document.querySelector("#guest-form").scrollIntoView({behavior: "smooth", block: "start"});
+        } else {
+          startGuestScan(true);
+        }
         return;
       }
-      document.querySelector("#guest-form").scrollIntoView({behavior: "smooth", block: "start"});
+      const item = event.target.closest("[data-guest-open]");
+      if (item) toggleGuestScan(item.dataset.guestOpen);
     });
     document.querySelector("#public-login").addEventListener("click", openLoginDialog);
     document.querySelector("#login-close").addEventListener("click", closeLoginDialog);

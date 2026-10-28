@@ -195,3 +195,30 @@ def test_the_guest_view_hides_the_session_and_address() -> None:
     assert "guest_ip" not in shown
     assert shown["private"] is True
     assert shown["severity"]["high"] == 1
+
+
+def test_guest_view_exposes_per_tool_ok_failed() -> None:
+    shown = present_guest_scan(
+        _scan(
+            guest="g1",
+            status="failed",
+            tools=["semgrep", "checkov", "trivy"],
+            tool_results=[
+                {"tool": "semgrep", "status": "ok", "error": ""},
+                {
+                    "tool": "checkov",
+                    "status": "failed",
+                    "error": "Checkov timed out after 1200 seconds.",
+                },
+                {"tool": "trivy", "status": "ok", "error": ""},
+            ],
+            error="Checkov: Checkov timed out after 1200 seconds.",
+        ),
+        summary=True,
+    )
+
+    assert [(row["tool"], row["status"]) for row in shown["tool_results"]] == [
+        ("semgrep", "ok"),
+        ("checkov", "failed"),
+        ("trivy", "ok"),
+    ]

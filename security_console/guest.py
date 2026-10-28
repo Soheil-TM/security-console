@@ -149,13 +149,16 @@ def expired(scan: dict[str, Any], now: datetime | None = None) -> bool:
 def present_guest_scan(scan: dict[str, Any], *, summary: bool) -> dict[str, Any]:
     """Return what the guest who started the scan may read."""
 
+    from security_console.tool_results import normalize_tool_results
+
     findings = list(scan.get("findings") or [])
+    tools = list(scan.get("tools") or [])
     shown: dict[str, Any] = {
         "id": scan.get("id"),
         "target": scan.get("target") or "repo",
         "repo": scan.get("repo") or "",
         "image": scan.get("image") or "",
-        "tools": list(scan.get("tools") or []),
+        "tools": tools,
         "status": scan.get("status") or "",
         "phase": scan.get("phase") or "",
         "error": scan.get("error") or "",
@@ -164,6 +167,13 @@ def present_guest_scan(scan: dict[str, Any], *, summary: bool) -> dict[str, Any]
         "private": bool(scan.get("private")),
         "finding_count": len(findings),
         "severity": severity_counts(findings),
+        "tool_results": normalize_tool_results(
+            tools,
+            scan.get("tool_results"),
+            str(scan.get("error") or ""),
+            findings,
+            str(scan.get("status") or ""),
+        ),
     }
     position = scan.get("queue_position")
     if position is not None:

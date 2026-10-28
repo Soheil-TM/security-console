@@ -236,15 +236,16 @@ def present_scan(
         findings = findings + expand_sonar_findings(
             sonar if isinstance(sonar, dict) else None
         )
+    from security_console.tool_results import normalize_tool_results
+
+    tools = [tool for tool in scan.get("tools") or [] if allowed.get(tool)]
     shown: dict[str, Any] = {
         "id": scan.get("id"),
         "target": scan.get("target") or "repo",
         "repo": scan.get("repo") or "",
         "image": scan.get("image") or "",
         "owner": scan.get("owner") or "",
-        "tools": [
-            tool for tool in scan.get("tools") or [] if allowed.get(tool)
-        ],
+        "tools": tools,
         "status": scan.get("status") or "",
         "phase": scan.get("phase") or "",
         "error": scan.get("error") or "",
@@ -255,6 +256,17 @@ def present_scan(
         "finished_at": scan.get("finished_at") or "",
         "finding_count": len(findings),
         "severity": severity_counts(findings),
+        "tool_results": [
+            row
+            for row in normalize_tool_results(
+                tools,
+                scan.get("tool_results"),
+                str(scan.get("error") or ""),
+                findings,
+                str(scan.get("status") or ""),
+            )
+            if allowed.get(row["tool"])
+        ],
         "sonar": sonar,
         "project_ref": scan_project_ref(scan),
     }

@@ -90,6 +90,7 @@ def start_job(job: dict[str, Any]) -> None:
             "phase": "clone" if job["target"] == "repo" else "Trivy",
             "findings": [],
             "notes": [],
+            "tool_results": [],
             "sonar": None,
             "error": "",
         }
@@ -108,13 +109,32 @@ def _run(job: dict[str, Any]) -> None:
             if current is not None and current.get("status") == "running":
                 current["phase"] = phase
 
-    outcome = execute_job(job, on_phase)
+    def on_progress(
+        findings: list[dict[str, Any]],
+        notes: list[str],
+        failures: list[str],
+        tool_results: list[dict[str, Any]],
+    ) -> None:
+        """Publish each tool's results so a console deadline can keep them."""
+
+        with _lock:
+            current = _jobs.get(job["id"])
+            if current is None or current.get("status") != "running":
+                return
+            current["findings"] = list(findings)
+            current["notes"] = list(notes)
+            current["tool_results"] = list(tool_results)
+            if failures:
+                current["error"] = "\n".join(failures)[:2000]
+
+    outcome = execute_job(job, on_phase, on_progress)
     with _lock:
         _jobs[job["id"]] = {
             "status": outcome.get("status") or "failed",
             "phase": "",
             "findings": outcome.get("findings") or [],
             "notes": outcome.get("notes") or [],
+            "tool_results": outcome.get("tool_results") or [],
             "sonar": outcome.get("sonar"),
             "error": str(outcome.get("error") or "")[:2000],
             "requested_sha": str(outcome.get("requested_sha") or ""),

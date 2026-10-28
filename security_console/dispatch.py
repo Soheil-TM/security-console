@@ -22,6 +22,7 @@ from security_console.secrets import read_secret, same_secret
 log = logging.getLogger("security_console")
 _warned = False
 Phase = Callable[[str], None]
+Update = Callable[[dict[str, Any]], None]
 
 
 def scanner_url() -> str:
@@ -36,13 +37,21 @@ def scanner_token() -> str:
     return read_secret("SCANNER_TOKEN", "SCANNER_TOKEN_FILE")
 
 
-def dispatch_scan(job: dict[str, Any], on_phase: Phase | None = None) -> dict[str, Any]:
+def dispatch_scan(
+    job: dict[str, Any],
+    on_phase: Phase | None = None,
+    on_update: Update | None = None,
+) -> dict[str, Any]:
     """Run a scan and always return a status dict."""
 
     try:
         approved = parse_job(job)
         if scanner_url():
-            return _remote_scan(approved, on_phase or (lambda _phase: None))
+            return _remote_scan(
+                approved,
+                on_phase or (lambda _phase: None),
+                on_update,
+            )
         _warn_local()
         from security_console.runner import execute_job
 
@@ -68,22 +77,43 @@ def dispatch_images() -> list[dict[str, Any]]:
     return list_images()
 
 
-def _remote_scan(job: dict[str, Any], on_phase: Phase) -> dict[str, Any]:
+def _remote_scan(
+    job: dict[str, Any],
+    on_phase: Phase,
+    on_update: Update | None = None,
+) -> dict[str, Any]:
     _request("POST", "/v1/jobs", job, timeout=30)
-    deadline = time.monotonic() + _deadline()
+    limit = _deadline()
+    started = time.monotonic()
+    deadline = started + limit
+    last_phase = ""
     while True:
         if time.monotonic() > deadline:
+            partial = _partial_on_timeout(job["id"], last_phase)
+            if partial is not None:
+                return partial
             raise RuntimeError("The scan timed out.")
         payload = _request("GET", "/v1/jobs/" + job["id"], None, timeout=30)
         if not isinstance(payload, dict):
             raise RuntimeError("The scanner returned an unexpected result.")
         phase = payload.get("phase") or ""
         if isinstance(phase, str) and phase:
+            last_phase = phase
             on_phase(phase)
+        if on_update is not None and payload.get("status") == "running":
+            on_update(
+                {
+                    "phase": phase if isinstance(phase, str) else "",
+                    "findings": payload.get("findings") or [],
+                    "tool_results": payload.get("tool_results") or [],
+                    "error": str(payload.get("error") or ""),
+                }
+            )
         if payload.get("status") in {"done", "failed"}:
             return {
                 "findings": payload.get("findings") or [],
                 "notes": payload.get("notes") or [],
+                "tool_results": payload.get("tool_results") or [],
                 "sonar": payload.get("sonar"),
                 "status": payload.get("status"),
                 "error": _redact(str(payload.get("error") or "")),
@@ -126,10 +156,56 @@ def _request(method: str, path: str, body: dict[str, Any] | None, timeout: int) 
 
 
 def _deadline() -> int:
+    """Overall poll budget. Must cover Semgrep + Checkov + Trivy + clone."""
+
     override = os.environ.get("SCANNER_DEADLINE", "").strip()
     if override.isdigit() and 60 <= int(override) <= 7200:
         return int(override)
-    return 1200
+    # Default was 1200s; Checkov alone may use that, so juice-shop timed out
+    # at the console while the worker was still on Checkov.
+    return 3600
+
+
+def _partial_on_timeout(scan_id: str, last_phase: str) -> dict[str, Any] | None:
+    """Keep whatever the worker already recorded when the console deadline hits."""
+
+    try:
+        payload = _request("GET", "/v1/jobs/" + scan_id, None, timeout=30)
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    findings = payload.get("findings") or []
+    status = payload.get("status") or "running"
+    tool_results = payload.get("tool_results") or []
+    if status == "running":
+        # Worker still going; surface timeout but keep any findings already stored.
+        return {
+            "findings": findings if isinstance(findings, list) else [],
+            "notes": payload.get("notes") or [],
+            "tool_results": tool_results if isinstance(tool_results, list) else [],
+            "sonar": payload.get("sonar"),
+            "status": "failed",
+            "error": _redact(
+                f"The scan timed out while running {last_phase or 'a tool'}."
+            ),
+            "phase": "",
+            "requested_sha": str(payload.get("requested_sha") or ""),
+            "commit_sha": str(payload.get("commit_sha") or ""),
+            "failure_reason": "deadline",
+        }
+    return {
+        "findings": findings if isinstance(findings, list) else [],
+        "notes": payload.get("notes") or [],
+        "tool_results": tool_results if isinstance(tool_results, list) else [],
+        "sonar": payload.get("sonar"),
+        "status": status,
+        "error": _redact(str(payload.get("error") or "")),
+        "phase": "",
+        "requested_sha": str(payload.get("requested_sha") or ""),
+        "commit_sha": str(payload.get("commit_sha") or ""),
+        "failure_reason": str(payload.get("failure_reason") or ""),
+    }
 
 
 def _warn_local() -> None:
@@ -146,6 +222,7 @@ def _failed(message: str) -> dict[str, Any]:
     return {
         "findings": [],
         "notes": [],
+        "tool_results": [],
         "sonar": None,
         "status": "failed",
         "error": _redact(message)[-2000:],

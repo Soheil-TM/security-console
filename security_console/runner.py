@@ -34,11 +34,25 @@ from security_console.trivy import parse_report as parse_trivy_report
 from security_console.trivy_db import refresh_trivy_databases
 
 SCAN_TIMEOUT = 600
+CHECKOV_TIMEOUT = 1200
 IMAGE_SCAN_TIMEOUT = 900
 SONAR_TIMEOUT = 900
+_DOCKER_CLIENT_TIMEOUT = 1800
 _MAX_IMAGE_BYTES = 2 * 1024 * 1024 * 1024
 _MAX_REPO_BYTES = 1024 * 1024 * 1024
 Phase = Callable[[str], None]
+# findings, notes, failures, tool_results
+Progress = Callable[
+    [list[dict[str, Any]], list[str], list[str], list[dict[str, Any]]],
+    None,
+]
+
+_TOOL_KEYS = {
+    "Semgrep": "semgrep",
+    "Checkov": "checkov",
+    "Trivy": "trivy",
+    "SonarQube": "sonar",
+}
 
 
 class CloneError(RuntimeError):
@@ -49,7 +63,11 @@ class CloneError(RuntimeError):
         self.reason = reason
 
 
-def execute_job(job: dict[str, Any], on_phase: Phase | None = None) -> dict[str, Any]:
+def execute_job(
+    job: dict[str, Any],
+    on_phase: Phase | None = None,
+    on_progress: Progress | None = None,
+) -> dict[str, Any]:
     """Run one scan and return findings. Docker errors become a failed result."""
 
     requested = str(job.get("requested_sha") or "")
@@ -58,11 +76,20 @@ def execute_job(job: dict[str, Any], on_phase: Phase | None = None) -> dict[str,
         if on_phase is not None:
             on_phase(name)
 
+    def progress(
+        findings: list[dict[str, Any]],
+        notes: list[str],
+        failures: list[str],
+        tool_results: list[dict[str, Any]],
+    ) -> None:
+        if on_progress is not None:
+            on_progress(findings, notes, failures, tool_results)
+
     try:
         if job["target"] == "image":
             result = _image_scan(job, phase)
         else:
-            result = _repo_scan(job, phase)
+            result = _repo_scan(job, phase, progress)
     except CloneError as exc:
         result = _failed(
             RuntimeError(_redact_job(str(exc), job)),
@@ -94,7 +121,11 @@ def list_images() -> list[dict[str, Any]]:
     return image_rows(raw)
 
 
-def _repo_scan(job: dict[str, Any], phase: Phase) -> dict[str, Any]:
+def _repo_scan(
+    job: dict[str, Any],
+    phase: Phase,
+    progress: Progress | None = None,
+) -> dict[str, Any]:
     local_path = _scan_path(job["id"])
     host_path = _host_path(job["id"])
     auth_dir = local_path.parent / (job["id"] + "-auth")
@@ -111,41 +142,89 @@ def _repo_scan(job: dict[str, Any], phase: Phase) -> dict[str, Any]:
         client = _client()
         findings: list[dict[str, Any]] = []
         notes: list[str] = []
+        failures: list[str] = []
+        tool_results: list[dict[str, Any]] = []
         sonar: dict[str, Any] | None = None
         if "semgrep" in job["tools"]:
             phase("Semgrep")
-            code, stdout, stderr = _run(
+            _run_recorded(
                 client,
                 filesystem_spec("semgrep", host_path),
                 SCAN_TIMEOUT,
+                findings,
+                notes,
+                failures,
+                tool_results,
+                job,
+                "Semgrep",
+                _parse_semgrep,
+                progress,
             )
-            _record(findings, notes, "Semgrep", _parse_semgrep, code, stdout, stderr)
         if "checkov" in job["tools"]:
             phase("Checkov")
-            code, stdout, stderr = _run(
+            _run_recorded(
                 client,
                 filesystem_spec("checkov", host_path),
-                SCAN_TIMEOUT,
+                CHECKOV_TIMEOUT,
+                findings,
+                notes,
+                failures,
+                tool_results,
+                job,
+                "Checkov",
+                _parse_checkov,
+                progress,
             )
-            _record(findings, notes, "Checkov", _parse_checkov, code, stdout, stderr)
         if "trivy" in job["tools"]:
             phase("Trivy database")
             db_error = _refresh_trivy_databases(client)
             if db_error:
                 notes.append(db_error)
             phase("Trivy")
-            code, stdout, stderr = _run(
+            _run_recorded(
                 client,
                 filesystem_spec("trivy", host_path),
                 SCAN_TIMEOUT,
+                findings,
+                notes,
+                failures,
+                tool_results,
+                job,
+                "Trivy",
+                _parse_trivy,
+                progress,
             )
-            _record(findings, notes, "Trivy", _parse_trivy, code, stdout, stderr)
         if "sonar" in job["tools"]:
             phase("SonarQube")
             sonar = _run_sonar(client, host_path, job["id"])
+            sonar_error = str((sonar or {}).get("error") or "").strip()
+            if sonar_error:
+                tool_results.append(
+                    {
+                        "tool": "sonar",
+                        "status": "failed",
+                        "error": sonar_error[:500],
+                    }
+                )
+                failures.append("SonarQube: " + sonar_error[:500])
+            else:
+                tool_results.append({"tool": "sonar", "status": "ok", "error": ""})
+            if progress is not None:
+                progress(
+                    list(findings),
+                    list(notes),
+                    list(failures),
+                    list(tool_results),
+                )
         result = _finish(job["tools"], findings, notes, sonar)
         result["commit_sha"] = commit_sha
-        result["failure_reason"] = ""
+        result["tool_results"] = list(tool_results)
+        if failures:
+            result["status"] = "failed"
+            result["error"] = "\n".join(failures)[:2000]
+            result["failure_reason"] = "tool_failed"
+        else:
+            result["failure_reason"] = ""
         return result
     finally:
         if local_path.exists():
@@ -203,6 +282,7 @@ def _image_scan(job: dict[str, Any], phase: Phase) -> dict[str, Any]:
             archive_host = _host_file(job["id"], "image.tar")
         findings: list[dict[str, Any]] = []
         notes: list[str] = []
+        tool_results: list[dict[str, Any]] = []
         phase("Trivy database")
         db_error = _refresh_trivy_databases(client)
         if db_error:
@@ -213,17 +293,31 @@ def _image_scan(job: dict[str, Any], phase: Phase) -> dict[str, Any]:
             archive_host_path=archive_host,
             tmp_host_path=_host_file(job["id"], "tmp"),
         )
-        code, stdout, stderr = _run(
-            client,
-            spec,
-            IMAGE_SCAN_TIMEOUT,
-            limit_path=tmp_dir,
-            limit_bytes=TRIVY_IMAGE_TMP_BYTES,
-        )
-        _record(findings, notes, "Trivy", _parse_trivy, code, stdout, stderr)
+        try:
+            code, stdout, stderr = _run(
+                client,
+                spec,
+                IMAGE_SCAN_TIMEOUT,
+                limit_path=tmp_dir,
+                limit_bytes=TRIVY_IMAGE_TMP_BYTES,
+            )
+            _record(findings, notes, "Trivy", _parse_trivy, code, stdout, stderr)
+            tool_results.append({"tool": "trivy", "status": "ok", "error": ""})
+        except Exception as exc:
+            detail = _redact_job(str(exc), job)
+            tool_results.append(
+                {"tool": "trivy", "status": "failed", "error": detail[:500]}
+            )
+            result = _failed(RuntimeError(detail), reason="tool_failed")
+            result["findings"] = findings
+            result["notes"] = notes
+            result["tool_results"] = tool_results
+            result["error"] = f"Trivy: {detail}"[:2000]
+            return result
         result = _finish(job["tools"], findings, notes, None)
         result["commit_sha"] = ""
         result["failure_reason"] = ""
+        result["tool_results"] = tool_results
         return result
     finally:
         if local_path.exists():
@@ -467,16 +561,64 @@ def _clone(
         )
     else:
         commands = [git_clone_args(repo, str(dest), pins, auth_config)]
-    for command in commands:
-        timeout = 180 if "fetch" in command or "clone" in command else 30
-        try:
-            completed = _run_git(command, timeout)
-        except subprocess.TimeoutExpired:
-            raise CloneError("git timed out.", "clone_failed") from None
+    if len(commands) == 1 and "clone" in commands[0]:
+        completed = _clone_with_retries(commands[0], dest)
         if completed.returncode != 0:
             detail = (completed.stderr or completed.stdout or "git failed").strip()
             raise CloneError(detail[-1500:] or "git clone failed", "clone_failed")
+    else:
+        for command in commands:
+            timeout = 600 if "fetch" in command or "clone" in command else 30
+            try:
+                completed = _run_git(command, timeout)
+            except subprocess.TimeoutExpired:
+                raise CloneError("git timed out.", "clone_failed") from None
+            if completed.returncode != 0:
+                detail = (completed.stderr or completed.stdout or "git failed").strip()
+                raise CloneError(detail[-1500:] or "git clone failed", "clone_failed")
     return _require_head(dest, requested_sha)
+
+
+def _clone_with_retries(
+    command: list[str],
+    dest: Path,
+    *,
+    attempts: int = 3,
+    timeout: int = 600,
+) -> subprocess.CompletedProcess[str]:
+    """Retry a shallow clone when the network drops mid-transfer."""
+
+    last_timeout: subprocess.TimeoutExpired | None = None
+    last = subprocess.CompletedProcess(command, 1, "", "git failed")
+    for attempt in range(1, attempts + 1):
+        if dest.exists():
+            shutil.rmtree(dest, ignore_errors=True)
+        try:
+            last = _run_git(command, timeout)
+        except subprocess.TimeoutExpired as exc:
+            last_timeout = exc
+            continue
+        if last.returncode == 0:
+            return last
+        detail = (last.stderr or last.stdout or "").lower()
+        transient = any(
+            token in detail
+            for token in (
+                "timed out",
+                "timeout",
+                "could not resolve",
+                "unable to access",
+                "connection reset",
+                "unexpected disconnect",
+                "recv failure",
+                "network is unreachable",
+            )
+        )
+        if not transient or attempt == attempts:
+            return last
+    if last_timeout is not None:
+        raise CloneError("git timed out.", "clone_failed") from last_timeout
+    return last
 
 
 def _run_git(command: list[str], timeout: int) -> subprocess.CompletedProcess[str]:
@@ -544,6 +686,69 @@ def _enforce_directory_limit(
         return
 
 
+def _run_recorded(
+    client: Any,
+    spec: dict[str, Any],
+    timeout: int,
+    findings: list[dict[str, Any]],
+    notes: list[str],
+    failures: list[str],
+    tool_results: list[dict[str, Any]],
+    job: dict[str, Any],
+    name: str,
+    parser: Callable[[str], list[dict[str, Any]]],
+    progress: Progress | None = None,
+) -> None:
+    """Run one tool. A timeout or Docker error keeps earlier findings."""
+
+    key = _TOOL_KEYS.get(name, name.lower())
+    try:
+        code, stdout, stderr = _run(client, spec, timeout)
+    except Exception as exc:
+        detail = _redact_job(str(exc), job)
+        failures.append(f"{name}: {detail}")
+        tool_results.append(
+            {"tool": key, "status": "failed", "error": detail[:500]}
+        )
+        if progress is not None:
+            progress(
+                list(findings),
+                list(notes),
+                list(failures),
+                list(tool_results),
+            )
+        return
+    _record(findings, notes, name, parser, code, stdout, stderr)
+    tool_results.append({"tool": key, "status": "ok", "error": ""})
+    if progress is not None:
+        progress(
+            list(findings),
+            list(notes),
+            list(failures),
+            list(tool_results),
+        )
+
+
+def _tool_label(spec: dict[str, Any]) -> str:
+    labels = spec.get("labels") or {}
+    tool = str(labels.get("security-console.tool") or "").strip().lower()
+    names = {
+        "semgrep": "Semgrep",
+        "checkov": "Checkov",
+        "trivy": "Trivy",
+        "sonar": "SonarQube",
+    }
+    return names.get(tool, tool or "Scanner")
+
+
+def _is_timeout(exc: BaseException) -> bool:
+    text = str(exc).lower()
+    if "timed out" in text or "timeout" in text or "read timed out" in text:
+        return True
+    name = type(exc).__name__.lower()
+    return "timeout" in name
+
+
 def _run(
     client: Any,
     spec: dict[str, Any],
@@ -574,7 +779,17 @@ def _run(
         )
         watcher.start()
     try:
-        result = container.wait(timeout=timeout)
+        try:
+            result = container.wait(timeout=timeout)
+        except Exception as exc:
+            with suppress(Exception):
+                container.kill()
+            if _is_timeout(exc):
+                label = _tool_label(spec)
+                raise RuntimeError(
+                    f"{label} timed out after {timeout} seconds."
+                ) from None
+            raise
         if exceeded.is_set():
             raise RuntimeError(
                 "Image scan temporary files exceeded the size limit."
@@ -714,6 +929,7 @@ def _failed(exc: Exception, *, reason: str = "") -> dict[str, Any]:
         "findings": [],
         "notes": [],
         "sonar": None,
+        "tool_results": [],
         "status": "failed",
         "error": text[-2000:],
         "phase": "",
@@ -726,7 +942,7 @@ def _failed(exc: Exception, *, reason: str = "") -> dict[str, Any]:
 def _client() -> Any:
     import docker
 
-    return docker.from_env()
+    return docker.from_env(timeout=_DOCKER_CLIENT_TIMEOUT)
 
 
 def _ensure_image(client: Any, ref: str) -> None:

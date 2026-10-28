@@ -287,3 +287,115 @@ def test_a_failed_pull_uses_the_local_image(
     missing = _Images(pull_fails=True, local=False)
     with pytest.raises(RuntimeError, match="i/o timeout"):
         _ensure_image(_Client(missing), TRIVY_IMAGE)
+
+
+def test_checkov_gets_a_larger_memory_limit() -> None:
+    spec = filesystem_spec("checkov", "/var/lib/security-scans/abc123def456")
+
+    assert spec["mem_limit"] == "2048m"
+    assert spec["labels"]["security-console.tool"] == "checkov"
+
+
+def test_a_tool_timeout_keeps_earlier_findings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from security_console.runner import _run_recorded
+
+    findings = [{"tool": "semgrep", "rule": "x"}]
+    notes: list[str] = []
+    failures: list[str] = []
+    tool_results: list[dict[str, object]] = []
+
+    def boom(*_args: object, **_kwargs: object) -> tuple[int, str, str]:
+        raise RuntimeError("Checkov timed out after 1200 seconds.")
+
+    monkeypatch.setattr("security_console.runner._run", boom)
+    _run_recorded(
+        object(),
+        {"image": "bridgecrew/checkov:3.3.26"},
+        1200,
+        findings,
+        notes,
+        failures,
+        tool_results,
+        {"id": "abc123def456"},
+        "Checkov",
+        lambda _raw: [],
+    )
+
+    assert findings == [{"tool": "semgrep", "rule": "x"}]
+    assert failures == ["Checkov: Checkov timed out after 1200 seconds."]
+    assert tool_results == [
+        {
+            "tool": "checkov",
+            "status": "failed",
+            "error": "Checkov timed out after 1200 seconds.",
+        }
+    ]
+
+
+def test_wait_timeout_becomes_a_clear_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from security_console.runner import _run
+
+    class _Container:
+        def wait(self, timeout: int = 0) -> dict[str, int]:
+            raise TimeoutError("UnixHTTPConnectionPool Read timed out.")
+
+        def kill(self) -> None:
+            return None
+
+        def remove(self, force: bool = False) -> None:
+            return None
+
+        def logs(self, **_kwargs: object) -> bytes:
+            return b""
+
+    class _Containers:
+        def run(self, _image: str, **_kwargs: object) -> _Container:
+            return _Container()
+
+    class _Client:
+        containers = _Containers()
+
+        class images:
+            @staticmethod
+            def pull(_ref: str) -> None:
+                return None
+
+    monkeypatch.setattr(
+        "security_console.runner._ensure_image",
+        lambda *_args, **_kwargs: None,
+    )
+    with pytest.raises(RuntimeError, match="Checkov timed out after 30 seconds"):
+        _run(
+            _Client(),
+            {
+                "image": "bridgecrew/checkov:3.3.26",
+                "labels": {"security-console.tool": "checkov"},
+            },
+            30,
+        )
+
+
+def test_docker_client_uses_a_long_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import types
+
+    from security_console import runner
+
+    seen: dict[str, object] = {}
+
+    def fake_from_env(**kwargs: object) -> object:
+        seen.update(kwargs)
+        return object()
+
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "docker",
+        types.SimpleNamespace(from_env=fake_from_env),
+    )
+    runner._client()
+    assert seen.get("timeout") == runner._DOCKER_CLIENT_TIMEOUT

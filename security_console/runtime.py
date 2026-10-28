@@ -146,7 +146,7 @@ def filesystem_spec(tool: str, host_path: str) -> dict[str, Any]:
             volumes={host_path: {"bind": "/src", "mode": "ro"}},
             environment=_home_env(),
             working_dir="/src",
-            mem_limit="1024m",
+            mem_limit="2048m",
             read_only=True,
             user=_user_for("checkov"),
         )

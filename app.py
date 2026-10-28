@@ -171,6 +171,25 @@ def execute_scan(scan_id: str) -> None:
             current["phase"] = phase
             save_scan(current)
 
+    def on_update(progress: dict) -> None:
+        with lock:
+            current = scans.get(scan_id)
+            if current is None or current.get("status") != "running":
+                return
+            phase = progress.get("phase")
+            if isinstance(phase, str) and phase:
+                current["phase"] = phase
+            findings = progress.get("findings")
+            if isinstance(findings, list):
+                current["findings"] = findings
+            tool_results = progress.get("tool_results")
+            if isinstance(tool_results, list):
+                current["tool_results"] = tool_results
+            error = progress.get("error")
+            if isinstance(error, str) and error:
+                current["error"] = error
+            save_scan(current)
+
     try:
         try:
             if item.get("guest"):
@@ -200,12 +219,14 @@ def execute_scan(scan_id: str) -> None:
                 **secrets,
             },
             on_phase,
+            on_update,
         )
         with lock:
             current = scans.get(scan_id)
             if current is None:
                 return
             current["findings"] = outcome.get("findings") or []
+            current["tool_results"] = outcome.get("tool_results") or []
             current["sonar"] = outcome.get("sonar")
             current["status"] = outcome.get("status") or "failed"
             current["error"] = outcome.get("error") or ""

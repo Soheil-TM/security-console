@@ -510,6 +510,11 @@ MIGRATIONS = (
         ADD COLUMN IF NOT EXISTS triage_snapshot jsonb
         NOT NULL DEFAULT '{}'::jsonb
     """,
+    """
+    ALTER TABLE scans
+        ADD COLUMN IF NOT EXISTS tool_results jsonb
+        NOT NULL DEFAULT '[]'::jsonb
+    """,
 )
 
 
@@ -730,7 +735,7 @@ _SCAN_SELECT = """
     SELECT s.id, s.target, s.repo, s.image, s.project_id, s.tools, s.status,
            s.phase, s.error, s.failure_reason, s.owner, s.guest, s.guest_ip,
            s.private, s.requested_sha, s.commit_sha, s.findings, s.sonar,
-           s.priority, s.created_at, s.started_at, s.finished_at,
+           s.tool_results, s.priority, s.created_at, s.started_at, s.finished_at,
            p.slug AS project_slug, p.name AS project_name
     FROM scans AS s
     LEFT JOIN projects AS p ON p.id = s.project_id
@@ -746,6 +751,9 @@ def scan_from_row(row: dict[str, Any]) -> dict[str, Any]:
     findings = row.get("findings") or []
     if isinstance(findings, str):
         findings = json.loads(findings)
+    tool_results = row.get("tool_results") or []
+    if isinstance(tool_results, str):
+        tool_results = json.loads(tool_results)
     sonar = row.get("sonar")
     if isinstance(sonar, str):
         sonar = json.loads(sonar)
@@ -763,6 +771,7 @@ def scan_from_row(row: dict[str, Any]) -> dict[str, Any]:
         "requested_sha": str(row.get("requested_sha") or ""),
         "commit_sha": str(row.get("commit_sha") or ""),
         "findings": list(findings),
+        "tool_results": list(tool_results),
         "sonar": sonar,
         "priority": int(row.get("priority") or 0),
         "created_at": _stamp(row.get("created_at")),
@@ -834,13 +843,13 @@ def upsert_scan(item: dict[str, Any]) -> None:
             INSERT INTO scans (
                 id, target, repo, image, project_id, tools, status, phase, error,
                 failure_reason, owner, guest, guest_ip, private,
-                requested_sha, commit_sha, findings, sonar, priority,
+                requested_sha, commit_sha, findings, sonar, tool_results, priority,
                 created_at, started_at, finished_at
             )
             VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s,
                 %s, %s, %s
             )
             ON CONFLICT (id) DO UPDATE SET
@@ -861,6 +870,7 @@ def upsert_scan(item: dict[str, Any]) -> None:
                 commit_sha = EXCLUDED.commit_sha,
                 findings = EXCLUDED.findings,
                 sonar = EXCLUDED.sonar,
+                tool_results = EXCLUDED.tool_results,
                 priority = EXCLUDED.priority,
                 created_at = EXCLUDED.created_at,
                 started_at = EXCLUDED.started_at,
@@ -885,6 +895,7 @@ def upsert_scan(item: dict[str, Any]) -> None:
                 str(item.get("commit_sha") or ""),
                 Jsonb(list(item.get("findings") or [])),
                 Jsonb(item["sonar"]) if item.get("sonar") is not None else None,
+                Jsonb(list(item.get("tool_results") or [])),
                 int(item.get("priority") or 0),
                 created,
                 started,

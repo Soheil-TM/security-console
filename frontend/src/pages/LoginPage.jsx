@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { useAuth } from "../auth";
+import { hasCap, useAuth } from "../auth";
 import { useTheme } from "../theme";
 
 export function LoginPage() {
@@ -20,7 +20,7 @@ export function LoginPage() {
     setError("");
     try {
       const user = await login(username.trim(), password);
-      navigate(user.role === "admin" ? "/users" : "/portal");
+      navigate(hasCap(user, "users.manage") ? "/users" : "/portal");
     } catch (err) {
       setError(err.message);
     } finally {

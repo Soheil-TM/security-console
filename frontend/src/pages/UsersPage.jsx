@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { ROLE_LABEL, TOOLS, api, readJson } from "../api";
+import { CAPABILITY_LABEL, ROLE_LABEL, TOOLS, api, readJson } from "../api";
+import { toolsLocked } from "../auth";
 
 const EMPTY = {
   username: "",
@@ -9,7 +10,10 @@ const EMPTY = {
   role: "viewer",
   disabled: false,
   access: { semgrep: true, checkov: true, sonar: false },
+  capabilities: {},
 };
+
+const CAP_KEYS = Object.keys(CAPABILITY_LABEL);
 
 export function UsersPage() {
   const [users, setUsers] = useState([]);
@@ -51,6 +55,7 @@ export function UsersPage() {
       role: form.role,
       disabled: form.disabled,
       access: form.access,
+      capabilities: form.role === "admin" ? (form.capabilities || {}) : {},
     };
     if (form.password) payload.password = form.password;
     try {
@@ -100,6 +105,7 @@ export function UsersPage() {
         />
         <select className="field sm:max-w-48" value={role} onChange={(event) => setRole(event.target.value)}>
           <option value="all">همه نقش‌ها</option>
+          <option value="super_admin">ابرمدیر</option>
           <option value="admin">مدیر</option>
           <option value="developer">توسعه‌دهنده</option>
           <option value="viewer">بیننده</option>
@@ -124,7 +130,7 @@ export function UsersPage() {
                 <td className="px-4 py-3">{TOOLS.filter((tool) => user.access[tool.id]).map((tool) => tool.label).join("، ") || "—"}</td>
                 <td className="px-4 py-3">
                   <div className="flex justify-end gap-2">
-                    <button className="btn-ghost" onClick={() => setForm({ ...user, password: "" })}>ویرایش</button>
+                    <button className="btn-ghost" onClick={() => setForm({ ...user, password: "", capabilities: capMap(user) })}>ویرایش</button>
                     <button className="btn-danger" onClick={() => remove(user)}>حذف</button>
                   </div>
                 </td>
@@ -158,6 +164,7 @@ export function UsersPage() {
               <label className="block text-sm">
                 سطح دسترسی
                 <select className="field mt-1" value={form.role} onChange={(event) => patchForm("role", event.target.value)}>
+                  <option value="super_admin">ابرمدیر</option>
                   <option value="admin">مدیر</option>
                   <option value="developer">توسعه‌دهنده</option>
                   <option value="viewer">بیننده</option>
@@ -173,8 +180,8 @@ export function UsersPage() {
                     <input
                       type="checkbox"
                       className="me-2"
-                      checked={form.role === "admin" || form.access[tool.id]}
-                      disabled={form.role === "admin"}
+                      checked={toolsLocked(form.role) || form.access[tool.id]}
+                      disabled={toolsLocked(form.role)}
                       onChange={(event) =>
                         setForm((current) => ({
                           ...current,
@@ -186,6 +193,29 @@ export function UsersPage() {
                   </label>
                 ))}
               </div>
+              {form.role === "admin" && (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {CAP_KEYS.map((name) => (
+                    <label key={name} className="rounded-xl border border-slate-200 p-3 text-sm dark:border-white/10">
+                      <input
+                        type="checkbox"
+                        className="me-2"
+                        checked={Boolean((form.capabilities || {})[name])}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            capabilities: {
+                              ...(current.capabilities || {}),
+                              [name]: event.target.checked,
+                            },
+                          }))
+                        }
+                      />
+                      {CAPABILITY_LABEL[name]}
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="mt-5 flex justify-end gap-2">
               <button type="button" className="btn-ghost" onClick={() => setForm(null)}>انصراف</button>
@@ -204,4 +234,13 @@ function Callout({ children }) {
       {children}
     </div>
   );
+}
+
+
+function capMap(user) {
+  const raw = user.capabilities;
+  if (Array.isArray(raw)) {
+    return Object.fromEntries(raw.map((name) => [name, true]));
+  }
+  return raw && typeof raw === "object" ? { ...raw } : {};
 }

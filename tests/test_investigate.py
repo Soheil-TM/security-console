@@ -42,6 +42,23 @@ def test_gate_ready_when_all_fp_or_accepted() -> None:
     assert ready["counts"]["accepted_risk"] == 1
 
 
+def test_gate_ready_when_resolved_with_reason() -> None:
+    findings = [{"tool": "semgrep", "check": "a", "path": "a.py", "line": 1}]
+    key = finding_key(findings[0])
+    ready = gate_readiness(
+        findings,
+        {
+            key: {
+                "status": "resolved",
+                "reason": "Patched in main and redeployed.",
+                "assignee_username": "ada",
+            }
+        },
+    )
+    assert ready["ready_for_gate"] is True
+    assert ready["counts"]["resolved"] == 1
+
+
 def test_gate_blocked_for_true_positive_or_missing() -> None:
     findings = [
         {"tool": "semgrep", "check": "a", "path": "a.py", "line": 1},

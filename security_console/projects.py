@@ -12,6 +12,11 @@ from psycopg.errors import UniqueViolation
 
 from security_console import db
 from security_console.access import project_key
+from security_console.authz import (
+    can_edit_project,
+    can_manage_all_projects,
+    can_write_triage_by_role,
+)
 from security_console.images import valid_image_ref
 from security_console.repos import valid_repo
 
@@ -115,7 +120,7 @@ def public_project(project: dict[str, Any], *, can_edit: bool) -> dict[str, Any]
 
 def _list_projects() -> Response:
     user = g.user
-    user_id = None if user.get("role") == "admin" else int(user["id"])
+    user_id = None if can_manage_all_projects(user) else int(user["id"])
     projects = [
         public_project(item, can_edit=_can_edit(user, item))
         for item in db.list_projects(user_id)
@@ -194,9 +199,9 @@ def _delete_project(app: Flask, slug: str) -> Reply:
 
 
 def _may_create(user: dict[str, Any], group_ids: list[int]) -> bool:
-    if user.get("role") == "admin":
+    if can_manage_all_projects(user):
         return True
-    if user.get("role") != "developer":
+    if not can_write_triage_by_role(user):
         return False
     if not group_ids:
         return False
@@ -204,7 +209,7 @@ def _may_create(user: dict[str, Any], group_ids: list[int]) -> bool:
 
 
 def _can_view(user: dict[str, Any], project: dict[str, Any]) -> bool:
-    if user.get("role") == "admin":
+    if can_manage_all_projects(user):
         return True
     try:
         slugs = db.user_project_slugs(int(user["id"]))
@@ -214,15 +219,14 @@ def _can_view(user: dict[str, Any], project: dict[str, Any]) -> bool:
 
 
 def _can_edit(user: dict[str, Any], project: dict[str, Any]) -> bool:
-    if user.get("role") == "admin":
-        return True
     group_ids = [int(item) for item in project.get("group_ids") or []]
-    if not group_ids:
-        return False
-    try:
-        return db.user_leads_any_of_groups(int(user["id"]), group_ids)
-    except (TypeError, ValueError):
-        return False
+    leads = False
+    if group_ids:
+        try:
+            leads = db.user_leads_any_of_groups(int(user["id"]), group_ids)
+        except (TypeError, ValueError):
+            leads = False
+    return can_edit_project(user, lead_of_attached_group=leads)
 
 
 def _targets(body: dict[str, Any]) -> tuple[list[dict[str, str]], str]:

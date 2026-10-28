@@ -8,3 +8,5 @@ services:
   console:
     ports:
       - "8091:8080"
+    volumes:
+      - /home/402iti002/.cursor:/host-cursor

@@ -8,6 +8,7 @@ import psycopg
 from flask import Flask, Response, g, jsonify, request
 
 from security_console import db
+from security_console.authz import bypasses_project_scope
 from security_console.access import (
     can_view_scan,
     present_scan,
@@ -59,16 +60,16 @@ def diff_findings(
 
 
 def can_accept_risk(user: dict[str, Any], project: str) -> bool:
-    """Admins and leads of a group that owns the project may accept risk."""
+    """Accept risk via ``risk.accept_any`` or scoped project lead."""
 
-    if user.get("role") == "admin":
-        return True
-    if user.get("role") not in {"admin", "developer"}:
-        return False
+    from security_console.authz import can_accept_risk as authz_can_accept
+
+    leads = False
     try:
-        return db.user_leads_project(int(user["id"]), project)
+        leads = db.user_leads_project(int(user["id"]), project)
     except (psycopg.Error, TypeError, ValueError):
-        return False
+        leads = False
+    return authz_can_accept(user, leads_project=leads)
 
 
 def install_risk(app: Flask) -> None:
@@ -107,12 +108,12 @@ def _history() -> Reply:
     try:
         group_keys = (
             None
-            if user.get("role") == "admin"
+            if bypasses_project_scope(user)
             else db.group_project_keys(int(user["id"]))
         )
     except (TypeError, ValueError):
         return jsonify({"error": "You do not have permission."}), 403
-    if user.get("role") != "admin" and project not in (group_keys or set()):
+    if not bypasses_project_scope(user) and project not in (group_keys or set()):
         return jsonify({"error": "You do not have permission."}), 403
 
     record = db.get_project_by_slug(project)
@@ -165,7 +166,7 @@ def _diff() -> Reply:
     try:
         group_keys = (
             None
-            if user.get("role") == "admin"
+            if bypasses_project_scope(user)
             else db.group_project_keys(int(user["id"]))
         )
     except (TypeError, ValueError):
@@ -177,24 +178,12 @@ def _diff() -> Reply:
     if not _same_project(baseline, current):
         return jsonify({"error": "Both scans must belong to the same project."}), 400
 
+    from security_console.access import access_map
+
     allowed_tools = {
         tool
-        for tool, ok in (
-            {
-                "semgrep": True,
-                "checkov": True,
-                "trivy": True,
-                "sonar": True,
-            }
-            if user.get("role") == "admin"
-            else {
-                "semgrep": bool(user.get("allow_semgrep")),
-                "checkov": bool(user.get("allow_checkov")),
-                "trivy": bool(user.get("allow_trivy")),
-                "sonar": bool(user.get("allow_sonar")),
-            }
-        ).items()
-        if ok
+        for tool, ok in access_map(user).items()
+        if ok and tool in {"semgrep", "checkov", "trivy", "sonar"}
     }
     before = [
         row
@@ -256,7 +245,7 @@ def _accept() -> Reply:
     try:
         group_keys = (
             None
-            if user.get("role") == "admin"
+            if bypasses_project_scope(user)
             else db.group_project_keys(int(user["id"]))
         )
     except (TypeError, ValueError):
@@ -297,22 +286,46 @@ def _accept() -> Reply:
     )
     commit_sha = str(current.get("commit_sha") or current.get("requested_sha") or "")
     snapshot = triage_snapshot(findings, dispositions)
-    row = db.insert_risk_acceptance(
+    from flask import current_app
+
+    from security_console import audit
+    from security_console.fingerprint import compute_risk_fingerprint
+
+    finding_keys = [finding_key(row) for row in findings]
+    fingerprint = compute_risk_fingerprint(
         project_key=project,
-        baseline_scan_id=baseline_id,
-        current_scan_id=current_id,
         commit_sha=commit_sha,
-        accepted_by=str(user.get("username") or ""),
-        accepted_by_user_id=int(user["id"]),
-        reason=reason,
-        remaining_keys=list(compared["remaining_keys"]),
-        baseline_severity=dict(compared["baseline_severity"]),
-        current_severity=dict(compared["current_severity"]),
-        fixed_count=int(compared["fixed_count"]),
-        new_count=int(compared["new_count"]),
-        remaining_count=int(compared["remaining_count"]),
-        triage_snapshot=snapshot,
+        finding_keys=finding_keys,
+        dispositions=dispositions,
     )
+    try:
+        row = db.insert_risk_acceptance(
+            project_key=project,
+            baseline_scan_id=baseline_id,
+            current_scan_id=current_id,
+            commit_sha=commit_sha,
+            accepted_by=str(user.get("username") or ""),
+            accepted_by_user_id=int(user["id"]),
+            reason=reason,
+            remaining_keys=list(compared["remaining_keys"]),
+            baseline_severity=dict(compared["baseline_severity"]),
+            current_severity=dict(compared["current_severity"]),
+            fixed_count=int(compared["fixed_count"]),
+            new_count=int(compared["new_count"]),
+            remaining_count=int(compared["remaining_count"]),
+            triage_snapshot=snapshot,
+            fingerprint=fingerprint,
+        )
+        audit.record(
+            action="risk.accept",
+            target_type="project",
+            target_id=project,
+            outcome="success",
+            detail={"acceptance_id": row["id"], "fingerprint": fingerprint},
+        )
+    except Exception:
+        current_app.logger.error("risk accept or audit failed")
+        return jsonify({"error": "Could not record risk acceptance."}), 500
     return jsonify(
         {
             "acceptance": row,
@@ -340,7 +353,7 @@ def _gate(app: Flask) -> Reply:
     user = getattr(g, "user", None)
     if not isinstance(user, dict):
         return jsonify({"error": "You do not have permission."}), 401
-    if user.get("username") != "gate" and user.get("role") != "admin":
+    if user.get("username") != "gate" and not bypasses_project_scope(user):
         try:
             keys = db.group_project_keys(int(user["id"]))
         except (psycopg.Error, TypeError, ValueError):
@@ -353,12 +366,46 @@ def _gate(app: Flask) -> Reply:
     except psycopg.Error:
         app.logger.error("risk gate database unavailable")
         return jsonify({"error": "Sign-in is unavailable."}), 503
+    approved = False
+    if latest is not None and not latest.get("executed_at"):
+        stored_fp = str(latest.get("fingerprint") or "")
+        if stored_fp:
+            from security_console.fingerprint import (
+                compute_risk_fingerprint,
+                fingerprints_match,
+            )
+
+            dispositions = db.list_dispositions(project)
+            snap = latest.get("triage_snapshot") or {}
+            keys = sorted(str(k) for k in (snap.keys() if isinstance(snap, dict) else []))
+            if not keys:
+                keys = [str(row.get("finding_key") or "") for row in dispositions]
+            current_fp = compute_risk_fingerprint(
+                project_key=project,
+                commit_sha=commit or str(latest.get("commit_sha") or ""),
+                finding_keys=keys,
+                dispositions=dispositions,
+            )
+            approved = fingerprints_match(stored_fp, current_fp)
+            if approved:
+                try:
+                    db.mark_risk_acceptance_executed(int(latest["id"]))
+                except psycopg.Error:
+                    app.logger.error("risk gate consume failed")
+                    return jsonify({"error": "Sign-in is unavailable."}), 503
+        else:
+            # Legacy rows without fingerprint remain usable once.
+            approved = True
+            try:
+                db.mark_risk_acceptance_executed(int(latest["id"]))
+            except (psycopg.Error, TypeError, ValueError):
+                pass
     return jsonify(
         {
             "project_key": project,
             "commit_sha": commit,
-            "approved_for_push": latest is not None,
-            "acceptance": latest,
+            "approved_for_push": approved,
+            "acceptance": latest if approved else None,
         }
     )
 

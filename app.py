@@ -337,10 +337,13 @@ def create_scan() -> View:
             return jsonify({"error": "Image scans run with Trivy only."}), 400
         if requested_sha:
             return jsonify({"error": "Image scans do not take a commit."}), 400
-        if not project_ref and user.get("role") != "admin":
-            return jsonify(
-                {"error": "Select a project, or ask an admin to scan ad-hoc."}
-            ), 403
+        if not project_ref:
+            from security_console.authz import can_adhoc_scan
+
+            if not can_adhoc_scan(user):
+                return jsonify(
+                    {"error": "Select a project, or ask an admin to scan ad-hoc."}
+                ), 403
     else:
         if not project_ref:
             repo = (body.get("repo") or "").strip()
@@ -350,19 +353,24 @@ def create_scan() -> View:
             ), 400
         if not tools:
             return jsonify({"error": "Select at least one tool."}), 400
-        if not project_ref and user.get("role") != "admin":
-            return jsonify(
-                {"error": "Select a project, or ask an admin to scan ad-hoc."}
-            ), 403
+        if not project_ref:
+            from security_console.authz import can_adhoc_scan
+
+            if not can_adhoc_scan(user):
+                return jsonify(
+                    {"error": "Select a project, or ask an admin to scan ad-hoc."}
+                ), 403
     scan_key = (
         project_slug
         if project_slug
         else project_key({"target": target, "repo": repo, "image": image})
     )
     try:
+        from security_console.authz import bypasses_project_scope
+
         group_keys = (
             set()
-            if user.get("role") == "admin"
+            if bypasses_project_scope(user)
             else db.group_project_keys(int(user["id"]))
         )
     except psycopg.Error:
@@ -516,6 +524,36 @@ def _guest_reply(payload: Any, status: int, cookie: str = "") -> Response:
     return response
 
 
+@app.post("/api/guest/__debug_agent_log")
+def debug_agent_log() -> Response:
+    # #region agent log
+    if os.environ.get("CONSOLE_ENV") != "development":
+        return jsonify({"error": "Not found."}), 404
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"ok": False}), 400
+    line = json.dumps(
+        {
+            "sessionId": body.get("sessionId") or "4a0a8b",
+            "runId": body.get("runId") or "pre-fix",
+            "hypothesisId": body.get("hypothesisId") or "",
+            "location": str(body.get("location") or "")[:200],
+            "message": str(body.get("message") or "")[:300],
+            "data": body.get("data") if isinstance(body.get("data"), dict) else {},
+            "timestamp": body.get("timestamp") or 0,
+        },
+        ensure_ascii=True,
+    )
+    try:
+        path = DATA / "agent-debug.ndjson"
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(line + "\n")
+    except OSError:
+        return jsonify({"ok": False}), 500
+    return jsonify({"ok": True})
+    # #endregion
+
+
 @app.post("/api/guest/scans")
 def create_guest_scan() -> Response:
     if not request.is_json:
@@ -623,8 +661,10 @@ def get_guest_scan(scan_id: str) -> View:
 @app.get("/api/sonar/setup")
 @app.post("/api/sonar/setup")
 def sonar_setup_route() -> View:
+    from security_console.authz import can_setup_sonar
+
     user = getattr(g, "user", None)
-    if not isinstance(user, dict) or user.get("role") != "admin":
+    if not isinstance(user, dict) or not can_setup_sonar(user):
         return jsonify({"error": "You do not have permission."}), 403
     if request.method == "POST":
         body = request.get_json(silent=True) or {}
@@ -646,9 +686,11 @@ install_sonar_proxy(app)
 
 
 def _group_keys(user: dict[str, Any]) -> set[str] | None:
-    """Return group projects for a member. Admins are not filtered."""
+    """Return group projects for a member. Scope-bypass accounts are unfiltered."""
 
-    if user.get("role") == "admin":
+    from security_console.authz import bypasses_project_scope
+
+    if bypasses_project_scope(user):
         return None
     return db.group_project_keys(int(user["id"]))
 

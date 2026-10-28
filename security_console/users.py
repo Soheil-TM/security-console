@@ -18,6 +18,12 @@ from security_console.auth import (
     valid_username,
     verify_password,
 )
+from security_console.authz import (
+    can_reset_password,
+    effective_capability_names,
+    is_super_admin,
+    would_remove_last_super_admin,
+)
 
 Reply = Response | tuple[Response, int]
 _EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -71,6 +77,7 @@ def public_user(user: dict[str, Any]) -> dict[str, Any]:
         "last_name": user.get("last_name") or "",
         "email": user.get("email") or "",
         "role": user["role"],
+        "capabilities": effective_capability_names(user),
         "disabled": bool(user.get("disabled")),
         "access": access_map(user),
         "created_at": created_at,
@@ -85,6 +92,8 @@ def _create_account(app: Flask) -> Reply:
     parsed = _account_body(request.get_json(silent=True), password_required=True)
     if isinstance(parsed, Response):
         return parsed
+    if parsed["role"] == "super_admin" and not is_super_admin(g.user):
+        return jsonify({"error": "You do not have permission."}), 403
     try:
         user_id = db.insert_user(
             parsed["username"],
@@ -99,6 +108,7 @@ def _create_account(app: Flask) -> Reply:
             allow_sonar_ui=parsed["allow_sonar_ui"],
             first_name=parsed["first_name"],
             last_name=parsed["last_name"],
+            capabilities=parsed.get("capabilities") or {},
         )
     except UniqueViolation:
         return jsonify({"error": "That username is already registered."}), 409
@@ -120,8 +130,10 @@ def _update_account(app: Flask, user_id: int) -> Reply:
     )
     if isinstance(parsed, Response):
         return parsed
-    if _removes_last_admin(current, parsed):
-        return jsonify({"error": "The last admin cannot be removed."}), 409
+    if parsed["role"] == "super_admin" and not is_super_admin(g.user):
+        return jsonify({"error": "You do not have permission."}), 403
+    if _removes_last_privileged(current, parsed):
+        return jsonify({"error": "The last privileged admin cannot be removed."}), 409
     password_hash = None
     if parsed["password"]:
         if not _can_reset_password(g.user, current):
@@ -143,6 +155,7 @@ def _update_account(app: Flask, user_id: int) -> Reply:
             first_name=parsed["first_name"],
             last_name=parsed["last_name"],
             must_change_password=parsed["must_change_password"],
+            capabilities=parsed.get("capabilities"),
         )
     except UniqueViolation:
         return jsonify({"error": "That username is already registered."}), 409
@@ -159,8 +172,8 @@ def _remove_account(app: Flask, user_id: int) -> Reply:
         return jsonify({"error": "User not found."}), 404
     if int(g.user["id"]) == user_id:
         return jsonify({"error": "Do not delete your own account here."}), 409
-    if current["role"] == "admin" and db.count_other_admins(user_id) == 0:
-        return jsonify({"error": "The last admin cannot be removed."}), 409
+    if _delete_removes_last_privileged(current):
+        return jsonify({"error": "The last privileged admin cannot be removed."}), 409
     db.delete_user(user_id)
     app.logger.info("user deleted id=%s", user_id)
     return jsonify({"ok": True})
@@ -237,9 +250,26 @@ def _account_body(
         for tool in TOOLS
     }
     sonar_ui = bool(access.get("sonar_ui"))
-    if role == "admin":
+    if role in {"admin", "super_admin"}:
         flags = {tool: True for tool in TOOLS}
         sonar_ui = True
+    # Preserve stored capabilities on update when the client omits them.
+    # Creating without an explicit map stores {}. Admin does not get implicit caps.
+    if "capabilities" in body:
+        raw_caps = body.get("capabilities")
+        if isinstance(raw_caps, dict):
+            capabilities: dict[str, bool] | None = {
+                str(key): bool(value) for key, value in raw_caps.items()
+            }
+        else:
+            return _reject("Capabilities are invalid.", 400)
+    elif current is not None:
+        existing = current.get("capabilities")
+        capabilities = existing if isinstance(existing, dict) else {}
+    else:
+        capabilities = {}
+    if role == "super_admin":
+        capabilities = {}
     return {
         "username": username.strip(),
         "first_name": first_name,
@@ -254,6 +284,7 @@ def _account_body(
         "allow_trivy": flags["trivy"],
         "allow_sonar_ui": sonar_ui,
         "must_change_password": _must_change(body, password, password_required),
+        "capabilities": capabilities,
     }
 
 
@@ -270,15 +301,11 @@ def _must_change(body: dict[str, Any], password: str, required: bool) -> bool:
 
 
 def _can_reset_password(actor: dict[str, Any], target: dict[str, Any]) -> bool:
-    """An admin resets other people. Only admin resets another admin."""
+    """Reset another account using role/capability policy (no usernames)."""
 
-    if actor.get("role") != "admin":
-        return False
     if int(actor.get("id") or 0) == int(target["id"]):
         return False
-    if target.get("role") == "admin" and actor.get("username") != "admin":
-        return False
-    return True
+    return can_reset_password(actor, target)
 
 
 def _email_text(
@@ -325,13 +352,37 @@ def _reject(message: str, status: int) -> Response:
     return response
 
 
-def _removes_last_admin(
+def _removes_last_privileged(
     current: dict[str, Any],
     parsed: dict[str, Any],
 ) -> bool:
+    """Block demote/disable that would remove the last super_admin or last admin."""
+
+    if would_remove_last_super_admin(
+        current,
+        other_active_super_admin_count=db.count_other_super_admins(
+            int(current["id"])
+        ),
+        new_role=str(parsed["role"]),
+        new_disabled=bool(parsed["disabled"]),
+    ):
+        return True
     if current["role"] != "admin":
         return False
     stays_admin = parsed["role"] == "admin" and not parsed["disabled"]
     if stays_admin:
         return False
     return db.count_other_admins(int(current["id"])) == 0
+
+
+def _delete_removes_last_privileged(current: dict[str, Any]) -> bool:
+    if would_remove_last_super_admin(
+        current,
+        other_active_super_admin_count=db.count_other_super_admins(
+            int(current["id"])
+        ),
+    ):
+        return True
+    if current["role"] == "admin" and db.count_other_admins(int(current["id"])) == 0:
+        return True
+    return False

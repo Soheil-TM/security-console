@@ -15,6 +15,7 @@ from security_console.access import (
     present_scan,
     scan_project_ref,
 )
+from security_console.authz import bypasses_project_scope, can_write_triage_by_role
 from security_console.risk import can_accept_risk, finding_key
 
 Reply = Response | tuple[Response, int]
@@ -24,10 +25,11 @@ DISPOSITION_STATUSES = (
     "false_positive",
     "accepted_risk",
     "needs_review",
+    "resolved",
 )
-GATE_OK_STATUSES = frozenset({"false_positive", "accepted_risk"})
-REASON_STATUSES = frozenset({"false_positive", "accepted_risk"})
-ASSIGNABLE_STATUSES = frozenset({"true_positive", "needs_review"})
+GATE_OK_STATUSES = frozenset({"false_positive", "accepted_risk", "resolved"})
+REASON_STATUSES = frozenset({"false_positive", "accepted_risk", "resolved"})
+ASSIGNABLE_STATUSES = frozenset({"true_positive", "needs_review", "resolved"})
 
 
 def install_investigate(app: Flask) -> None:
@@ -81,7 +83,7 @@ def gate_readiness(
     findings: list[dict[str, Any]],
     dispositions: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
-    """Return whether every finding is FP or Accepted Risk with a reason."""
+    """Return whether every finding is FP, Accepted Risk, or Resolved with a reason."""
 
     blockers: list[dict[str, str]] = []
     counts = {
@@ -89,6 +91,7 @@ def gate_readiness(
         "false_positive": 0,
         "accepted_risk": 0,
         "needs_review": 0,
+        "resolved": 0,
         "undecided": 0,
     }
     for row in findings:
@@ -111,7 +114,9 @@ def gate_readiness(
             blockers.append(
                 {
                     "finding_key": key,
-                    "reason": "Status must be False Positive or Accepted Risk.",
+                    "reason": (
+                        "Status must be False Positive, Accepted Risk, or Resolved."
+                    ),
                 }
             )
             continue
@@ -167,7 +172,7 @@ def _investigate() -> Reply:
     try:
         group_keys = (
             None
-            if user.get("role") == "admin"
+            if bypasses_project_scope(user)
             else db.group_project_keys(int(user["id"]))
         )
     except (TypeError, ValueError):
@@ -179,30 +184,44 @@ def _investigate() -> Reply:
     findings = allowed_findings(user, scan)
     dispositions = db.list_dispositions(project)
     readiness = gate_readiness(findings, dispositions)
-    can_triage = user.get("role") in {"admin", "developer", "viewer"} and (
-        user.get("role") == "admin"
-        or project in (group_keys or set())
-    )
-    # Viewers may view investigate but only developers/admins/leads write.
-    can_write = user.get("role") in {"admin", "developer"} and (
-        user.get("role") == "admin"
+    can_triage = bypasses_project_scope(user) or project in (group_keys or set())
+    # Viewers may view investigate but only triage-writer roles write.
+    can_write = can_write_triage_by_role(user) and (
+        bypasses_project_scope(user)
         or db.user_in_project_groups(int(user["id"]), project)
         or project in (group_keys or set())
     )
     previous = _previous_done_scan(scan, project)
+    annotated: list[dict[str, Any]] = []
+    carry_by_status: dict[str, int] = {}
+    new_count = 0
+    carried_count = 0
+    for row in findings:
+        key = finding_key(row)
+        disp = dispositions.get(key) if key else None
+        carried = disp is not None
+        if carried:
+            carried_count += 1
+            status = str(disp.get("status") or "")
+            if status:
+                carry_by_status[status] = carry_by_status.get(status, 0) + 1
+        else:
+            new_count += 1
+        annotated.append(
+            {
+                **row,
+                "finding_key": key,
+                "is_new": not carried,
+                "carried": carried,
+            }
+        )
     return jsonify(
         {
             "project_key": project,
             "scan": present_scan(
                 user, scan, summary=True, group_keys=group_keys
             ),
-            "findings": [
-                {
-                    **row,
-                    "finding_key": finding_key(row),
-                }
-                for row in findings
-            ],
+            "findings": annotated,
             "dispositions": dispositions,
             "assignees": db.list_project_assignees(project),
             "readiness": readiness,
@@ -212,6 +231,11 @@ def _investigate() -> Reply:
                 previous["id"] if previous is not None else scan["id"]
             ),
             "statuses": list(DISPOSITION_STATUSES),
+            "carry": {
+                "new": new_count,
+                "carried": carried_count,
+                "by_status": carry_by_status,
+            },
         }
     )
 
@@ -244,16 +268,16 @@ def _put_disposition() -> Reply:
     try:
         group_keys = (
             None
-            if user.get("role") == "admin"
+            if bypasses_project_scope(user)
             else db.group_project_keys(int(user["id"]))
         )
     except (TypeError, ValueError):
         return jsonify({"error": "You do not have permission."}), 403
     if not can_view_scan(user, scan, group_keys=group_keys):
         return jsonify({"error": "You do not have permission."}), 403
-    if user.get("role") not in {"admin", "developer"}:
+    if not can_write_triage_by_role(user):
         return jsonify({"error": "You do not have permission."}), 403
-    if user.get("role") != "admin" and not (
+    if not bypasses_project_scope(user) and not (
         db.user_in_project_groups(int(user["id"]), project)
         or project in (group_keys or set())
     ):
@@ -267,7 +291,7 @@ def _put_disposition() -> Reply:
         return jsonify(
             {"error": "Only an admin or project lead can mark Accepted Risk."}
         ), 403
-    if status in REASON_STATUSES and len(reason) < 12:
+    if len(reason) < 12:
         return jsonify(
             {"error": "Write a reason of at least 12 characters."}
         ), 400
@@ -275,20 +299,17 @@ def _put_disposition() -> Reply:
         return jsonify({"error": "Reason is too long."}), 400
 
     assignee_id = None
-    if assignee_name:
-        if status not in ASSIGNABLE_STATUSES:
-            return jsonify(
-                {"error": "Assignee is only used for True Positive or Needs Review."}
-            ), 400
+    if status == "accepted_risk":
+        # Whoever is allowed to accept risk owns the acceptance.
+        assignee_id = int(user["id"])
+    elif assignee_name and status in ASSIGNABLE_STATUSES:
         candidates = {
             item["username"]: item for item in db.list_project_assignees(project)
         }
         person = candidates.get(assignee_name)
         if person is None:
-            return jsonify({"error": "Assignee must belong to the project group."}), 400
+            return jsonify({"error": "Assigned user must belong to the project group."}), 400
         assignee_id = int(person["id"])
-    elif status not in ASSIGNABLE_STATUSES:
-        assignee_id = None
 
     row = db.upsert_disposition(
         project_key=project,
@@ -400,11 +421,11 @@ def _triage_inbox() -> Reply:
         return jsonify({"error": "You do not have permission."}), 403
     group_keys = (
         None
-        if user.get("role") == "admin"
+        if bypasses_project_scope(user)
         else db.group_project_keys(user_id)
     )
     assignments = db.list_my_assignments(user_id)
-    project_user = None if user.get("role") == "admin" else user_id
+    project_user = None if bypasses_project_scope(user) else user_id
     projects = db.list_projects(project_user)
     scans = db.list_scan_rows()
     dispositions_by_project: dict[str, dict[str, dict[str, Any]]] = {}
@@ -426,6 +447,55 @@ def _triage_inbox() -> Reply:
         dispositions_by_project=dispositions_by_project,
         group_keys=group_keys,
     )
+    # #region agent log
+    try:
+        import json
+        from pathlib import Path
+        from datetime import datetime, timezone
+
+        status_counts: dict[str, int] = {}
+        for project_disps in dispositions_by_project.values():
+            for disp in project_disps.values():
+                status = str(disp.get("status") or "undecided")
+                status_counts[status] = status_counts.get(status, 0) + 1
+        line = {
+            "sessionId": "4a0a8b",
+            "runId": "pre-fix",
+            "hypothesisId": "A",
+            "location": "investigate.py:_triage_inbox",
+            "message": "triage inbox payload",
+            "data": {
+                "user_id": user_id,
+                "role": str(user.get("role") or ""),
+                "assignments": len(assignments),
+                "needs_triage": len(payload.get("needs_triage") or []),
+                "badge_count": payload.get("badge_count"),
+                "projects": len(projects),
+                "done_project_scans": sum(
+                    1
+                    for item in scans
+                    if not item.get("guest")
+                    and item.get("status") == "done"
+                    and (item.get("project_id") or item.get("project_slug"))
+                ),
+                "disposition_status_counts": status_counts,
+                "triage_by_project": {
+                    key: {
+                        "ready_for_gate": bool(entry.get("ready_for_gate")),
+                        "open_count": entry.get("open_count"),
+                        "counts": entry.get("counts"),
+                    }
+                    for key, entry in (payload.get("triage_by_project") or {}).items()
+                },
+            },
+            "timestamp": int(datetime.now(timezone.utc).timestamp() * 1000),
+        }
+        Path("/data/agent-debug.ndjson").open("a", encoding="utf-8").write(
+            json.dumps(line, ensure_ascii=True) + "\n"
+        )
+    except OSError:
+        pass
+    # #endregion
     return jsonify(payload)
 
 

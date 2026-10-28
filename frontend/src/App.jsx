@@ -1,6 +1,6 @@
 import { Navigate, Outlet, Route, Routes } from "react-router-dom";
 
-import { useAuth } from "./auth";
+import { hasCap, useAuth } from "./auth";
 import { Shell } from "./components/Shell";
 import { AccessPage } from "./pages/AccessPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -31,11 +31,23 @@ export default function App() {
         <Route path="/settings" element={<SettingsPage />} />
         <Route
           path="/users"
-          element={user?.role === "admin" ? <UsersPage /> : <Navigate to="/portal" replace />}
+          element={
+            hasCap(user, "users.manage") ? (
+              <UsersPage />
+            ) : (
+              <Navigate to="/portal" replace />
+            )
+          }
         />
         <Route
           path="/access"
-          element={user?.role === "admin" ? <AccessPage /> : <Navigate to="/portal" replace />}
+          element={
+            hasCap(user, "tool_access.manage") ? (
+              <AccessPage />
+            ) : (
+              <Navigate to="/portal" replace />
+            )
+          }
         />
         <Route path="*" element={<Navigate to={user ? home(user) : "/login"} replace />} />
       </Route>
@@ -53,5 +65,5 @@ function Private({ user }) {
 }
 
 function home(user) {
-  return user.role === "admin" ? "/users" : "/portal";
+  return hasCap(user, "users.manage") ? "/users" : "/portal";
 }

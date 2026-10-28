@@ -65,7 +65,17 @@ def test_diff_splits_fixed_remaining_and_new() -> None:
 
 
 def test_admin_can_accept_risk_without_group_lookup() -> None:
-    assert can_accept_risk({"role": "admin", "id": 1}, "payments-api") is True
+    assert (
+        can_accept_risk(
+            {
+                "role": "admin",
+                "id": 1,
+                "capabilities": {"risk.accept_any": True},
+            },
+            "payments-api",
+        )
+        is True
+    )
     assert can_accept_risk({"role": "viewer", "id": 2}, "payments-api") is False
 
 

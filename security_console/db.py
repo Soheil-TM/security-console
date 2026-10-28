@@ -21,13 +21,16 @@ SCHEMA = (
         username text NOT NULL UNIQUE,
         email text NOT NULL DEFAULT '',
         password_hash text NOT NULL,
-        role text NOT NULL CHECK (role IN ('admin', 'developer', 'viewer')),
+        role text NOT NULL CHECK (
+            role IN ('super_admin', 'admin', 'developer', 'viewer')
+        ),
         disabled boolean NOT NULL DEFAULT false,
         allow_semgrep boolean NOT NULL DEFAULT true,
         allow_checkov boolean NOT NULL DEFAULT true,
         allow_sonar boolean NOT NULL DEFAULT false,
         allow_sonar_ui boolean NOT NULL DEFAULT false,
         allow_trivy boolean NOT NULL DEFAULT true,
+        capabilities jsonb NOT NULL DEFAULT '{}'::jsonb,
         first_name text NOT NULL DEFAULT '',
         last_name text NOT NULL DEFAULT '',
         must_change_password boolean NOT NULL DEFAULT false,
@@ -219,7 +222,8 @@ SCHEMA = (
                 'true_positive',
                 'false_positive',
                 'accepted_risk',
-                'needs_review'
+                'needs_review',
+                'resolved'
             )),
         reason text NOT NULL DEFAULT '',
         assignee_user_id bigint REFERENCES users (id) ON DELETE SET NULL,
@@ -239,6 +243,91 @@ SCHEMA = (
     CREATE INDEX IF NOT EXISTS finding_dispositions_assignee
         ON finding_dispositions (assignee_user_id)
         WHERE assignee_user_id IS NOT NULL
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS finding_disposition_notes (
+        id bigserial PRIMARY KEY,
+        project_key text NOT NULL,
+        finding_key text NOT NULL,
+        status text NOT NULL
+            CHECK (status IN (
+                'true_positive',
+                'false_positive',
+                'accepted_risk',
+                'needs_review',
+                'resolved'
+            )),
+        reason text NOT NULL DEFAULT '',
+        assignee_user_id bigint REFERENCES users (id) ON DELETE SET NULL,
+        author_user_id bigint REFERENCES users (id) ON DELETE SET NULL,
+        author_username text NOT NULL DEFAULT '',
+        scan_id text NOT NULL DEFAULT '',
+        created_at timestamptz NOT NULL DEFAULT now()
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS finding_disposition_notes_finding
+        ON finding_disposition_notes (project_key, finding_key, id DESC)
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS audit_events (
+        id bigserial PRIMARY KEY,
+        actor_user_id bigint,
+        actor_username text NOT NULL DEFAULT '',
+        action text NOT NULL,
+        target_type text NOT NULL DEFAULT '',
+        target_id text NOT NULL DEFAULT '',
+        outcome text NOT NULL
+            CHECK (outcome IN ('success', 'denied', 'failure')),
+        detail jsonb NOT NULL DEFAULT '{}'::jsonb,
+        created_at timestamptz NOT NULL DEFAULT now()
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS audit_events_time
+        ON audit_events (created_at DESC)
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS tasks (
+        id bigserial PRIMARY KEY,
+        group_id bigint NOT NULL REFERENCES project_groups (id) ON DELETE CASCADE,
+        project_id bigint REFERENCES projects (id) ON DELETE SET NULL,
+        title text NOT NULL,
+        body text NOT NULL DEFAULT '',
+        status text NOT NULL DEFAULT 'open'
+            CHECK (status IN (
+                'open',
+                'in_progress',
+                'submitted',
+                'approved',
+                'rejected',
+                'cancelled'
+            )),
+        creator_user_id bigint NOT NULL REFERENCES users (id),
+        assignee_user_id bigint REFERENCES users (id) ON DELETE SET NULL,
+        version integer NOT NULL DEFAULT 1,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS tasks_group_status
+        ON tasks (group_id, status)
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS task_events (
+        id bigserial PRIMARY KEY,
+        task_id bigint NOT NULL REFERENCES tasks (id) ON DELETE CASCADE,
+        actor_user_id bigint,
+        actor_username text NOT NULL DEFAULT '',
+        event text NOT NULL,
+        detail jsonb NOT NULL DEFAULT '{}'::jsonb,
+        created_at timestamptz NOT NULL DEFAULT now()
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS task_events_task_time
+        ON task_events (task_id, created_at)
     """,
 )
 
@@ -442,7 +531,12 @@ MIGRATIONS = (
     """
     ALTER TABLE users
         ADD CONSTRAINT users_role_check
-        CHECK (role IN ('admin', 'developer', 'viewer'))
+        CHECK (role IN ('super_admin', 'admin', 'developer', 'viewer'))
+    """,
+    """
+    ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS capabilities jsonb
+        NOT NULL DEFAULT '{}'::jsonb
     """,
     """
     UPDATE users
@@ -450,14 +544,16 @@ MIGRATIONS = (
         allow_checkov = true,
         allow_sonar = true,
         allow_trivy = true
-    WHERE role = 'admin'
+    WHERE role IN ('admin', 'super_admin')
     """,
     """
     ALTER TABLE users
         ADD COLUMN IF NOT EXISTS allow_sonar_ui boolean NOT NULL DEFAULT false
     """,
     """
-    UPDATE users SET allow_sonar_ui = true WHERE role = 'admin'
+    UPDATE users
+    SET allow_sonar_ui = true
+    WHERE role IN ('admin', 'super_admin')
     """,
     """
     ALTER TABLE users
@@ -515,11 +611,95 @@ MIGRATIONS = (
         ADD COLUMN IF NOT EXISTS tool_results jsonb
         NOT NULL DEFAULT '[]'::jsonb
     """,
+    """
+    ALTER TABLE risk_acceptances
+        ADD COLUMN IF NOT EXISTS fingerprint text NOT NULL DEFAULT ''
+    """,
+    """
+    ALTER TABLE risk_acceptances
+        ADD COLUMN IF NOT EXISTS executed_at timestamptz
+    """,
+    """
+    DO $$
+    DECLARE constraint_name text;
+    BEGIN
+        FOR constraint_name IN
+            SELECT conname
+            FROM pg_constraint
+            WHERE conrelid = 'finding_dispositions'::regclass
+              AND contype = 'c'
+              AND pg_get_constraintdef(oid) ILIKE '%status%'
+        LOOP
+            EXECUTE format(
+                'ALTER TABLE finding_dispositions DROP CONSTRAINT %I',
+                constraint_name
+            );
+        END LOOP;
+    END $$
+    """,
+    """
+    ALTER TABLE finding_dispositions
+        ADD CONSTRAINT finding_dispositions_status_check
+        CHECK (status IN (
+            'true_positive',
+            'false_positive',
+            'accepted_risk',
+            'needs_review',
+            'resolved'
+        ))
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS finding_disposition_notes (
+        id bigserial PRIMARY KEY,
+        project_key text NOT NULL,
+        finding_key text NOT NULL,
+        status text NOT NULL
+            CHECK (status IN (
+                'true_positive',
+                'false_positive',
+                'accepted_risk',
+                'needs_review',
+                'resolved'
+            )),
+        reason text NOT NULL DEFAULT '',
+        assignee_user_id bigint REFERENCES users (id) ON DELETE SET NULL,
+        author_user_id bigint REFERENCES users (id) ON DELETE SET NULL,
+        author_username text NOT NULL DEFAULT '',
+        scan_id text NOT NULL DEFAULT '',
+        created_at timestamptz NOT NULL DEFAULT now()
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS finding_disposition_notes_finding
+        ON finding_disposition_notes (project_key, finding_key, id DESC)
+    """,
+    """
+    INSERT INTO finding_disposition_notes (
+        project_key, finding_key, status, reason, assignee_user_id,
+        author_user_id, author_username, scan_id, created_at
+    )
+    SELECT d.project_key, d.finding_key, d.status, d.reason, d.assignee_user_id,
+           d.updated_by_user_id, d.updated_by, d.scan_id, d.updated_at
+    FROM finding_dispositions AS d
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM finding_disposition_notes AS n
+        WHERE n.project_key = d.project_key
+          AND n.finding_key = d.finding_key
+    )
+    """,
 )
 
 
 def prepare_database() -> None:
-    """Create tables. Scan rows may also exist as JSON files until migrated."""
+    """Create tables. Scan rows may also exist as JSON files until migrated.
+
+    RBAC U1 data mapping runs in the same transaction as schema migrations so
+    a validation failure rolls back DDL+data together. It is idempotent via
+    ``app_flags.rbac_roles_u1_v1`` on this connection (not a separate commit).
+    """
+
+    from security_console.rbac_migrate import apply_rbac_u1
 
     ensure_database()
     with connect() as conn:
@@ -528,6 +708,7 @@ def prepare_database() -> None:
         for statement in MIGRATIONS:
             conn.execute(statement)
         _migrate_legacy_group_projects(conn)
+        apply_rbac_u1(conn)
         conn.commit()
 
 
@@ -1000,18 +1181,21 @@ def insert_user(
     allow_sonar_ui: bool = False,
     first_name: str = "",
     last_name: str = "",
+    capabilities: dict[str, Any] | None = None,
 ) -> int:
     """Insert one account and return its id."""
 
+    caps = capabilities if isinstance(capabilities, dict) else {}
     with connect() as conn:
         row = conn.execute(
             """
             INSERT INTO users (
                 username, email, password_hash, role,
                 allow_semgrep, allow_checkov, allow_sonar, allow_trivy,
-                allow_sonar_ui, must_change_password, first_name, last_name
+                allow_sonar_ui, must_change_password, first_name, last_name,
+                capabilities
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
             (
@@ -1027,6 +1211,7 @@ def insert_user(
                 must_change_password,
                 first_name,
                 last_name,
+                Jsonb(caps),
             ),
         ).fetchone()
         conn.commit()
@@ -1045,7 +1230,7 @@ def find_user(username: str) -> dict[str, Any] | None:
                    password_hash, role, disabled,
                    allow_semgrep, allow_checkov, allow_sonar, allow_trivy,
                    allow_sonar_ui, must_change_password, session_version,
-                   idle_timeout_minutes
+                   idle_timeout_minutes, capabilities
             FROM users
             WHERE username = %s
             """,
@@ -1064,7 +1249,8 @@ def find_user_by_id(user_id: int) -> dict[str, Any] | None:
             SELECT id, username, email, first_name, last_name, role, disabled,
                    allow_semgrep, allow_checkov, allow_sonar,
                    allow_trivy, allow_sonar_ui, must_change_password,
-                   session_version, idle_timeout_minutes, created_at
+                   session_version, idle_timeout_minutes, created_at,
+                   capabilities
             FROM users
             WHERE id = %s
             """,
@@ -1082,7 +1268,7 @@ def list_users() -> list[dict[str, Any]]:
             """
             SELECT id, username, email, first_name, last_name, role, disabled,
                    allow_semgrep, allow_checkov, allow_sonar,
-                   allow_trivy, allow_sonar_ui, created_at
+                   allow_trivy, allow_sonar_ui, created_at, capabilities
             FROM users
             ORDER BY username
             """
@@ -1092,7 +1278,7 @@ def list_users() -> list[dict[str, Any]]:
 
 
 def count_other_admins(user_id: int) -> int:
-    """Count active admins other than this account."""
+    """Count active org admins other than this account."""
 
     with connect() as conn:
         row = conn.execute(
@@ -1100,6 +1286,24 @@ def count_other_admins(user_id: int) -> int:
             SELECT count(*) AS n
             FROM users
             WHERE role = 'admin' AND disabled = false AND id <> %s
+            """,
+            (user_id,),
+        ).fetchone()
+        conn.commit()
+    if row is None:
+        return 0
+    return int(row["n"])
+
+
+def count_other_super_admins(user_id: int) -> int:
+    """Count active super_admins other than this account."""
+
+    with connect() as conn:
+        row = conn.execute(
+            """
+            SELECT count(*) AS n
+            FROM users
+            WHERE role = 'super_admin' AND disabled = false AND id <> %s
             """,
             (user_id,),
         ).fetchone()
@@ -1124,11 +1328,15 @@ def update_user(
     first_name: str = "",
     last_name: str = "",
     must_change_password: bool = False,
+    capabilities: dict[str, Any] | None = None,
 ) -> None:
-    """Replace the editable fields of one account."""
+    """Replace the editable fields of one account.
+
+    When ``capabilities`` is ``None``, the stored JSON map is left unchanged.
+    """
 
     with connect() as conn:
-        if password_hash is None:
+        if password_hash is None and capabilities is None:
             conn.execute(
                 """
                 UPDATE users
@@ -1154,7 +1362,35 @@ def update_user(
                     user_id,
                 ),
             )
-        else:
+        elif password_hash is None:
+            conn.execute(
+                """
+                UPDATE users
+                SET username = %s, email = %s, role = %s, disabled = %s,
+                    allow_semgrep = %s, allow_checkov = %s,
+                    allow_sonar = %s, allow_trivy = %s,
+                    allow_sonar_ui = %s,
+                    first_name = %s, last_name = %s,
+                    capabilities = %s
+                WHERE id = %s
+                """,
+                (
+                    username,
+                    email,
+                    role,
+                    disabled,
+                    allow_semgrep,
+                    allow_checkov,
+                    allow_sonar,
+                    allow_trivy,
+                    allow_sonar_ui,
+                    first_name,
+                    last_name,
+                    Jsonb(capabilities if isinstance(capabilities, dict) else {}),
+                    user_id,
+                ),
+            )
+        elif capabilities is None:
             conn.execute(
                 """
                 UPDATE users
@@ -1182,6 +1418,40 @@ def update_user(
                     last_name,
                     password_hash,
                     must_change_password,
+                    user_id,
+                ),
+            )
+            _revoke_refresh_conn(conn, user_id)
+        else:
+            conn.execute(
+                """
+                UPDATE users
+                SET username = %s, email = %s, role = %s, disabled = %s,
+                    allow_semgrep = %s, allow_checkov = %s,
+                    allow_sonar = %s, allow_trivy = %s,
+                    allow_sonar_ui = %s,
+                    first_name = %s, last_name = %s,
+                    password_hash = %s,
+                    must_change_password = %s,
+                    session_version = session_version + 1,
+                    capabilities = %s
+                WHERE id = %s
+                """,
+                (
+                    username,
+                    email,
+                    role,
+                    disabled,
+                    allow_semgrep,
+                    allow_checkov,
+                    allow_sonar,
+                    allow_trivy,
+                    allow_sonar_ui,
+                    first_name,
+                    last_name,
+                    password_hash,
+                    must_change_password,
+                    Jsonb(capabilities if isinstance(capabilities, dict) else {}),
                     user_id,
                 ),
             )
@@ -2215,7 +2485,8 @@ _ACCEPTANCE_SELECT = """
            commit_sha, accepted_by, reason, remaining_keys,
            baseline_severity, current_severity,
            fixed_count, new_count, remaining_count,
-           triage_snapshot, created_at, revoked_at
+           triage_snapshot, fingerprint, executed_at,
+           created_at, revoked_at
     FROM risk_acceptances
 """
 
@@ -2248,6 +2519,8 @@ def _acceptance_from_row(row: dict[str, Any]) -> dict[str, Any]:
         "new_count": int(row.get("new_count") or 0),
         "remaining_count": int(row.get("remaining_count") or 0),
         "triage_snapshot": dict(snapshot) if isinstance(snapshot, dict) else {},
+        "fingerprint": str(row.get("fingerprint") or ""),
+        "executed_at": _stamp(row.get("executed_at")),
         "created_at": _stamp(row.get("created_at")),
         "revoked_at": _stamp(row.get("revoked_at")),
         "active": row.get("revoked_at") is None,
@@ -2270,6 +2543,7 @@ def insert_risk_acceptance(
     new_count: int,
     remaining_count: int,
     triage_snapshot: dict[str, Any] | None = None,
+    fingerprint: str = "",
 ) -> dict[str, Any]:
     """Store one risk acceptance and return it."""
 
@@ -2280,19 +2554,22 @@ def insert_risk_acceptance(
                 project_key, baseline_scan_id, current_scan_id, commit_sha,
                 accepted_by, accepted_by_user_id, reason, remaining_keys,
                 baseline_severity, current_severity,
-                fixed_count, new_count, remaining_count, triage_snapshot
+                fixed_count, new_count, remaining_count, triage_snapshot,
+                fingerprint
             )
             VALUES (
                 %s, %s, %s, %s,
                 %s, %s, %s, %s,
                 %s, %s,
-                %s, %s, %s, %s
+                %s, %s, %s, %s,
+                %s
             )
             RETURNING id, project_key, baseline_scan_id, current_scan_id,
                       commit_sha, accepted_by, reason, remaining_keys,
                       baseline_severity, current_severity,
                       fixed_count, new_count, remaining_count,
-                      triage_snapshot, created_at, revoked_at
+                      triage_snapshot, fingerprint, executed_at,
+                      created_at, revoked_at
             """,
             (
                 project_key,
@@ -2309,6 +2586,7 @@ def insert_risk_acceptance(
                 new_count,
                 remaining_count,
                 Jsonb(triage_snapshot or {}),
+                fingerprint,
             ),
         ).fetchone()
         conn.commit()
@@ -2403,12 +2681,65 @@ def _disposition_from_row(row: dict[str, Any]) -> dict[str, Any]:
         "scan_id": str(row.get("scan_id") or ""),
         "created_at": _stamp(row.get("created_at")),
         "updated_at": _stamp(row.get("updated_at")),
+        "notes": list(row.get("notes") or []),
     }
+
+
+def _note_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": int(row["id"]),
+        "project_key": str(row.get("project_key") or ""),
+        "finding_key": str(row.get("finding_key") or ""),
+        "status": str(row.get("status") or ""),
+        "reason": str(row.get("reason") or ""),
+        "assignee_user_id": (
+            int(row["assignee_user_id"])
+            if row.get("assignee_user_id") is not None
+            else None
+        ),
+        "assignee_username": str(row.get("assignee_username") or ""),
+        "author_user_id": (
+            int(row["author_user_id"])
+            if row.get("author_user_id") is not None
+            else None
+        ),
+        "author_username": str(row.get("author_username") or ""),
+        "scan_id": str(row.get("scan_id") or ""),
+        "created_at": _stamp(row.get("created_at")),
+    }
+
+
+def list_disposition_notes(
+    project_key: str,
+) -> dict[str, list[dict[str, Any]]]:
+    """Return immutable disposition notes newest-first, keyed by finding_key."""
+
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT n.id, n.project_key, n.finding_key, n.status, n.reason,
+                   n.assignee_user_id, n.author_user_id, n.author_username,
+                   n.scan_id, n.created_at,
+                   u.username AS assignee_username
+            FROM finding_disposition_notes AS n
+            LEFT JOIN users AS u ON u.id = n.assignee_user_id
+            WHERE n.project_key = %s
+            ORDER BY n.id DESC
+            """,
+            (project_key,),
+        ).fetchall()
+        conn.commit()
+    notes: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        key = str(row["finding_key"])
+        notes.setdefault(key, []).append(_note_from_row(dict(row)))
+    return notes
 
 
 def list_dispositions(project_key: str) -> dict[str, dict[str, Any]]:
     """Return dispositions for one project keyed by finding_key."""
 
+    notes = list_disposition_notes(project_key)
     with connect() as conn:
         rows = conn.execute(
             """
@@ -2423,9 +2754,13 @@ def list_dispositions(project_key: str) -> dict[str, dict[str, Any]]:
             (project_key,),
         ).fetchall()
         conn.commit()
-    return {
-        str(row["finding_key"]): _disposition_from_row(dict(row)) for row in rows
-    }
+    result: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        loaded = dict(row)
+        key = str(loaded["finding_key"])
+        loaded["notes"] = notes.get(key) or []
+        result[key] = _disposition_from_row(loaded)
+    return result
 
 
 def upsert_disposition(
@@ -2439,7 +2774,7 @@ def upsert_disposition(
     updated_by_user_id: int,
     scan_id: str,
 ) -> dict[str, Any]:
-    """Insert or replace one finding disposition."""
+    """Insert or replace one finding disposition and append an immutable note."""
 
     with connect() as conn:
         row = conn.execute(
@@ -2472,6 +2807,25 @@ def upsert_disposition(
                 scan_id,
             ),
         ).fetchone()
+        conn.execute(
+            """
+            INSERT INTO finding_disposition_notes (
+                project_key, finding_key, status, reason, assignee_user_id,
+                author_user_id, author_username, scan_id
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                project_key,
+                finding_key,
+                status,
+                reason,
+                assignee_user_id,
+                updated_by_user_id,
+                updated_by,
+                scan_id,
+            ),
+        )
         username = ""
         if row is not None and row.get("assignee_user_id") is not None:
             user = conn.execute(
@@ -2480,11 +2834,25 @@ def upsert_disposition(
             ).fetchone()
             if user is not None:
                 username = str(user["username"] or "")
+        note_rows = conn.execute(
+            """
+            SELECT n.id, n.project_key, n.finding_key, n.status, n.reason,
+                   n.assignee_user_id, n.author_user_id, n.author_username,
+                   n.scan_id, n.created_at,
+                   u.username AS assignee_username
+            FROM finding_disposition_notes AS n
+            LEFT JOIN users AS u ON u.id = n.assignee_user_id
+            WHERE n.project_key = %s AND n.finding_key = %s
+            ORDER BY n.id DESC
+            """,
+            (project_key, finding_key),
+        ).fetchall()
         conn.commit()
     if row is None:
         raise RuntimeError("disposition upsert did not return a row")
     loaded = dict(row)
     loaded["assignee_username"] = username
+    loaded["notes"] = [_note_from_row(dict(item)) for item in note_rows]
     return _disposition_from_row(loaded)
 
 
@@ -2565,6 +2933,7 @@ def reset_auth_tables() -> None:
     with connect() as conn:
         conn.execute(
             "TRUNCATE refresh_tokens, revoked_access, login_attempts, "
+            "task_events, tasks, audit_events, "
             "users, app_flags RESTART IDENTITY CASCADE"
         )
         conn.commit()
@@ -2576,3 +2945,217 @@ def reset_scan_table() -> None:
     with connect() as conn:
         conn.execute("TRUNCATE scans")
         conn.commit()
+
+
+def insert_audit_event(
+    *,
+    actor_user_id: int | None,
+    actor_username: str,
+    action: str,
+    target_type: str,
+    target_id: str,
+    outcome: str,
+    detail: dict[str, Any] | None = None,
+) -> int:
+    """Append one audit row. Never stores secrets in detail."""
+
+    with connect() as conn:
+        row = conn.execute(
+            """
+            INSERT INTO audit_events (
+                actor_user_id, actor_username, action, target_type, target_id,
+                outcome, detail
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (
+                actor_user_id,
+                actor_username,
+                action,
+                target_type,
+                target_id,
+                outcome,
+                Jsonb(detail or {}),
+            ),
+        ).fetchone()
+        conn.commit()
+    if row is None:
+        raise RuntimeError("audit insert failed")
+    return int(row["id"])
+
+
+def list_audit_events(*, limit: int = 100) -> list[dict[str, Any]]:
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, actor_user_id, actor_username, action, target_type,
+                   target_id, outcome, detail, created_at
+            FROM audit_events
+            ORDER BY created_at DESC
+            LIMIT %s
+            """,
+            (max(1, min(limit, 500)),),
+        ).fetchall()
+        conn.commit()
+    out = []
+    for row in rows:
+        detail = row.get("detail") or {}
+        if isinstance(detail, str):
+            detail = json.loads(detail)
+        out.append(
+            {
+                "id": int(row["id"]),
+                "actor_user_id": row.get("actor_user_id"),
+                "actor_username": str(row.get("actor_username") or ""),
+                "action": str(row.get("action") or ""),
+                "target_type": str(row.get("target_type") or ""),
+                "target_id": str(row.get("target_id") or ""),
+                "outcome": str(row.get("outcome") or ""),
+                "detail": dict(detail) if isinstance(detail, dict) else {},
+                "created_at": _stamp(row.get("created_at")),
+            }
+        )
+    return out
+
+
+def mark_risk_acceptance_executed(acceptance_id: int) -> None:
+    with connect() as conn:
+        conn.execute(
+            """
+            UPDATE risk_acceptances
+            SET executed_at = now()
+            WHERE id = %s AND executed_at IS NULL AND revoked_at IS NULL
+            """,
+            (acceptance_id,),
+        )
+        conn.commit()
+
+
+def insert_task(
+    *,
+    group_id: int,
+    project_id: int | None,
+    title: str,
+    body: str,
+    creator_user_id: int,
+    assignee_user_id: int | None,
+) -> dict[str, Any]:
+    with connect() as conn:
+        row = conn.execute(
+            """
+            INSERT INTO tasks (
+                group_id, project_id, title, body, creator_user_id,
+                assignee_user_id
+            )
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id, group_id, project_id, title, body, status,
+                      creator_user_id, assignee_user_id, version,
+                      created_at, updated_at
+            """,
+            (group_id, project_id, title, body, creator_user_id, assignee_user_id),
+        ).fetchone()
+        conn.execute(
+            """
+            INSERT INTO task_events (task_id, actor_user_id, actor_username, event)
+            VALUES (%s, %s, %s, 'created')
+            """,
+            (int(row["id"]), creator_user_id, ""),
+        )
+        conn.commit()
+    return _task_from_row(dict(row))
+
+
+def get_task(task_id: int) -> dict[str, Any] | None:
+    with connect() as conn:
+        row = conn.execute(
+            """
+            SELECT id, group_id, project_id, title, body, status,
+                   creator_user_id, assignee_user_id, version,
+                   created_at, updated_at
+            FROM tasks WHERE id = %s
+            """,
+            (task_id,),
+        ).fetchone()
+        conn.commit()
+    return _task_from_row(dict(row)) if row else None
+
+
+def list_tasks_for_group(group_id: int) -> list[dict[str, Any]]:
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, group_id, project_id, title, body, status,
+                   creator_user_id, assignee_user_id, version,
+                   created_at, updated_at
+            FROM tasks
+            WHERE group_id = %s
+            ORDER BY updated_at DESC
+            """,
+            (group_id,),
+        ).fetchall()
+        conn.commit()
+    return [_task_from_row(dict(row)) for row in rows]
+
+
+def update_task_status(
+    task_id: int,
+    *,
+    status: str,
+    version: int,
+    actor_user_id: int,
+    actor_username: str,
+    event: str,
+) -> dict[str, Any] | None:
+    with connect() as conn:
+        row = conn.execute(
+            """
+            UPDATE tasks
+            SET status = %s, version = version + 1, updated_at = now()
+            WHERE id = %s AND version = %s
+            RETURNING id, group_id, project_id, title, body, status,
+                      creator_user_id, assignee_user_id, version,
+                      created_at, updated_at
+            """,
+            (status, task_id, version),
+        ).fetchone()
+        if row is None:
+            conn.commit()
+            return None
+        conn.execute(
+            """
+            INSERT INTO task_events (
+                task_id, actor_user_id, actor_username, event, detail
+            )
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            (
+                task_id,
+                actor_user_id,
+                actor_username,
+                event,
+                Jsonb({"status": status}),
+            ),
+        )
+        conn.commit()
+    return _task_from_row(dict(row))
+
+
+def _task_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": int(row["id"]),
+        "group_id": int(row["group_id"]),
+        "project_id": int(row["project_id"]) if row.get("project_id") is not None else None,
+        "title": str(row.get("title") or ""),
+        "body": str(row.get("body") or ""),
+        "status": str(row.get("status") or ""),
+        "creator_user_id": int(row["creator_user_id"]),
+        "assignee_user_id": (
+            int(row["assignee_user_id"])
+            if row.get("assignee_user_id") is not None
+            else None
+        ),
+        "version": int(row.get("version") or 1),
+        "created_at": _stamp(row.get("created_at")),
+        "updated_at": _stamp(row.get("updated_at")),
+    }

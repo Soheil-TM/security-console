@@ -101,16 +101,23 @@ def prepare_auth() -> None:
 
 
 def _insert_bootstrap_admin(username: str) -> None:
+    """Create the first console account as ``super_admin`` (empty install only).
+
+    This path is independent of the project-specific U1 id mapping. Capabilities
+    stay empty because ``super_admin`` is treated as all-capable at check time.
+    """
+
     db.insert_user(
         username,
         hash_password(_BOOTSTRAP_PASSWORD),
-        "admin",
+        "super_admin",
         allow_semgrep=True,
         allow_checkov=True,
         allow_sonar=True,
         allow_trivy=True,
         must_change_password=True,
         allow_sonar_ui=True,
+        capabilities={},
     )
 
 
@@ -150,11 +157,13 @@ def install_auth(app: Flask) -> None:
     def idle_timeout() -> Reply:
         return _call_db(app, _set_idle_timeout)
 
+    from security_console.audit import install_audit
     from security_console.groups import install_groups
     from security_console.integrations import install_integrations
     from security_console.investigate import install_investigate
     from security_console.projects import install_projects
     from security_console.risk import install_risk
+    from security_console.tasks import install_tasks
     from security_console.users import install_users
 
     install_users(app)
@@ -163,6 +172,8 @@ def install_auth(app: Flask) -> None:
     install_integrations(app)
     install_risk(app)
     install_investigate(app)
+    install_tasks(app)
+    install_audit(app)
 
 
 def _call_db(app: Flask, action: Callable[[], Reply]) -> Reply:
@@ -212,12 +223,23 @@ def _guard_request() -> Reply | None:
         return jsonify(
             {"error": "Change your password before continuing."}
         ), 403
+    from security_console.authz import (
+        can_manage_users,
+        can_setup_sonar,
+        can_start_scan_by_role,
+    )
+
     if (
         request.path == "/api/users" or request.path.startswith("/api/users/")
-    ) and user["role"] != "admin":
+    ) and not can_manage_users(user):
         return jsonify({"error": "You do not have permission."}), 403
-    if request.path == "/api/sonar/setup" and user["role"] != "admin":
+    if request.path == "/api/sonar/setup" and not can_setup_sonar(user):
         return jsonify({"error": "You do not have permission."}), 403
+    if request.path.startswith("/api/audit") and request.method == "GET":
+        from security_console.authz import can_read_audit
+
+        if not can_read_audit(user):
+            return jsonify({"error": "You do not have permission."}), 403
     if request.path == "/api/scans" and request.method == "POST":
         body = request.get_json(silent=True) or {}
         requested = body.get("tools") if isinstance(body, dict) else []
@@ -226,7 +248,7 @@ def _guard_request() -> Reply | None:
             for tool in requested or []
             if tool in {"semgrep", "checkov", "sonar", "trivy"}
         ]
-        if user["role"] not in {"admin", "developer"} or (
+        if not can_start_scan_by_role(user) or (
             tools and not _tools_allowed(user, tools)
         ):
             return jsonify({"error": "You do not have permission."}), 403
@@ -340,7 +362,7 @@ def _current_user() -> dict[str, Any] | None:
     user = db.find_user_by_id(user_id)
     if user is None or user["disabled"]:
         return None
-    if user["role"] not in {"admin", "developer", "viewer"}:
+    if user["role"] not in {"super_admin", "admin", "developer", "viewer"}:
         return None
     try:
         token_version = int(claims.get("ver") or 0)
@@ -354,6 +376,8 @@ def _current_user() -> dict[str, Any] | None:
 
 
 def _session_payload(user: dict[str, Any]) -> dict[str, Any]:
+    from security_console.authz import effective_capability_names
+
     return {
         "id": int(user["id"]),
         "username": user["username"],
@@ -361,6 +385,7 @@ def _session_payload(user: dict[str, Any]) -> dict[str, Any]:
         "last_name": user.get("last_name") or "",
         "email": user.get("email") or "",
         "role": user["role"],
+        "capabilities": effective_capability_names(user),
         "access": access_map(user),
         "must_change_password": bool(user.get("must_change_password")),
         "idle_timeout_minutes": _idle_minutes(user),

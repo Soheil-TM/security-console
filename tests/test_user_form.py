@@ -95,14 +95,22 @@ def test_a_reset_requires_the_next_sign_in_only_with_a_password() -> None:
     assert blank["must_change_password"] is False
 
 
-def test_only_the_admin_account_resets_another_admin() -> None:
-    root = {"id": 1, "username": "admin", "role": "admin"}
-    deputy = {"id": 4, "username": "sam", "role": "admin"}
+def test_password_reset_uses_role_and_capabilities_not_usernames() -> None:
+    root = {"id": 1, "username": "anyone", "role": "super_admin"}
+    other_super = {"id": 9, "username": "other-super", "role": "super_admin"}
+    deputy = {
+        "id": 4,
+        "username": "sam",
+        "role": "admin",
+        "capabilities": {"users.reset_password": True},
+    }
+    bare_admin = {"id": 5, "username": "admin", "role": "admin", "capabilities": {}}
     member = {"id": 2, "username": "ada", "role": "viewer"}
 
     assert _can_reset_password(root, member) is True
+    assert _can_reset_password(root, other_super) is True
     assert _can_reset_password(deputy, member) is True
-    assert _can_reset_password(root, deputy) is True
     assert _can_reset_password(deputy, root) is False
+    assert _can_reset_password(bare_admin, member) is False
     assert _can_reset_password(root, root) is False
     assert _can_reset_password(member, deputy) is False

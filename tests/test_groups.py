@@ -28,7 +28,10 @@ def test_members_see_the_group_project_and_not_a_private_one() -> None:
 
     assert can_view_scan(member, shared, group_keys=group) is True
     assert can_view_scan(member, private, group_keys=group) is False
-    assert can_view_scan({"role": "admin"}, private) is True
+    assert can_view_scan(
+        {"role": "admin", "capabilities": {"projects.manage_all": True}},
+        private,
+    ) is True
 
 
 def test_a_developer_can_scan_only_a_group_project() -> None:
@@ -60,7 +63,7 @@ def test_a_developer_can_scan_only_a_group_project() -> None:
         keys,
     )
     assert can_scan_project(
-        {"role": "admin"},
+        {"role": "admin", "capabilities": {"projects.manage_all": True}},
         ["semgrep"],
         "https://github.com/org/notes",
         set(),

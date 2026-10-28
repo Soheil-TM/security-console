@@ -5,15 +5,25 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from security_console.authz import bypasses_project_scope
+
 TOOLS = ("semgrep", "checkov", "sonar", "trivy")
-ROLES = ("admin", "developer", "viewer")
+# Platform roles accepted in the database / account forms.
+ROLES = ("super_admin", "admin", "developer", "viewer")
 REUSE_HOURS = 24
+_TOOL_ADMIN_ROLES = frozenset({"super_admin", "admin"})
+_SCAN_ROLES = frozenset({"super_admin", "admin", "developer"})
 
 
 def access_map(user: dict[str, Any]) -> dict[str, bool]:
-    """Return the tools this account may see. Admins see every tool."""
+    """Return the tools this account may see.
 
-    if user.get("role") == "admin":
+    ``super_admin`` and ``admin`` see every tool (legacy tool matrix). This does
+    **not** grant admin-oriented capabilities such as ``users.manage`` — those
+    stay in ``authz`` / ``users.capabilities``.
+    """
+
+    if user.get("role") in _TOOL_ADMIN_ROLES:
         allowed = {tool: True for tool in TOOLS}
     else:
         allowed = {tool: bool(user.get(f"allow_{tool}")) for tool in TOOLS}
@@ -24,7 +34,7 @@ def access_map(user: dict[str, Any]) -> dict[str, bool]:
 def can_open_sonar_ui(user: dict[str, Any]) -> bool:
     """Return whether this account may open the SonarQube site."""
 
-    if user.get("role") == "admin":
+    if user.get("role") in _TOOL_ADMIN_ROLES:
         return True
     return bool(user.get("allow_sonar_ui"))
 
@@ -32,7 +42,7 @@ def can_open_sonar_ui(user: dict[str, Any]) -> bool:
 def can_start_scan(user: dict[str, Any], tools: list[str]) -> bool:
     """Return whether this account may launch exactly these tools."""
 
-    if user.get("role") not in {"admin", "developer"}:
+    if user.get("role") not in _SCAN_ROLES:
         return False
     if not tools:
         return False
@@ -48,14 +58,14 @@ def can_scan_project(
 ) -> bool:
     """Return whether this account may scan one group project.
 
-    Admins may scan any accepted target. A developer may scan it only when
-    that project belongs to one of their groups and every requested tool is
-    allowed.
+    Super admins and org admins may scan any accepted target. A developer may
+    scan it only when that project belongs to one of their groups and every
+    requested tool is allowed.
     """
 
     if not can_start_scan(user, tools):
         return False
-    if user.get("role") == "admin":
+    if bypasses_project_scope(user):
         return True
     return project in group_keys
 
@@ -97,9 +107,9 @@ def can_view_scan(
     access. A guest scan from the public page is open to admins only.
     """
 
-    if scan.get("guest") and user.get("role") != "admin":
+    if scan.get("guest") and not bypasses_project_scope(user):
         return False
-    if user.get("role") != "admin":
+    if not bypasses_project_scope(user):
         keys = group_keys or set()
         slug = str(scan.get("project_slug") or "").strip().lower()
         legacy = project_key(scan)

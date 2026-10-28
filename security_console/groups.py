@@ -10,6 +10,11 @@ from flask import Flask, Response, g, jsonify, request
 from psycopg.errors import UniqueViolation
 
 from security_console import db
+from security_console.authz import (
+    can_edit_group,
+    can_manage_all_groups,
+    can_write_triage_by_role,
+)
 
 Reply = Response | tuple[Response, int]
 _MAX_NAME = 80
@@ -123,7 +128,7 @@ def public_group(
 def _list_people() -> Reply:
     """Names an admin or developer may add to a group. No email."""
 
-    if g.user.get("role") not in {"admin", "developer"}:
+    if not can_write_triage_by_role(g.user):
         return jsonify({"error": "You do not have permission."}), 403
     people = [
         {
@@ -140,7 +145,7 @@ def _list_people() -> Reply:
 
 def _list_groups() -> Response:
     user = g.user
-    user_id = None if user.get("role") == "admin" else int(user["id"])
+    user_id = None if can_manage_all_groups(user) else int(user["id"])
     groups = [
         public_group(group, can_edit=_can_edit(user, group))
         for group in db.list_groups(user_id)
@@ -150,7 +155,7 @@ def _list_groups() -> Response:
 
 def _create_group(app: Flask) -> Reply:
     user = g.user
-    if user.get("role") not in {"admin", "developer"}:
+    if not can_write_triage_by_role(user):
         return jsonify({"error": "You do not have permission."}), 403
     parsed, error = parse_group(request.get_json(silent=True))
     if parsed is None:
@@ -223,12 +228,13 @@ def _delete_group(app: Flask, group_id: int) -> Reply:
 
 
 def _can_edit(user: dict[str, Any], group: dict[str, Any]) -> bool:
-    if user.get("role") == "admin":
-        return True
-    username = user.get("username")
-    return any(
-        item["username"] == username and item["lead"]
+    is_lead = any(
+        item.get("username") == user.get("username") and item.get("lead")
         for item in group.get("members") or []
+    )
+    lead_group_ids = {int(group["id"])} if is_lead else set()
+    return can_edit_group(
+        user, group_id=int(group["id"]), lead_group_ids=lead_group_ids
     )
 
 

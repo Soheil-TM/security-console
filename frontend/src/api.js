@@ -42,9 +42,23 @@ export async function readJson(response) {
 }
 
 export const ROLE_LABEL = {
+  super_admin: "ابرمدیر",
   admin: "مدیر",
   developer: "توسعه‌دهنده",
   viewer: "بیننده",
+};
+
+export const CAPABILITY_LABEL = {
+  "users.manage": "مدیریت کاربران",
+  "users.reset_password": "بازنشانی رمز",
+  "groups.manage_all": "همه گروه‌ها",
+  "projects.manage_all": "همه پروژه‌ها",
+  "connections.manage": "اتصالات",
+  "tool_access.manage": "دسترسی ابزار",
+  "sonar.setup": "راه‌اندازی Sonar",
+  "adhoc.scan": "اسکن آزاد",
+  "risk.accept_any": "پذیرش ریسک",
+  "audit.read": "خواندن audit",
 };
 
 export const TOOLS = [

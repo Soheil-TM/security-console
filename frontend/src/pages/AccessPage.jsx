@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { ROLE_LABEL, TOOLS, api, readJson } from "../api";
+import { toolsLocked } from "../auth";
 
 export function AccessPage() {
   const [users, setUsers] = useState([]);
@@ -15,7 +16,7 @@ export function AccessPage() {
   }, []);
 
   async function toggle(user, tool) {
-    if (user.role === "admin") return;
+    if (toolsLocked(user)) return;
     const access = { ...user.access, [tool]: !user.access[tool] };
     setError("");
     setNotice("");
@@ -60,12 +61,12 @@ export function AccessPage() {
             </div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               {TOOLS.map((tool) => {
-                const on = user.role === "admin" || user.access[tool.id];
+                const on = toolsLocked(user) || user.access[tool.id];
                 return (
                   <button
                     key={tool.id}
                     type="button"
-                    disabled={user.role === "admin"}
+                    disabled={toolsLocked(user)}
                     onClick={() => toggle(user, tool.id)}
                     className={`rounded-xl border px-3 py-3 text-right text-sm transition ${
                       on

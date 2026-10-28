@@ -325,7 +325,15 @@ def _list_projects(integration_id: int) -> Reply:
     purpose = request.args.get("purpose") or "scan"
     if purpose not in {"scan", "edit"}:
         return jsonify({"error": "Request rejected."}), 400
-    if purpose == "edit" and user.get("role") not in {"admin", "developer"}:
+    from security_console.authz import (
+        bypasses_project_scope,
+        can_start_scan_by_role,
+        can_write_triage_by_role,
+    )
+
+    if purpose == "edit" and not can_write_triage_by_role(user):
+        return jsonify({"error": "You do not have permission."}), 403
+    if purpose == "scan" and not can_start_scan_by_role(user):
         return jsonify({"error": "You do not have permission."}), 403
     current = db.get_integration(integration_id)
     if current is None:
@@ -337,7 +345,7 @@ def _list_projects(integration_id: int) -> Reply:
             projects = _registry_names(current)
     except RuntimeError as exc:
         return jsonify({"error": str(exc)}), 502
-    if purpose == "scan" and user.get("role") != "admin":
+    if purpose == "scan" and not bypasses_project_scope(user):
         keys = db.group_project_keys(int(user["id"]))
         projects = [
             item
@@ -603,8 +611,10 @@ def _public_by_id(integration_id: int) -> dict[str, Any] | None:
 
 
 def _admin() -> bool:
+    from security_console.authz import can_manage_connections
+
     user = getattr(g, "user", None)
-    return isinstance(user, dict) and user.get("role") == "admin"
+    return isinstance(user, dict) and can_manage_connections(user)
 
 
 def _valid_secret(value: str) -> bool:

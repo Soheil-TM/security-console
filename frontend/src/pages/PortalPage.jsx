@@ -13,7 +13,10 @@ export function PortalPage() {
   const [repo, setRepo] = useState("");
   const [tools, setTools] = useState(["semgrep", "checkov"]);
 
-  const canStart = user?.role === "admin" || user?.role === "developer";
+  const canStart =
+    user?.role === "super_admin" ||
+    user?.role === "admin" ||
+    user?.role === "developer";
   const allowed = TOOLS.filter((tool) => user?.access?.[tool.id]);
 
   async function load() {
@@ -80,9 +83,9 @@ export function PortalPage() {
       <div>
         <h1 className="text-2xl font-black">گزارش‌های من</h1>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          {user?.role === "admin"
-            ? "مدیر همهٔ بررسی‌ها را می‌بیند."
-            : "فقط بررسی‌هایی که خودت شروع کرده‌ای، برای ابزارهای مجاز، اینجاست."}
+          {user?.role === "super_admin" || user?.role === "admin"
+            ? "مدیر همهٔ بررسی‌های در محدوده مجوز را می‌بیند."
+            : "فقط بررسی‌های پروژه‌های گروهت، برای ابزارهای مجاز، اینجاست."}
         </p>
       </div>
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">

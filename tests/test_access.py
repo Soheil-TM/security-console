@@ -121,7 +121,11 @@ def test_expand_sonar_findings_issues_and_hotspots() -> None:
 
 
 def test_present_scan_merges_sonar_into_findings() -> None:
-    admin = {"role": "admin", "username": "admin"}
+    admin = {
+        "role": "admin",
+        "username": "admin",
+        "capabilities": {"projects.manage_all": True},
+    }
     scan = {
         "id": "s1",
         "repo": "https://example.com/a.git",

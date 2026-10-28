@@ -53,3 +53,19 @@ export function AuthProvider({ children }) {
 export function useAuth() {
   return useContext(AuthContext);
 }
+
+export function hasCap(user, capability) {
+  if (!user) return false;
+  if (user.role === "super_admin") return true;
+  const caps = user.capabilities;
+  return Array.isArray(caps) && caps.includes(capability);
+}
+
+export function isElevated(user) {
+  return Boolean(user && (user.role === "super_admin" || user.role === "admin"));
+}
+
+export function toolsLocked(userOrRole) {
+  const role = typeof userOrRole === "string" ? userOrRole : userOrRole?.role;
+  return role === "super_admin" || role === "admin";
+}

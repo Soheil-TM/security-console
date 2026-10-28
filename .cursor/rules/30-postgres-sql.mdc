@@ -1,0 +1,23 @@
+---
+description: Postgres and psycopg rules for the console database
+globs: "security_console/db.py,tests/test_sql_literal.py"
+alwaysApply: false
+---
+
+# Queries
+- Bind values with %s placeholders. Never build SQL with f-strings, format, or string concat.
+- Dynamic table or column names go through psycopg.sql.Identifier and an allow-list.
+- Schema statements in SCHEMA are static. Do not interpolate user input into them.
+- New queries name their columns. Filter by owner or project membership in the query, not only in Python after a broad SELECT.
+- Use TIMESTAMPTZ. Keep transactions and connection context managers.
+
+```python
+# Forbidden
+cur.execute(f"SELECT id FROM scans WHERE id = '{scan_id}'")
+# Required
+cur.execute("SELECT id FROM scans WHERE id = %s", (scan_id,))
+```
+
+# Deployment
+- The console DB user is not a superuser. Postgres ports stay off the host. Only the Compose network reaches db and sonar-db.
+- Refresh tokens and reset material are stored hashed. Do not add a column that stores a raw session secret.

@@ -1,0 +1,20 @@
+---
+description: Console trust boundaries and security defaults
+alwaysApply: true
+---
+
+# What this is
+A scan console. Users submit a git URL or image ref. Tools are Semgrep, Checkov, Trivy, and SonarQube. Stack is Flask, Postgres, PyJWT, Argon2, Docker SDK, Compose, HTML templates, and a secondary React/Vite UI.
+
+# Trust boundaries
+- Repo URL, image ref, branch, commit, and every file inside a clone are untrusted.
+- The console process never receives the Docker socket. Only the scanner worker does, and it accepts only approved jobs over a shared token.
+- Scan containers use pinned images. A user image is a Trivy argument. It is never the container image that runs.
+- Secrets come from env or Docker secret files. Never hardcode them. Never log passwords, tokens, JWTs, or Authorization headers.
+- Fail closed. Generic errors to the client. Details only in server logs.
+- Do not add a dependency to satisfy a checklist. Match the controls already in this repo.
+- Forbidden on untrusted data: eval, exec, pickle, yaml.load, shell=True.
+- A change to login, authorization, valid_repo, or valid_image_ref needs a negative test.
+
+# When changing code
+Preserve the split between console and scanner. Do not mount docker.sock on the console. Do not weaken SSRF checks in repos.py and images.py to make a scan succeed.

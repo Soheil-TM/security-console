@@ -1,0 +1,18 @@
+---
+description: Python and Flask rules for this console
+globs: "**/*.py"
+alwaysApply: false
+---
+
+# Style
+PEP 8, line length 88, type hints on public functions. f-strings are fine. Never use them for SQL or shell.
+
+# Flask in this repo
+- Console MAX_CONTENT_LENGTH is 256 KiB. Worker job body is 64 KiB. Do not raise either without a reason.
+- DEBUG stays off outside development. Production requires COOKIE_SECURE=1. Do not infer HTTPS from X-Forwarded-Proto.
+- Every /api route except the existing public list (login, guest, health on the worker) needs a session and an authorization check. Check ownership, not only the role.
+- Validate JSON by reading known fields. Ignore unknown fields. Do not mass-assign request.json onto a row.
+- Login rate limit already lives in the database. Reuse that pattern. Do not add Flask-Limiter unless asked.
+- Compare secrets with hmac.compare_digest or the existing same_secret helper. Randomness uses secrets, not random.
+- Outbound calls need a timeout. subprocess uses a list, shell=False, and a timeout.
+- Return a short error string. Do not return tracebacks.

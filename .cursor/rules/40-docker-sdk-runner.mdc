@@ -1,0 +1,27 @@
+---
+description: Rules for the scanner worker and Docker SDK specs
+globs: "security_console/runtime.py,security_console/runner.py,security_console/worker.py,security_console/dispatch.py,security_console/jobs.py"
+alwaysApply: false
+---
+
+# Who may use Docker
+- docker.sock is mounted on the scanner service only. The console calls the worker over HTTP with the scanner token.
+- Do not mount the socket into Semgrep, Checkov, Trivy, or Sonar containers.
+- The worker accepts only jobs that parse_job already allows. Do not add a passthrough for image, entrypoint, mounts, or env from the client.
+
+```python
+# Forbidden: the submitted image becomes the container
+client.containers.run(user_image, ...)
+# Required: pinned Trivy image, user ref is only an argument
+client.containers.run(TRIVY_IMAGE, command=["image", image_ref], ...)
+```
+
+# Every scan container
+- Image must be one of SEMGREP_IMAGE, CHECKOV_IMAGE, TRIVY_IMAGE, SONAR_IMAGE. Tags stay pinned.
+- command and entrypoint are lists. privileged=False, cap_drop=["ALL"], no-new-privileges, mem_limit, nano_cpus, pids_limit.
+- network_mode is scanner_network(). The value host is rejected.
+- Semgrep and Checkov run as uid 65534 unless SCANNER_FORCE_ROOT=1. Trivy and Sonar keep the image user.
+- read_only=True for Semgrep, Checkov, and Trivy. Sonar is the exception: read_only=False because the scanner writes under /tmp. Do not flip Sonar to read-only without a writable tmpfs that Java can actually use.
+- Repo mounts are read-only. The Trivy cache volume is the only extra writable mount, and it is not the repo.
+- Clean up containers and job directories in finally. Cap log size. Treat container logs as untrusted.
+- Do not put the Sonar token in Config.Env or in argv. Keep the token-file plus shell wrapper in sonar_spec.

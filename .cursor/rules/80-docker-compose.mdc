@@ -1,0 +1,17 @@
+---
+description: Dockerfile and Compose hardening for this stack
+globs: "Dockerfile*,docker-compose*.yml,docker-compose*.yaml,.dockerignore"
+alwaysApply: false
+---
+
+# Compose as it is
+- Publish only the console port. db, sonar-db, and SonarQube 9000 stay on the Compose network. Sonar is reached through the console at /sonar/.
+- Do not add docker-compose.override.yml to the production -f list. Override publishes 8091 for development. Production binds 127.0.0.1.
+- privileged: true is only host-setup, and that service only sets vm.max_map_count. Do not add other host changes there.
+- The console does not mount docker.sock. The scanner service does.
+- Secret files live in secrets/ and are Compose secrets or read-only binds. They stay out of git.
+- Pin image tags when you bump them. Digest pins are better when you next touch an image line. Do not use latest.
+- There is no nginx config in this repo. If you add one, TLS terminates there, the proxy is the only TRUSTED_PROXIES entry, and logs must not store Authorization or cookies.
+
+# Dockerfile
+- Multi-stage Node build, then python:3.12-slim. The process drops to uid 10001. Do not copy secrets into the image.

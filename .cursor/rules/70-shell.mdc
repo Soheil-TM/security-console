@@ -1,0 +1,10 @@
+---
+description: Shell used by entrypoint and secret setup
+globs: "**/*.sh,scripts/**"
+alwaysApply: false
+---
+
+- entrypoint.sh and init-secrets.sh are POSIX sh. Use set -eu. Do not add bash-only syntax.
+- Quote every expansion. No eval. Secrets are copied to /run/console-secrets for uid 10001. Do not print file contents.
+- init-secrets.sh creates missing files mode 600 and never overwrites an existing secret.
+- Shell only copies files, drops privileges, or writes a secret. Application logic stays in Python.

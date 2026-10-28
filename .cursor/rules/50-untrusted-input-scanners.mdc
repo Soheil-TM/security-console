@@ -1,0 +1,18 @@
+---
+description: Untrusted git URLs, image refs, and scanner arguments
+globs: "security_console/repos.py,security_console/images.py,security_console/runtime.py,security_console/runner.py,security_console/trivy.py,security_console/trivy_db.py,security_console/sonar_setup.py,security_console/sonar_proxy.py"
+alwaysApply: false
+---
+
+# URLs and refs
+- valid_repo and valid_image_ref are the gates. Do not clone or pull before they return true.
+- Allowed schemes are http and https. Reject file, ssh, git, ext, credentials in the URL, leading dashes, and control characters.
+- Block loopback, link-local, metadata names, 100.64.0.0/10, and the AWS IPv6 metadata address. RFC1918 stays allowed for an internal git server.
+- Keep clone_pins. A Git build without libcurl can still re-resolve DNS. Do not describe the pin as a complete rebinding fix.
+- Commit SHAs are 40 hex characters. Branch and image names never reach a shell string.
+
+# Clone and scan
+- git clone uses a list, protocol.ext.allow=never, no hooks, no submodules. Do not run repo scripts, Makefiles, or package installs.
+- Scanner flags are fixed in runtime.py. A repo must not replace Semgrep config, Checkov external checks, or Sonar host, proxy, truststore, or JVM options. The pinned -D properties in sonar_spec exist for that reason.
+- Parse tool JSON with a size cap. Render filenames and snippets as text.
+- A scan is owned by the user or guest who started it. Listing and fetch must check that.

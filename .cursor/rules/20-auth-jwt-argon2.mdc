@@ -1,0 +1,19 @@
+---
+description: Session, JWT, and password rules for this console
+globs: "security_console/auth.py,security_console/users.py,security_console/secrets.py,security_console/guest.py,tests/test_auth.py"
+alwaysApply: false
+---
+
+# Keep the current session design
+- Access token is a JWT, about 20 minutes. Refresh token is random, stored hashed, path /api/auth, about 7 days.
+- Cookies are HttpOnly and SameSite=Strict. Secure is on only when COOKIE_SECURE=1.
+- CSRF is the csrf_token cookie compared with X-CSRF-Token on state-changing requests.
+- Decode with algorithms=["HS256"] and the key from CONSOLE_JWT_KEY_FILE. Never take alg from the token header.
+- jti is revoked on logout and when the session version changes. Password change must keep that revocation.
+- Unknown user and wrong password return the same error. The dummy Argon2 hash must stay so timing does not reveal the account.
+- Idle timeout is only 5, 15, 30, or 60 minutes. Absolute lifetime is 12 hours from sign-in.
+- First admin password is admin and must_change_password blocks the API until it is replaced. Do not bypass that gate.
+- New passwords are at least 12 characters. Hash with argon2-cffi PasswordHasher. Never log or return the hash.
+- Do not require iss or aud until both the issuer and the decoder set them. Adding only the check logs everyone out.
+- X-Forwarded-For is trusted only when remote_addr is in TRUSTED_PROXIES. Use the right-most hop.
+- Guest scans are a separate cookie. Do not treat a guest id as a user id.

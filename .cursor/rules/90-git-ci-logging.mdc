@@ -1,0 +1,13 @@
+---
+description: Git, CI, and logging limits
+globs: "pyproject.toml,frontend/package.json,.github/**"
+alwaysApply: false
+---
+
+# Git
+- Do not commit secrets/, .env, or database dumps. A password of admin in the README is the bootstrap password, not a license to log real passwords.
+- Do not add a CI workflow unless asked. If you do, pin third-party actions by commit SHA and keep tokens in the CI secret store.
+
+# Logs
+- Log the event and the scan id. Strip newlines from user-controlled fields before logging. Do not log request bodies from login or scanner job calls.
+- pytest passing does not remove the residual risks in the README: scanner socket, DNS rebinding, and cloud metadata.

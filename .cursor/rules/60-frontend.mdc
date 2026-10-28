@@ -1,0 +1,14 @@
+---
+description: UI rules for templates and the React frontend
+globs: "templates/**/*.html,frontend/**/*.{js,jsx,css,html}"
+alwaysApply: false
+---
+
+# Two UIs
+The page users actually get is templates/index.html, served by Flask. frontend/ is a Vite/React app copied into the image as static files. Change the surface you were asked to change. Do not port one into the other in passing.
+
+# Untrusted scan data
+- Findings, paths, snippets, and tool output are text. Do not assign them to innerHTML or dangerouslySetInnerHTML.
+- Links from scan data must not be javascript: or data: URLs.
+- Do not put secrets in VITE_ variables. The session cookie is HttpOnly. The browser sends X-CSRF-Token. It does not read the access token.
+- Client-side role checks are only for hiding buttons. The API still enforces access.

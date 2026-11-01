@@ -12,10 +12,35 @@
     } catch (e) {}
   </script>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%230f766e' d='M16 2.5 27.5 7v8.2c0 7.2-4.6 12.2-11.5 14.3C9.1 27.4 4.5 22.4 4.5 15.2V7z'/%3E%3C/svg%3E">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
+    @font-face {
+      font-family: "Vazirmatn";
+      font-style: normal;
+      font-weight: 400;
+      font-display: swap;
+      src: url("/static/fonts/Vazirmatn-Regular.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Vazirmatn";
+      font-style: normal;
+      font-weight: 500;
+      font-display: swap;
+      src: url("/static/fonts/Vazirmatn-Medium.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Vazirmatn";
+      font-style: normal;
+      font-weight: 600;
+      font-display: swap;
+      src: url("/static/fonts/Vazirmatn-SemiBold.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Vazirmatn";
+      font-style: normal;
+      font-weight: 700;
+      font-display: swap;
+      src: url("/static/fonts/Vazirmatn-Bold.woff2") format("woff2");
+    }
     :root {
       --navy: #152232;
       --navy-2: #1c2d42;
@@ -108,36 +133,56 @@
       padding-left: 8px;
       border-left: 1px solid #2c4258;
     }
+    .nav-branch {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
     .kind {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 6px;
       width: 100%;
       text-align: left;
       direction: ltr;
       background: transparent;
-      color: #8ea0b5;
+      color: #d5e0ec;
       border: 0;
       border-radius: 8px;
-      padding: 8px 12px 2px;
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: .06em;
-      text-transform: uppercase;
+      padding: 8px 12px;
+      font-size: 13px;
+      font-weight: 650;
+      letter-spacing: normal;
+      text-transform: none;
     }
-    .kind:hover { background: transparent; color: #d5e0ec; }
-    .kind-body, .reports-body { margin: 0; display: flex; flex-direction: column; gap: 2px; }
-    .nav-sub .mode {
+    .kind:hover { background: var(--navy-2); color: white; }
+    .kind.open { color: white; }
+    .kind-body, .reports-body {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      margin: 0 0 4px 12px;
+      padding-left: 8px;
+      border-left: 1px solid #2c4258;
+    }
+    .nav-sub .mode,
+    .kind-body .mode {
       width: 100%;
       text-align: left;
       background: transparent;
       color: #d5e0ec;
       border: 0;
       border-radius: 8px;
-      padding: 9px 12px;
-      font-size: 14px;
-      font-weight: 650;
+      padding: 8px 12px;
+      font-size: 13px;
+      font-weight: 600;
     }
-    .nav-sub .mode:hover { background: var(--navy-2); color: white; }
+    .nav-sub .mode:hover,
+    .kind-body .mode:hover { background: var(--navy-2); color: white; }
     .nav-sub .mode.on,
-    .nav-sub button.active {
+    .nav-sub button.active,
+    .kind-body .mode.on {
       background: #214057;
       color: white;
       box-shadow: inset 3px 0 0 #2dd4bf;
@@ -2025,11 +2070,11 @@
     <aside>
       <nav>
         <button type="button" data-action="view" data-view="dashboard" class="active">Dashboard</button>
-        <button type="button" data-action="view" data-view="scans"><span class="nav-label"><span id="scans-chev">▾</span> Scans</span> <span class="count" id="scan-count">0</span></button>
+        <button type="button" data-action="view" data-view="scans"><span class="nav-label">Scans</span> <span class="count" id="scan-count">0</span></button>
         <div class="nav-sub" id="history-wrap"></div>
         <button type="button" data-action="view" data-view="knowledge">Knowledge</button>
         <button type="button" data-action="view" data-view="triage"><span class="nav-label">Triage</span> <span class="count" id="triage-count" hidden>0</span></button>
-        <button type="button" data-action="view" data-view="settings"><span class="nav-label"><span id="settings-chev">▸</span> Settings</span></button>
+        <button type="button" data-action="view" data-view="settings"><span class="nav-label">Settings</span></button>
         <div class="nav-sub" id="settings-wrap" hidden>
           <button type="button" class="mode" data-action="view" data-view="users" id="nav-users" hidden>Users</button>
           <button type="button" class="mode" data-action="view" data-view="access" id="nav-access" hidden>Tool access</button>
@@ -2815,7 +2860,6 @@
     let chosenMembers = [];
 
     function paintSettings() {
-      document.querySelector("#settings-chev").textContent = settingsMenuOpen ? "▾" : "▸";
       document.querySelector("#settings-wrap").hidden = !settingsMenuOpen;
     }
 
@@ -3266,9 +3310,17 @@
       const scanOn = inScans && state.pane === "scan" && state.target === kind ? " on" : "";
       const reportsOn = inScans && (state.pane === "report" || state.pane === "overview" || state.pane === "investigate") && state.target === kind ? " on" : "";
       const body = open
-        ? '<div class="kind-body"><button type="button" class="mode' + scanOn + '" data-action="mode-scan" data-kind="' + kind + '">Scan</button><button type="button" class="mode' + reportsOn + '" data-action="mode-reports" data-kind="' + kind + '">Reports</button></div>'
+        ? '<div class="kind-body">'
+          + '<button type="button" class="mode' + scanOn + '" data-action="mode-scan" data-kind="' + kind + '">New scan</button>'
+          + '<button type="button" class="mode' + reportsOn + '" data-action="mode-reports" data-kind="' + kind + '">Reports</button>'
+          + "</div>"
         : "";
-      return '<button type="button" class="kind" data-action="hist-kind" data-kind="' + kind + '">' + (open ? "▾" : "▸") + " " + label + "</button>" + body;
+      return '<div class="nav-branch">'
+        + '<button type="button" class="kind' + (open ? " open" : "") + '" data-action="hist-kind" data-kind="'
+        + kind + '"><span class="nav-label"><span aria-hidden="true">'
+        + (open ? "▾" : "▸") + "</span> " + label + "</span></button>"
+        + body
+        + "</div>";
     }
 
     function renderHistory() {
@@ -3283,7 +3335,6 @@
       ].join("|");
       const box = document.querySelector("#history-wrap");
       document.querySelector("#scan-count").textContent = String(state.scans.length);
-      document.querySelector("#scans-chev").textContent = scansMenuOpen ? "▾" : "▸";
       box.hidden = !scansMenuOpen;
       if (stamp === histStamp && box.childElementCount) {
         box.querySelectorAll(".hist").forEach((el) => el.classList.toggle("on", el.dataset.id === (state.scan && state.scan.id)));
@@ -4126,32 +4177,18 @@
       if (!currentUser) return;
       try {
         const response = await api("/api/security/triage-inbox");
-        // #region agent log
-        fetch('/api/guest/__debug_agent_log',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},credentials:'same-origin',body:JSON.stringify({sessionId:'4a0a8b',runId:'pre-fix',hypothesisId:'C',location:'index.html:loadTriageInbox',message:'triage-inbox response',data:{ok:response.ok,status:response.status,user:currentUser&&currentUser.username,role:currentUser&&currentUser.role},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         if (!response.ok) return;
         const body = await response.json();
         state.assignments = Array.isArray(body.assignments) ? body.assignments : [];
         state.needsTriage = Array.isArray(body.needs_triage) ? body.needs_triage : [];
         state.triageByProject = body.triage_by_project || {};
         state.triageBadge = Number(body.badge_count || 0);
-        // #region agent log
-        const projectSummary = {};
-        Object.keys(state.triageByProject || {}).forEach((key) => {
-          const entry = state.triageByProject[key] || {};
-          projectSummary[key] = {ready: !!entry.ready_for_gate, open: entry.open_count || 0, counts: entry.counts || {}};
-        });
-        fetch('/api/guest/__debug_agent_log',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},credentials:'same-origin',body:JSON.stringify({sessionId:'4a0a8b',runId:'pre-fix',hypothesisId:'E',location:'index.html:loadTriageInbox:body',message:'triage inbox state',data:{assignments:state.assignments.length,needsTriage:state.needsTriage.length,badge:state.triageBadge,view:state.view,projects:projectSummary},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         paintTriageBadge();
         renderAssignmentStrip();
         renderTriageInbox();
         reportStamp = null;
         renderReportsNav();
       } catch (err) {
-        // #region agent log
-        fetch('/api/guest/__debug_agent_log',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},credentials:'same-origin',body:JSON.stringify({sessionId:'4a0a8b',runId:'pre-fix',hypothesisId:'C',location:'index.html:loadTriageInbox:catch',message:'triage inbox failed',data:{error:String((err&&err.message)||err||'')},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         return;
       }
     }

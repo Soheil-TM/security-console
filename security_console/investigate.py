@@ -447,55 +447,6 @@ def _triage_inbox() -> Reply:
         dispositions_by_project=dispositions_by_project,
         group_keys=group_keys,
     )
-    # #region agent log
-    try:
-        import json
-        from pathlib import Path
-        from datetime import datetime, timezone
-
-        status_counts: dict[str, int] = {}
-        for project_disps in dispositions_by_project.values():
-            for disp in project_disps.values():
-                status = str(disp.get("status") or "undecided")
-                status_counts[status] = status_counts.get(status, 0) + 1
-        line = {
-            "sessionId": "4a0a8b",
-            "runId": "pre-fix",
-            "hypothesisId": "A",
-            "location": "investigate.py:_triage_inbox",
-            "message": "triage inbox payload",
-            "data": {
-                "user_id": user_id,
-                "role": str(user.get("role") or ""),
-                "assignments": len(assignments),
-                "needs_triage": len(payload.get("needs_triage") or []),
-                "badge_count": payload.get("badge_count"),
-                "projects": len(projects),
-                "done_project_scans": sum(
-                    1
-                    for item in scans
-                    if not item.get("guest")
-                    and item.get("status") == "done"
-                    and (item.get("project_id") or item.get("project_slug"))
-                ),
-                "disposition_status_counts": status_counts,
-                "triage_by_project": {
-                    key: {
-                        "ready_for_gate": bool(entry.get("ready_for_gate")),
-                        "open_count": entry.get("open_count"),
-                        "counts": entry.get("counts"),
-                    }
-                    for key, entry in (payload.get("triage_by_project") or {}).items()
-                },
-            },
-            "timestamp": int(datetime.now(timezone.utc).timestamp() * 1000),
-        }
-        Path("/data/agent-debug.ndjson").open("a", encoding="utf-8").write(
-            json.dumps(line, ensure_ascii=True) + "\n"
-        )
-    except OSError:
-        pass
-    # #endregion
     return jsonify(payload)
 
 

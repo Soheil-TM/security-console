@@ -26,6 +26,7 @@ Create these files and keep them out of git, or run `./scripts/init-secrets.sh`:
 - `secrets/console_db_password.txt`
 - `secrets/console_jwt_key.txt` — at least 32 characters
 - `secrets/scanner_token.txt` — shared by the console and the scanner service
+- `secrets/gate_token.txt` — Bearer token for CI push-gate checks (`GATE_TOKEN_FILE`)
 - `secrets/sonar_db_password.txt` — SonarQube's Postgres password
 - `secrets/sonar-db.env` — the same password, for the SonarQube process
 - `secrets/sonar_token.txt` — written by `sonar-init` after SonarQube is up
@@ -94,6 +95,26 @@ Persist the rules with the host's firewall tool (`iptables-persistent`, `nftable
 `sonar-scanner-cli` 12.2 reads `SONAR_TOKEN` from its process environment. It does not accept the token on stdin or from a token file of its own. Putting the value in Docker's `environment` field stores it in `docker inspect` (`Config.Env`). The worker therefore writes the token to a file in a mode `0700` directory, bind-mounts that file read-only at `/run/secrets/sonar_token` (mode `0444` so the image user can read it), and starts `/bin/sh` which exports `SONAR_TOKEN` only inside the container process. The value is not in `Config.Env` or in the process arguments. It is still in `/proc/<pid>/environ` for the life of the scan, and the file remains on the worker until the scan function returns and deletes it. Anyone who can `docker exec` into that container, or read the worker's scan directory as root while the scan is running, can read the token. That is the boundary the scanner's own configuration leaves.
 
 Command-line `-D` properties outrank `sonar-project.properties`. The scanner command pins `sonar.host.url`, clears `sonar.scanner.proxyHost`, `proxyPort`, `proxyUser`, and `proxyPassword`, and sets `sonar.scanner.javaOpts` to the memory limit only. `truststorePath` is the image CA bundle copied to `/tmp/sonar-truststore`, and `keystorePath` is an empty keystore created in the same directory. A blank path is not used: the scanner treats it as the working directory and Java then fails with `Is a directory`. `sonar.working.directory` is `/tmp/.scannerwork`, and the repository mount is read-only. The scanner image user cannot create `.scannerwork` inside a root-owned clone. A repository file cannot replace those with another server, an HTTP proxy, a JVM proxy flag, or a private trust store. Other unpinned properties can still change. The token is not passed as `sonar.token` on the command line.
+
+## CI push gate
+
+After a **project** scan is triaged and an admin or project lead clicks **Accept risk for push**, CI can ask whether that commit is approved.
+
+```bash
+curl -fsS \
+  -H "Authorization: Bearer $(cat secrets/gate_token.txt)" \
+  "https://console.example/api/security/gate?project=<project-slug>&commit=<git-sha>"
+```
+
+You may send the same value as `X-Gate-Token` instead of `Authorization: Bearer`. A normal signed-in console session also works; CI should use the gate token.
+
+Response includes `approved_for_push` (boolean). When true, the matching risk acceptance is **consumed once** (`executed_at` is set). A second call for the same acceptance returns `approved_for_push: false`. Fingerprint mismatch (triage changed after acceptance) also denies the push. To allow another push, triage again and accept risk again on the console.
+
+`project` is the project slug. `commit` should match the commit SHA recorded on the acceptance. Create `secrets/gate_token.txt` with `./scripts/init-secrets.sh` (mode 600); Compose mounts it as `GATE_TOKEN_FILE`.
+
+## Health
+
+Console and scanner expose unauthenticated `GET /health` returning `{"ok": true}` for Compose and load-balancer probes.
 
 ## Tests
 

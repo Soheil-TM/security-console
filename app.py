@@ -256,6 +256,13 @@ def execute_scan(scan_id: str) -> None:
             save_scan(current)
 
 
+@app.get("/health")
+def health() -> Response:
+    """Liveness for Compose/LB probes. Unauthenticated by design."""
+
+    return jsonify({"ok": True})
+
+
 @app.get("/")
 @app.get("/login")
 def index() -> Response:
@@ -524,36 +531,6 @@ def _guest_reply(payload: Any, status: int, cookie: str = "") -> Response:
     return response
 
 
-@app.post("/api/guest/__debug_agent_log")
-def debug_agent_log() -> Response:
-    # #region agent log
-    if os.environ.get("CONSOLE_ENV") != "development":
-        return jsonify({"error": "Not found."}), 404
-    body = request.get_json(silent=True)
-    if not isinstance(body, dict):
-        return jsonify({"ok": False}), 400
-    line = json.dumps(
-        {
-            "sessionId": body.get("sessionId") or "4a0a8b",
-            "runId": body.get("runId") or "pre-fix",
-            "hypothesisId": body.get("hypothesisId") or "",
-            "location": str(body.get("location") or "")[:200],
-            "message": str(body.get("message") or "")[:300],
-            "data": body.get("data") if isinstance(body.get("data"), dict) else {},
-            "timestamp": body.get("timestamp") or 0,
-        },
-        ensure_ascii=True,
-    )
-    try:
-        path = DATA / "agent-debug.ndjson"
-        with path.open("a", encoding="utf-8") as handle:
-            handle.write(line + "\n")
-    except OSError:
-        return jsonify({"ok": False}), 500
-    return jsonify({"ok": True})
-    # #endregion
-
-
 @app.post("/api/guest/scans")
 def create_guest_scan() -> Response:
     if not request.is_json:
@@ -726,4 +703,6 @@ if os.environ.get("CONSOLE_SKIP_BOOT") != "1":
     boot()
 
 if __name__ == "__main__":
+    # Bind all interfaces inside the container; production compose publishes
+    # loopback only (see docker-compose.production.yml).
     app.run(host="0.0.0.0", port=8080, threaded=True)

@@ -26,6 +26,11 @@ COPY security_console /app/security_console
 COPY templates /app/templates
 COPY entrypoint.sh /app/entrypoint.sh
 COPY --from=ui /ui/dist /app/static
+# Self-hosted fonts (after UI dist so they are not overwritten).
+COPY static/fonts /app/static/fonts
 RUN chmod 755 /app/entrypoint.sh
 EXPOSE 8080
+# Starts as root only to chown secrets/data; entrypoint then drops to uid 10001.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=4)"
 ENTRYPOINT ["/app/entrypoint.sh"]

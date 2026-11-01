@@ -3269,8 +3269,9 @@
       if (!currentUser || !item) return false;
       if (!(item.project_slug || item.project_id)) return false;
       if (scanIsActive(item)) return false;
-      if (item.status === "done" && !scanIsFailed(item)) return true;
-      return scanIsFailed(item) && scanFindingCount(item) > 0;
+      const count = scanFindingCount(item);
+      // Partial tool failure (e.g. Sonar) keeps findings; still allow triage.
+      return count > 0 && (item.status === "done" || item.status === "failed");
     }
 
     function reportScanRow(item) {

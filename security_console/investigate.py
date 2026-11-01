@@ -348,7 +348,16 @@ def build_triage_inbox(
 
     latest_by_project: dict[str, dict[str, Any]] = {}
     for item in scans:
-        if item.get("guest") or item.get("status") != "done":
+        if item.get("guest"):
+            continue
+        status = str(item.get("status") or "")
+        if status not in {"done", "failed"}:
+            continue
+        finding_n = len(item.get("findings") or []) or int(
+            item.get("finding_count") or 0
+        )
+        # Partial tool failures keep findings; still need triage.
+        if status == "failed" and finding_n <= 0:
             continue
         if not item.get("project_id") and not item.get("project_slug"):
             continue

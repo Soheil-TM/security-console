@@ -168,6 +168,40 @@ def test_inbox_lists_undecided_project_and_skips_ready() -> None:
     assert inbox["badge_count"] == 1
 
 
+def test_inbox_includes_failed_scan_with_findings() -> None:
+    admin = {"role": "super_admin", "id": 1, "allow_semgrep": True}
+    open_finding = {
+        "tool": "semgrep",
+        "check": "a",
+        "path": "a.py",
+        "line": 1,
+        "severity": "HIGH",
+    }
+    scans = [
+        {
+            "id": "scan-partial",
+            "status": "failed",
+            "project_slug": "testdev",
+            "project_id": 1,
+            "created_at": "2026-01-03 00:00:00 UTC",
+            "findings": [open_finding],
+            "tools": ["semgrep", "sonar"],
+            "failure_reason": "tool_failed",
+        }
+    ]
+    inbox = build_triage_inbox(
+        admin,
+        assignments=[],
+        projects=[{"slug": "testdev", "name": "test"}],
+        scans=scans,
+        dispositions_by_project={"testdev": {}},
+        group_keys=None,
+    )
+    needs_keys = {item["project_key"] for item in inbox["needs_triage"]}
+    assert "testdev" in needs_keys
+    assert inbox["triage_by_project"]["testdev"]["scan_id"] == "scan-partial"
+
+
 def test_inbox_badge_dedupes_assigned_project() -> None:
     admin = {"role": "admin", "id": 1, "allow_semgrep": True}
     finding = {

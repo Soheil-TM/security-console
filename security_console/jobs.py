@@ -65,17 +65,22 @@ def parse_job(body: Any) -> dict[str, Any]:
     requested_sha = normalize_commit_sha(body.get("requested_sha"))
     if requested_sha is None:
         raise JobError("Commit SHA is invalid.")
-    return _with_secrets(
-        body,
-        {
-            "id": scan_id,
-            "target": "repo",
-            "repo": repo.strip(),
-            "image": "",
-            "tools": tools,
-            "requested_sha": requested_sha,
-        },
-    )
+    job = {
+        "id": scan_id,
+        "target": "repo",
+        "repo": repo.strip(),
+        "image": "",
+        "tools": tools,
+        "requested_sha": requested_sha,
+    }
+    sonar_key = body.get("sonar_project_key") or ""
+    if sonar_key != "":
+        if not isinstance(sonar_key, str) or not re.fullmatch(
+            r"[A-Za-z0-9_.:-]{1,200}", sonar_key
+        ):
+            raise JobError("Invalid scan.")
+        job["sonar_project_key"] = sonar_key
+    return _with_secrets(body, job)
 
 
 def _with_secrets(body: dict[str, Any], job: dict[str, Any]) -> dict[str, Any]:

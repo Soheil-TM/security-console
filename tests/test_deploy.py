@@ -104,3 +104,48 @@ def test_sonar_init_does_not_gate_the_scanner() -> None:
         for item in scanner.get("volumes") or []
         if isinstance(item, dict)
     )
+
+
+def _volume_sources(service: dict[str, Any]) -> list[str]:
+    sources: list[str] = []
+    for item in service.get("volumes") or []:
+        if isinstance(item, dict):
+            sources.append(str(item.get("source") or ""))
+        else:
+            sources.append(str(item))
+    return sources
+
+
+def _network_names(service: dict[str, Any]) -> set[str]:
+    networks = service.get("networks") or {}
+    if isinstance(networks, dict):
+        return set(networks)
+    if isinstance(networks, list):
+        return {str(item) for item in networks}
+    return set()
+
+
+def test_scanner_uses_docker_socket_proxy_not_raw_sock() -> None:
+    document = _rendered(None)
+    services = document["services"]
+    scanner = services["scanner"]
+    proxy = services["docker-proxy"]
+    console = services["console"]
+    db = services["db"]
+
+    assert "docker.sock" not in " ".join(_volume_sources(scanner))
+    env = scanner.get("environment") or {}
+    assert env.get("DOCKER_HOST") == "tcp://docker-proxy:2375"
+    assert "docker-proxy" in (scanner.get("depends_on") or {})
+
+    assert any(source.rstrip("/").endswith("docker.sock") for source in _volume_sources(proxy))
+    assert not proxy.get("ports")
+    assert _network_names(proxy) == {"docker-control"}
+    assert "docker-control" in _network_names(scanner)
+    assert "docker-control" not in _network_names(console)
+    assert "docker-control" not in _network_names(db)
+
+    networks = document.get("networks") or {}
+    control = networks.get("docker-control") or {}
+    assert control.get("name") == "security-console-docker-control"
+    assert control.get("internal") is True

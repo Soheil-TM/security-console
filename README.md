@@ -15,7 +15,7 @@ docker compose up -d --build
 
 The page opens on port 8091. This Compose file is local development: `CONSOLE_ENV=development` and plain HTTP. The first account is `admin` with password `admin`. The server rejects every user API call except reading the session, refreshing it, logging out, and changing the password until that password is replaced. The new password must be at least 12 characters, typed twice. Do not expose port 8091 to an untrusted network before that change. Restarting the process or signing in again does not clear the requirement, and an existing database is never reset to password `admin`.
 
-The console container does not mount the Docker socket. A scanner service on the same machine does, and it only accepts approved scan jobs from the console. Semgrep, Checkov, Trivy, and the Sonar scanner each start a short-lived container from that service.
+The console container does not mount the Docker socket. A `docker-proxy` service mounts it and exposes a restricted Docker API on an internal Compose network. The scanner worker reaches that proxy through `DOCKER_HOST` and only accepts approved scan jobs from the console. Semgrep, Checkov, Trivy, and the Sonar scanner each start a short-lived container from that worker.
 
 SonarQube Community Build and its own Postgres start with the rest of the stack. The site is not published on port 9000. Open it from the console at `/sonar/` after an admin turns on SonarQube workspace for that account. SonarQube still has its own login. A one-shot `sonar-init` service changes the default `admin` password, or replaces an already changed one, writes a user token to `secrets/sonar_token.txt`, and creates the configured project. The replacement password stays in `secrets/sonar_admin_password.txt`. The scanner reads that file on every scan. The console and the scanner do not wait for this service, so Semgrep, Checkov, and Trivy still run when SonarQube setup needs attention. An admin reads that state under Sonar setup. Rotate the token there when the file is empty but SonarQube already has the token name, or when the saved token is rejected. Until the token exists, SonarQube analysis is skipped. `sonar-init` exits with an error only while SonarQube is still starting, and Docker starts it again. A finished setup stays stopped across a reboot. Elasticsearch inside SonarQube needs `vm.max_map_count` of at least 262144. The `host-setup` service sets that on the host when the current value is lower, and writes `/etc/sysctl.d/99-security-console.conf` so the next reboot keeps it. A higher value already set on the machine is left as it is. Leave a few gigabytes free on the disk. Elasticsearch stops when the disk is nearly full. Set `SONAR_PROJECT_KEY` to change the project name.
 
@@ -75,9 +75,9 @@ The first password is `admin` only so a controlled first install can sign in. Ch
 
 These limits are still present after the application controls above. Passing the test suite does not remove them.
 
-**Scanner Docker socket.** The worker process mounts `/var/run/docker.sock`. A compromise of that process is a compromise of the Docker host, because the socket can create a privileged container. Do not publish port 8092, and do not treat the current split as a production sandbox. The current layout is acceptable only when the Docker host is dedicated to this console and is not shared with unrelated production containers.
+**Scanner Docker access.** The worker does not mount `/var/run/docker.sock`. It talks to Tecnativa `docker-socket-proxy` (`0.3.0`) over `DOCKER_HOST=tcp://docker-proxy:2375` on the internal `docker-control` network. The proxy enables the `containers` and `images` API groups (and denies build/events/system/swarm). Enabling `CONTAINERS` also covers paths under `/containers/...` such as exec; the proxy does **not** validate dangerous `HostConfig` fields, so a compromised worker can still create a privileged container or bind-mount the host. Do not publish port 8092 or the proxy port, and do not treat this split as a production sandbox. Prefer a Docker host dedicated to this console.
 
-Operational mitigation: run the scanner daemon on its own virtual machine, with its own Docker daemon, and point `SCANNER_URL` at that machine over a management network that users cannot reach. Keep the socket on that virtual machine only. This repository does not create the virtual machine. Where a separate machine is not available yet, run the scanner under rootless Docker (`dockerd-rootless-setuptool.sh`, socket owned by an unprivileged user). A container started from that daemon does not receive host root. Rootless mode still exposes every container that daemon runs, so it is the weaker of the two options.
+Operational mitigation: run the scanner stack on its own virtual machine, with its own Docker daemon, and point `SCANNER_URL` at that machine over a management network that users cannot reach. Keep the host socket on that virtual machine only. This repository does not create the virtual machine. Where a separate machine is not available yet, rootless Docker on the scanner host is a weaker fallback.
 
 **Git address pinning depends on libcurl.** Clone disables HTTP redirects and passes `http.curloptResolve` for each address that was accepted. That option is honored when Git is built with libcurl, which is the normal Debian and Ubuntu `git` package. A Git build that ignores it resolves the name again at connect time, so DNS rebinding is not fully closed. Confirm the worker image's Git with `git version --build-options` and look for `libcurl`. Do not describe the pin as a complete rebinding control.
 
@@ -95,6 +95,29 @@ Persist the rules with the host's firewall tool (`iptables-persistent`, `nftable
 `sonar-scanner-cli` 12.2 reads `SONAR_TOKEN` from its process environment. It does not accept the token on stdin or from a token file of its own. Putting the value in Docker's `environment` field stores it in `docker inspect` (`Config.Env`). The worker therefore writes the token to a file in a mode `0700` directory, bind-mounts that file read-only at `/run/secrets/sonar_token` (mode `0444` so the image user can read it), and starts `/bin/sh` which exports `SONAR_TOKEN` only inside the container process. The value is not in `Config.Env` or in the process arguments. It is still in `/proc/<pid>/environ` for the life of the scan, and the file remains on the worker until the scan function returns and deletes it. Anyone who can `docker exec` into that container, or read the worker's scan directory as root while the scan is running, can read the token. That is the boundary the scanner's own configuration leaves.
 
 Command-line `-D` properties outrank `sonar-project.properties`. The scanner command pins `sonar.host.url`, clears `sonar.scanner.proxyHost`, `proxyPort`, `proxyUser`, and `proxyPassword`, and sets `sonar.scanner.javaOpts` to the memory limit only. `truststorePath` is the image CA bundle copied to `/tmp/sonar-truststore`, and `keystorePath` is an empty keystore created in the same directory. A blank path is not used: the scanner treats it as the working directory and Java then fails with `Is a directory`. `sonar.working.directory` is `/tmp/.scannerwork`, and the repository mount is read-only. The scanner image user cannot create `.scannerwork` inside a root-owned clone. A repository file cannot replace those with another server, an HTTP proxy, a JVM proxy flag, or a private trust store. Other unpinned properties can still change. The token is not passed as `sonar.token` on the command line.
+
+## CI scan API (async poll)
+
+GitLab (or other CI) can enqueue a **project** scan with a machine token. The console runs the existing scanner pipeline; open `/scans/<id>` in the UI for the Execution Center. Do not put a GitLab Runner on this host unless you accept the security and resource trade-offs.
+
+Create `secrets/ci_scan_token.txt` with `./scripts/init-secrets.sh` (mode 600). Compose mounts it as `CI_SCAN_TOKEN_FILE`. This token is **not** the push-gate token.
+
+```bash
+# Enqueue (project slug must exist; target must be one of its repos/images)
+curl -fsS -X POST "$CONSOLE_URL/api/ci/scans" \
+  -H "Authorization: Bearer $(cat secrets/ci_scan_token.txt)" \
+  -H "Content-Type: application/json" \
+  -d '{"project":"my-app","target":"repo","tools":["semgrep","checkov","sonar"],"requested_sha":"'"$CI_COMMIT_SHA"'"}'
+
+# Poll until status is done or failed
+curl -fsS \
+  -H "Authorization: Bearer $(cat secrets/ci_scan_token.txt)" \
+  "$CONSOLE_URL/api/ci/scans/<scan_id>"
+```
+
+You may send the same value as `X-CI-Scan-Token` instead of `Authorization: Bearer`.
+
+While the scan is `queued` or `running`, `policy.pending` is true and `policy.passed` is null. When finished, `policy.passed` is a boolean. **Fail the pipeline when `policy.passed` is false.** Reasons can include `scan_failed`, `tool_failed:<name>`, `severity_critical`, `severity_high`, and `sonar_quality_gate_error`. Medium/low/info findings alone do not fail. See `examples/gitlab-ci-scan.yml` for a poll loop.
 
 ## CI push gate
 

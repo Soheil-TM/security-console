@@ -87,3 +87,19 @@ def test_normalize_keeps_recorded_rows_while_running() -> None:
         status="running",
     )
     assert [(row["tool"], row["status"]) for row in rows] == [("semgrep", "ok")]
+
+
+def test_normalize_marks_unfinished_tools_failed_after_restart() -> None:
+    rows = normalize_tool_results(
+        ["semgrep", "checkov", "sonar"],
+        [{"tool": "semgrep", "status": "ok"}],
+        "The console restarted during the scan.",
+        [{"tool": "semgrep"}],
+        status="failed",
+    )
+    assert [(row["tool"], row["status"]) for row in rows] == [
+        ("semgrep", "ok"),
+        ("checkov", "failed"),
+        ("sonar", "failed"),
+    ]
+    assert "restarted" in rows[2]["error"]

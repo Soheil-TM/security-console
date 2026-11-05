@@ -263,6 +263,7 @@ def present_scan(
         "commit_sha": scan.get("commit_sha") or "",
         "failure_reason": scan.get("failure_reason") or "",
         "created_at": scan.get("created_at") or "",
+        "started_at": scan.get("started_at") or "",
         "finished_at": scan.get("finished_at") or "",
         "finding_count": len(findings),
         "severity": severity_counts(findings),

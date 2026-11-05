@@ -22,6 +22,7 @@ def normalize_tool_results(
     """Return one row per requested tool. Derive from error/findings when missing."""
 
     active = str(status or "").strip().lower() in {"running", "queued"}
+    failed_scan = str(status or "").strip().lower() == "failed"
     by_tool: dict[str, dict[str, str]] = {}
     if isinstance(raw, list):
         for item in raw:
@@ -59,6 +60,11 @@ def normalize_tool_results(
         (index for index, key in enumerate(ordered) if key in failed_names),
         None,
     )
+    last_recorded = -1
+    for index, key in enumerate(ordered):
+        if key in by_tool:
+            last_recorded = index
+    detail = str(error or "").strip()[:500]
     rows: list[dict[str, str]] = []
     for index, key in enumerate(ordered):
         if key in by_tool:
@@ -74,9 +80,31 @@ def normalize_tool_results(
                 }
             )
             continue
+        if key in finding_tools:
+            rows.append(
+                {
+                    "tool": key,
+                    "status": "ok",
+                    "error": "",
+                    "label": _LABELS.get(key, key),
+                }
+            )
+            continue
+        # Failed scans: tools that never recorded a result did not finish.
+        if failed_scan and detail and index > last_recorded:
+            rows.append(
+                {
+                    "tool": key,
+                    "status": "failed",
+                    "error": detail,
+                    "label": _LABELS.get(key, key),
+                }
+            )
+            continue
+        # Invent OK only for gaps at/before the last recorded tool, or
+        # tools that finished before a tool-prefixed failure line.
         if (
-            key in finding_tools
-            or by_tool
+            (last_recorded >= 0 and index <= last_recorded)
             or not error
             or (
                 first_failed is not None
@@ -94,7 +122,6 @@ def normalize_tool_results(
     # Pre-tool failures (clone, scanner down, deadline before any tool) would
     # otherwise leave the UI blank. Mark every requested tool failed.
     if not rows and error and ordered:
-        detail = str(error).strip()[:500]
         for key in ordered:
             rows.append(
                 {

@@ -1,7 +1,7 @@
 #!/bin/sh
 # Root is used only to hand /data and the secret copies to the console user.
 # The process then drops privileges. The scanner worker overrides this
-# entrypoint and stays root because it has to open the Docker socket.
+# entrypoint and stays root (Compose still runs it as root in this release).
 set -eu
 if [ "$(id -u)" != "0" ]; then
   exec python /app/app.py

@@ -34,6 +34,8 @@ from security_console.auth import (
 from security_console.dispatch import (
     dispatch_images,
     dispatch_scan,
+    poll_remote_job,
+    probe_remote_job,
     scanner_token,
     scanner_url,
 )
@@ -55,6 +57,10 @@ from security_console.queue import (
     bind_store,
     start_dispatcher,
 )
+from security_console.schedules import (
+    bind_schedule_store,
+    start_schedule_ticker,
+)
 from security_console.repos import normalize_commit_sha, valid_repo
 from security_console.sonar_proxy import install_sonar_proxy
 from security_console.sonar_setup import read_public_status, run_setup
@@ -65,6 +71,7 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 256 * 1024
 DATA = Path(os.environ.get("DATA_DIR", "/data"))
 RESTART_ERROR = "The console restarted during the scan."
+WORKER_GONE_ERROR = "The scanner no longer has this scan."
 
 lock = threading.Lock()
 scans: dict[str, dict[str, Any]] = {}
@@ -81,7 +88,7 @@ def load_state() -> None:
     scan_dir.mkdir(parents=True, exist_ok=True)
     _migrate_scan_files(scan_dir)
     try:
-        db.fail_running_scans(RESTART_ERROR)
+        # Keep running rows; resume_running_scans() reattaches after boot.
         for item in db.list_scan_rows():
             if guest_expired(item):
                 db.delete_scan_row(str(item["id"]))
@@ -98,9 +105,12 @@ def load_state() -> None:
             if guest_expired(item):
                 path.unlink(missing_ok=True)
                 continue
+            # File-only mode has no worker to reattach; fail in-flight rows.
             if item.get("status") == "running":
                 item["status"] = "failed"
                 item["error"] = RESTART_ERROR
+                item["phase"] = ""
+                item["finished_at"] = item.get("finished_at") or utcnow()
                 path.write_text(json.dumps(item, ensure_ascii=False))
             scans[item["id"]] = item
 
@@ -119,12 +129,7 @@ def _migrate_scan_files(scan_dir: Path) -> None:
         if guest_expired(item):
             path.unlink(missing_ok=True)
             continue
-        if item.get("status") == "running":
-            item["status"] = "failed"
-            item["error"] = RESTART_ERROR
-            item["phase"] = ""
-            item["finished_at"] = item.get("finished_at") or utcnow()
-            path.write_text(json.dumps(item, ensure_ascii=False))
+        # Leave running rows for resume_running_scans when Postgres is available.
         try:
             if db.get_scan_row(scan_id) is None:
                 db.upsert_scan(item)
@@ -132,6 +137,129 @@ def _migrate_scan_files(scan_dir: Path) -> None:
             app.logger.exception("could not migrate scan %s", scan_id)
             return
 
+
+def _apply_scan_outcome(scan_id: str, outcome: dict[str, Any]) -> None:
+    """Write a finished worker outcome onto the in-memory + DB scan row."""
+
+    with lock:
+        current = scans.get(scan_id)
+        if current is None or current.get("status") != "running":
+            return
+        current["findings"] = outcome.get("findings") or current.get("findings") or []
+        current["tool_results"] = (
+            outcome.get("tool_results") or current.get("tool_results") or []
+        )
+        if outcome.get("sonar") is not None:
+            current["sonar"] = outcome.get("sonar")
+        current["status"] = outcome.get("status") or "failed"
+        current["error"] = outcome.get("error") or ""
+        current["commit_sha"] = (
+            outcome.get("commit_sha") or current.get("commit_sha") or ""
+        )
+        current["failure_reason"] = outcome.get("failure_reason") or ""
+        current["requested_sha"] = (
+            outcome.get("requested_sha") or current.get("requested_sha") or ""
+        )
+        current["phase"] = ""
+        current["finished_at"] = utcnow()
+        save_scan(current)
+
+
+def _fail_running_scan(scan_id: str, message: str) -> None:
+    with lock:
+        current = scans.get(scan_id)
+        if current is None or current.get("status") != "running":
+            return
+        current["status"] = "failed"
+        current["error"] = message[:2000]
+        current["phase"] = ""
+        current["finished_at"] = utcnow()
+        save_scan(current)
+
+
+def resume_running_scans() -> None:
+    """Reattach to scanner jobs still running after a console restart."""
+
+    with lock:
+        running_ids = [
+            str(item["id"])
+            for item in scans.values()
+            if item.get("status") == "running"
+        ]
+    for scan_id in running_ids:
+        threading.Thread(
+            target=_resume_one_scan,
+            args=(scan_id,),
+            daemon=True,
+            name=f"reattach-{scan_id[:12]}",
+        ).start()
+
+
+def _resume_one_scan(scan_id: str) -> None:
+    if not scanner_url():
+        _fail_running_scan(scan_id, RESTART_ERROR)
+        return
+
+    def on_phase(phase: str) -> None:
+        with lock:
+            current = scans.get(scan_id)
+            if current is None or current.get("status") != "running":
+                return
+            current["phase"] = phase
+            save_scan(current)
+
+    def on_update(progress: dict) -> None:
+        with lock:
+            current = scans.get(scan_id)
+            if current is None or current.get("status") != "running":
+                return
+            phase = progress.get("phase")
+            if isinstance(phase, str) and phase:
+                current["phase"] = phase
+            findings = progress.get("findings")
+            if isinstance(findings, list):
+                current["findings"] = findings
+            tool_results = progress.get("tool_results")
+            if isinstance(tool_results, list):
+                current["tool_results"] = tool_results
+            error = progress.get("error")
+            if isinstance(error, str) and error:
+                current["error"] = error
+            save_scan(current)
+
+    try:
+        payload = probe_remote_job(scan_id)
+    except Exception:
+        app.logger.exception("reattach probe failed id=%s", scan_id)
+        _fail_running_scan(scan_id, "The scanner is unavailable.")
+        return
+    if payload is None:
+        _fail_running_scan(scan_id, WORKER_GONE_ERROR)
+        return
+    status = str(payload.get("status") or "")
+    if status in {"done", "failed"}:
+        _apply_scan_outcome(
+            scan_id,
+            {
+                "findings": payload.get("findings") or [],
+                "tool_results": payload.get("tool_results") or [],
+                "sonar": payload.get("sonar"),
+                "status": status,
+                "error": str(payload.get("error") or ""),
+                "requested_sha": str(payload.get("requested_sha") or ""),
+                "commit_sha": str(payload.get("commit_sha") or ""),
+                "failure_reason": str(payload.get("failure_reason") or ""),
+            },
+        )
+        return
+    try:
+        outcome = poll_remote_job(scan_id, on_phase, on_update)
+    except Exception as exc:
+        text = str(exc).strip() or type(exc).__name__
+        app.logger.error("reattach poll failed id=%s err=%s", scan_id, type(exc).__name__)
+        _fail_running_scan(scan_id, text[-2000:])
+        return
+    _apply_scan_outcome(scan_id, outcome)
 
 def prune_guest_scans() -> None:
     """Drop guest scans past their keep time. Call with ``lock`` held."""
@@ -208,16 +336,31 @@ def execute_scan(scan_id: str) -> None:
                 current["finished_at"] = utcnow()
                 save_scan(current)
             return
+        job_body: dict[str, Any] = {
+            "id": item["id"],
+            "target": item["target"],
+            "repo": item["repo"],
+            "image": item["image"],
+            "tools": item["tools"],
+            "requested_sha": item.get("requested_sha") or "",
+            **secrets,
+        }
+        if "sonar" in (item.get("tools") or []) and item.get("repo"):
+            try:
+                from security_console.sonar_keys import (
+                    derive_sonar_project_key,
+                    normalize_repo_key,
+                )
+
+                repo_key = normalize_repo_key(str(item["repo"]))
+                sonar_key = derive_sonar_project_key(str(item["repo"]))
+                with suppress(psycopg.Error):
+                    sonar_key = db.ensure_sonar_repo_key(repo_key, sonar_key)
+                job_body["sonar_project_key"] = sonar_key
+            except Exception:
+                app.logger.exception("sonar project key failed id=%s", scan_id)
         outcome = dispatch_scan(
-            {
-                "id": item["id"],
-                "target": item["target"],
-                "repo": item["repo"],
-                "image": item["image"],
-                "tools": item["tools"],
-                "requested_sha": item.get("requested_sha") or "",
-                **secrets,
-            },
+            job_body,
             on_phase,
             on_update,
         )
@@ -263,13 +406,33 @@ def health() -> Response:
     return jsonify({"ok": True})
 
 
-@app.get("/")
-@app.get("/login")
-def index() -> Response:
+def _console_shell() -> Response:
     response = make_response(render_template("index.html", sonar_url="/sonar/"))
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     response.headers["Pragma"] = "no-cache"
     return response
+
+
+@app.get("/")
+@app.get("/login")
+def index() -> Response:
+    return _console_shell()
+
+
+@app.get("/scans/<scan_id>")
+def scan_execution(scan_id: str) -> Response:
+    """Serve the console shell for Scan Execution Center deep-links.
+
+    Authz for scan data stays on the API. Unknown ids still get the shell so
+    the client can show Not found after GET /api/scans/<id>.
+    """
+
+    text = str(scan_id or "").strip()
+    if not text or len(text) > 64:
+        return jsonify({"error": "Not found"}), 404
+    if any(ch for ch in text if ch not in "0123456789abcdefABCDEF"):
+        return jsonify({"error": "Not found"}), 404
+    return _console_shell()
 
 
 @app.post("/api/scans")
@@ -697,6 +860,12 @@ def boot() -> None:
         )
     bind_store(lock, scans, save_scan)
     start_dispatcher(execute_scan)
+    resume_running_scans()
+    bind_schedule_store(lock, scans, save_scan, utcnow)
+    start_schedule_ticker()
+    from security_console.ci_scans import bind_ci_store
+
+    bind_ci_store(lock, scans, save_scan, utcnow)
 
 
 if os.environ.get("CONSOLE_SKIP_BOOT") != "1":

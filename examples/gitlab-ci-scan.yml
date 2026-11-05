@@ -1,0 +1,42 @@
+# Example GitLab CI job: enqueue a console project scan, poll, fail on policy.
+# Set CI/CD variables: CONSOLE_URL, CI_SCAN_TOKEN (masked), CONSOLE_PROJECT_SLUG.
+
+stages:
+  - security
+
+console_scan:
+  stage: security
+  image: curlimages/curl:8.5.0
+  variables:
+    POLL_SECONDS: "10"
+    POLL_MAX: "180"
+  script:
+    - |
+      set -eu
+      CREATE=$(curl -fsS -X POST "$CONSOLE_URL/api/ci/scans" \
+        -H "Authorization: Bearer $CI_SCAN_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d "{\"project\":\"$CONSOLE_PROJECT_SLUG\",\"target\":\"repo\",\"tools\":[\"semgrep\",\"checkov\",\"sonar\",\"trivy\"],\"requested_sha\":\"$CI_COMMIT_SHA\",\"force\":true}")
+      SCAN_ID=$(printf '%s' "$CREATE" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)
+      test -n "$SCAN_ID"
+      echo "Console Execution Center: $CONSOLE_URL/scans/$SCAN_ID"
+      i=0
+      while [ "$i" -lt "$POLL_MAX" ]; do
+        BODY=$(curl -fsS \
+          -H "Authorization: Bearer $CI_SCAN_TOKEN" \
+          "$CONSOLE_URL/api/ci/scans/$SCAN_ID")
+        STATUS=$(printf '%s' "$BODY" | sed -n 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)
+        echo "status=$STATUS"
+        case "$STATUS" in
+          done|failed)
+            echo "$BODY"
+            echo "$BODY" | grep -q '"passed"[[:space:]]*:[[:space:]]*true' && exit 0
+            echo "CI policy failed (see policy.reasons in the JSON above)."
+            exit 1
+            ;;
+        esac
+        i=$((i + 1))
+        sleep "$POLL_SECONDS"
+      done
+      echo "Timed out waiting for scan $SCAN_ID"
+      exit 1

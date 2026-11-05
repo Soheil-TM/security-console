@@ -120,6 +120,35 @@ def test_expand_sonar_findings_issues_and_hotspots() -> None:
     assert severity_bucket(rows[1]["severity"]) == "high"
 
 
+def test_present_scan_includes_started_at() -> None:
+    admin = {
+        "role": "admin",
+        "username": "admin",
+        "capabilities": {"projects.manage_all": True},
+    }
+    scan = {
+        "id": "s1",
+        "repo": "https://example.com/a.git",
+        "owner": "admin",
+        "tools": ["semgrep"],
+        "status": "running",
+        "findings": [],
+        "created_at": "2026-11-03 12:00:00 UTC",
+        "started_at": "2026-11-03 12:00:10 UTC",
+        "finished_at": "",
+    }
+    shown = present_scan(admin, scan, summary=True)
+    assert shown is not None
+    assert shown["started_at"] == "2026-11-03 12:00:10 UTC"
+    queued = present_scan(
+        admin,
+        {**scan, "status": "queued", "started_at": ""},
+        summary=True,
+    )
+    assert queued is not None
+    assert queued["started_at"] == ""
+
+
 def test_present_scan_merges_sonar_into_findings() -> None:
     admin = {
         "role": "admin",

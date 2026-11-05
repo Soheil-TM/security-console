@@ -12,6 +12,7 @@
     } catch (e) {}
   </script>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%230f766e' d='M16 2.5 27.5 7v8.2c0 7.2-4.6 12.2-11.5 14.3C9.1 27.4 4.5 22.4 4.5 15.2V7z'/%3E%3C/svg%3E">
+  <script src="/static/execution_math.js"></script>
   <style>
     @font-face {
       font-family: "Vazirmatn";
@@ -604,6 +605,28 @@
     .inv-compose {
       display: grid;
       gap: 6px;
+    }
+    .inv-field-hint {
+      margin: 0;
+      font-size: 12px;
+      color: #64748b;
+    }
+    html.dark .inv-field-hint {
+      color: #94a3b8;
+    }
+    .inv-field-error {
+      margin: 0;
+      font-size: 12px;
+      color: #b91c1c;
+      font-weight: 600;
+    }
+    html.dark .inv-field-error {
+      color: #fca5a5;
+    }
+    .inv-bulk-feedback {
+      grid-column: 1 / -1;
+      display: grid;
+      gap: 4px;
     }
     .dash-assign { margin-top: 12px; }
     .triage-inbox { display: grid; gap: 16px; }
@@ -1414,6 +1437,72 @@
     html.dark .dash-chip.ok { background: #12382c; color: #86efac; }
     html.dark .dash-chip.bad { background: #3f1d28; color: #fda4af; }
     html.dark .dash-table tr[data-action]:hover td { background: #22364a; }
+    .schedule-row {
+      background: #f4f8fb;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 8px;
+      color: var(--ink);
+    }
+    html.dark .schedule-row {
+      background: #1b2c3d;
+      border-color: #31475f;
+      color: var(--ink);
+    }
+    .schedule-row .meta { color: var(--muted); }
+    html.dark .schedule-row .meta { color: #9db0c3; }
+    .exec-panel {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 14px;
+      color: var(--ink);
+    }
+    .exec-hero {
+      display: grid;
+      grid-template-columns: minmax(120px, 160px) minmax(0, 1fr);
+      gap: 16px;
+      align-items: center;
+      margin: 12px 0 16px;
+    }
+    .exec-pct {
+      background: #0f766e;
+      color: #fff;
+      border-radius: 12px;
+      text-align: center;
+      padding: 18px 10px;
+    }
+    .exec-pct b { display: block; font-size: 34px; line-height: 1.1; }
+    .exec-pct span { display: block; font-size: 12px; opacity: .9; margin-top: 4px; }
+    .exec-pct.failed { background: #9f1239; }
+    .exec-pct.partial { background: #b45309; }
+    .exec-pct.queued { background: #475569; }
+    html.dark .exec-panel { background: #1b2c3d; border-color: #31475f; }
+    .exec-tools { display: grid; gap: 8px; margin-top: 8px; }
+    .exec-tool {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 12px;
+      background: #f8fafc;
+      color: var(--ink);
+    }
+    html.dark .exec-tool { background: #152232; border-color: #31475f; color: #e8eef5; }
+    .exec-tool summary { cursor: pointer; font-weight: 650; list-style: none; }
+    .exec-tool summary::-webkit-details-marker { display: none; }
+    .exec-tool .mark { float: right; font-size: 12px; font-weight: 700; }
+    .exec-tool .mark.ok { color: #146c43; }
+    .exec-tool .mark.run { color: #b45309; }
+    .exec-tool .mark.bad { color: #9f1239; }
+    .exec-tool .mark.wait { color: var(--muted); }
+    .exec-tool .detail { margin-top: 8px; font-size: 13px; color: var(--muted); white-space: pre-wrap; }
+    html.dark .exec-tool .detail { color: #c5d5e4; }
+    .exec-meta-grid { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+    html.dark .exec-meta-grid { color: #c5d5e4; }
+    @media (max-width: 720px) {
+      .exec-hero { grid-template-columns: 1fr; }
+    }
     html.dark .dash-status { background: #243648; color: #d5e4f0; }
     html.dark .dash-status.done { background: #12382c; color: #86efac; }
     html.dark .dash-status.failed { background: #3f1d28; color: #fda4af; }
@@ -1464,7 +1553,46 @@
     html.dark .badge.running { background: #3a2c14; color: #fcd34d; }
     html.dark .badge.queued { background: #153246; color: #7dd3fc; }
     html.dark .badge.failed { background: #3f1d24; color: #fda4af; }
-    .scan-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+    .scan-actions { display: flex; align-items: center; gap: 8px; flex: none; flex-wrap: wrap; }
+    .scan-actions .ghost,
+    .scan-actions button.retry {
+      height: 32px;
+      border-radius: 8px;
+      padding: 0 12px;
+      font-weight: 700;
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .scan-actions .ghost {
+      border: 1px solid #c5d1de;
+      background: #fff;
+      color: var(--ink);
+    }
+    .scan-actions .ghost:hover { border-color: var(--teal); color: var(--teal-2); background: #f0fdfa; }
+    html.dark .scan-actions .ghost {
+      background: #1b2c3d;
+      border-color: #3d556e;
+      color: #e8eef5;
+    }
+    html.dark .scan-actions .ghost:hover {
+      background: #12343a;
+      border-color: #5eead4;
+      color: #ccfbf1;
+    }
+    .rp-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+    .rp-row .ghost {
+      height: 32px;
+      flex: none;
+      padding: 0 12px;
+      font-size: 13px;
+    }
     button.retry {
       height: 32px;
       border: 0;
@@ -1830,7 +1958,41 @@
     html.dark #guest-msg.bad { color: #fda4af; }
     .public-section { margin-top: 22px; }
     .public-section h2 { font-size: 15px; margin: 0 0 10px; }
+    .guest-history-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    .guest-history-head h2 { margin: 0; font-size: 15px; }
+    .guest-history-toggle {
+      border: 1px solid var(--line);
+      background: var(--card);
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 6px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .guest-history-toggle:hover,
+    .guest-history-toggle[aria-expanded="true"] {
+      border-color: var(--teal);
+      background: color-mix(in srgb, var(--teal) 12%, var(--card));
+    }
+    html.dark .guest-history-toggle {
+      background: #1b2c3d;
+      border-color: #31475f;
+      color: var(--ink);
+    }
+    html.dark .guest-history-toggle:hover,
+    html.dark .guest-history-toggle[aria-expanded="true"] {
+      background: #22364a;
+      border-color: var(--teal);
+    }
     .guest-list { display: grid; gap: 8px; }
+    .guest-list[hidden] { display: none; }
     .guest-row {
       border: 1px solid var(--line);
       border-radius: 10px;
@@ -1871,8 +2033,27 @@
     .tool-pill { display: inline-flex; align-items: center; padding: 5px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; border: 1px solid var(--line); }
     .tool-pill.ok { background: #d1fae5; color: #065f46; border-color: #a7f3d0; }
     .tool-pill.bad { background: #ffe4e6; color: #9f1239; border-color: #fecdd3; }
+    .tool-pill.run { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
+    .tool-pill.wait { background: #eef2f7; color: #475569; border-color: #cbd5e1; }
     html.dark .tool-pill.ok { background: #143528; color: #6ee7b7; border-color: #1f4d3a; }
     html.dark .tool-pill.bad { background: #3f1d24; color: #fda4af; border-color: #5c2430; }
+    html.dark .tool-pill.run { background: #3a2c12; color: #fcd34d; border-color: #854d0e; }
+    html.dark .tool-pill.wait { background: #1a2838; color: #9aafc3; border-color: #2c4258; }
+    .phase-line {
+      margin: 0 0 10px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid #fcd34d;
+      background: #fffbeb;
+      color: #92400e;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    html.dark .phase-line {
+      background: #3a2c12;
+      border-color: #854d0e;
+      color: #fcd34d;
+    }
     .guest-error { white-space: pre-wrap; margin-top: 12px; }
     .guest-findings { width: 100%; border-collapse: collapse; direction: ltr; }
     .guest-findings th, .guest-findings td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; font-size: 13px; }
@@ -1965,9 +2146,14 @@
         </details>
         <p id="guest-msg" role="status"></p>
       </form>
-      <section class="public-section" id="guest-mine" hidden>
-        <h2>Your scans in this browser</h2>
-        <div class="guest-list" id="guest-list"></div>
+      <section class="public-section" id="guest-mine">
+        <div class="guest-history-head">
+          <h2>Your scans in this browser</h2>
+          <button type="button" class="guest-history-toggle" id="guest-history-toggle" aria-expanded="false" aria-controls="guest-list">
+            History
+          </button>
+        </div>
+        <div class="guest-list" id="guest-list" hidden></div>
       </section>
     </main>
   </div>
@@ -2081,6 +2267,7 @@
           <button type="button" class="mode" data-action="view" data-view="projects" id="nav-projects">Projects</button>
           <button type="button" class="mode" data-action="view" data-view="groups" id="nav-groups">Groups</button>
           <button type="button" class="mode" data-action="view" data-view="connections" id="nav-connections" hidden>Connections</button>
+          <button type="button" class="mode" data-action="view" data-view="schedules" id="nav-schedules" hidden>Schedules</button>
           <button type="button" class="mode" data-action="view" data-view="sonar-setup" id="nav-sonar-setup" hidden>Sonar setup</button>
         </div>
         <a id="sonar-link" href="{{ sonar_url }}" target="_blank" rel="noopener" hidden>SonarQube <span aria-hidden="true">↗</span></a>
@@ -2177,6 +2364,7 @@
             <span id="empty-text">Open Scan under Image or Repository.</span>
           </div>
           <div id="overview" hidden></div>
+          <div id="execution-panel" class="exec-panel" hidden></div>
           <div id="scan-panel" hidden>
             <div id="scan-head"></div>
             <div id="scan-error"></div>
@@ -2333,6 +2521,41 @@
             </div>
           </form>
         </section>
+        <section id="view-schedules" hidden>
+          <div class="page-head">
+            <div>
+              <h1>Schedules</h1>
+              <p class="meta">Rescan a project every N days. The console queues every attached repo and image when the schedule is due.</p>
+            </div>
+          </div>
+          <div id="schedule-error" class="login-error" hidden></div>
+          <p class="meta" id="schedule-msg"></p>
+          <div id="schedule-list"></div>
+          <form class="launch" id="schedule-form" style="margin-top:12px">
+            <h2 style="margin:0 0 12px;font-size:16px">Add or update schedule</h2>
+            <div class="account-grid">
+              <label><span class="field-label">Project</span>
+                <select id="schedule-project" class="field" required></select>
+              </label>
+              <label><span class="field-label">Every N days</span>
+                <input id="schedule-interval" class="field" type="number" min="1" max="90" value="7" required>
+              </label>
+              <label class="check"><input id="schedule-enabled" type="checkbox" checked> Enabled</label>
+              <fieldset class="tool-set">
+                <legend class="field-label">Tools</legend>
+                <label class="check"><input type="checkbox" name="schedule-tool" value="semgrep" checked> Semgrep</label>
+                <label class="check"><input type="checkbox" name="schedule-tool" value="checkov" checked> Checkov</label>
+                <label class="check"><input type="checkbox" name="schedule-tool" value="sonar"> SonarQube</label>
+                <label class="check"><input type="checkbox" name="schedule-tool" value="trivy" checked> Trivy</label>
+              </fieldset>
+            </div>
+            <p class="meta">Image targets always run Trivy. Repo targets use Semgrep, Checkov, and SonarQube from the selection above.</p>
+            <div style="display:flex;gap:8px;margin-top:12px">
+              <button type="submit" id="schedule-save">Save</button>
+              <button type="button" class="ghost" id="schedule-cancel">Clear</button>
+            </div>
+          </form>
+        </section>
         <section id="view-sonar-setup" hidden>
           <div class="page-head">
             <div>
@@ -2471,6 +2694,31 @@
     ];
     const STATUS = {queued: "Queued", running: "Running", done: "Done", failed: "Failed"};
 
+    function formatStamp(value) {
+      // API stamps are UTC ("YYYY-MM-DD HH:MM:SS UTC"). Show the browser's local clock.
+      const raw = String(value || "").trim();
+      if (!raw) return "";
+      let text = raw;
+      if (text.endsWith(" UTC")) {
+        text = text.slice(0, -4).trim().replace(" ", "T") + "Z";
+      } else if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/.test(text) && !/[zZ]|[+-]\d{2}:?\d{2}$/.test(text)) {
+        text = text.replace(" ", "T") + "Z";
+      }
+      const ms = Date.parse(text);
+      if (!Number.isFinite(ms)) return raw.replace(/\s*UTC$/, "").trim();
+      const d = new Date(ms);
+      const pad = (n) => String(n).padStart(2, "0");
+      const local = d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate())
+        + " " + pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+      // #region agent log
+      if (!window.__stampLogged) {
+        window.__stampLogged = true;
+        fetch('http://127.0.0.1:7667/ingest/85be6dba-ebad-458a-a516-e76dc6ca519e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4a0a8b'},body:JSON.stringify({sessionId:'4a0a8b',runId:'tz-fix',hypothesisId:'TZ',location:'index.html:formatStamp',message:'utc to local',data:{raw:raw,local:local,tzOffsetMin:d.getTimezoneOffset()},timestamp:Date.now()})}).catch(()=>{});
+      }
+      // #endregion
+      return local;
+    }
+
     function scanIsActive(item) {
       return item && (item.status === "running" || item.status === "queued");
     }
@@ -2497,6 +2745,51 @@
       } catch (err) {
         return "/sonar/";
       }
+    }
+
+    function parseScanPath(pathname) {
+      const match = String(pathname || "").match(/^\/scans\/([0-9a-fA-F]{1,64})\/?$/);
+      return match ? match[1].toLowerCase() : "";
+    }
+
+    function executionPath(id) {
+      return "/scans/" + encodeURIComponent(String(id || "").toLowerCase());
+    }
+
+    function urlScanId() {
+      return parseScanPath(location.pathname);
+    }
+
+    function goExecution(id, opts) {
+      const scanId = String(id || "").toLowerCase();
+      if (!scanId) return;
+      const path = executionPath(scanId);
+      const replace = opts && opts.replace;
+      if (location.pathname !== path) {
+        if (replace) history.replaceState({scanId: scanId}, "", path);
+        else history.pushState({scanId: scanId}, "", path);
+      }
+      state.view = "scans";
+      state.pane = "execution";
+      state.overviewKey = "";
+    }
+
+    function hydrateFromUrl() {
+      const id = urlScanId();
+      if (!id) return false;
+      state.view = "scans";
+      state.pane = "execution";
+      state.overviewKey = "";
+      const found = state.scans.find((item) => item.id === id);
+      if (found) {
+        state.scan = found;
+        state.target = isImageScan(found) ? "image" : "repo";
+        showOnlyProject(projectKey(found));
+        kindOpen.add(state.target);
+      } else if (!state.scan || state.scan.id !== id) {
+        state.scan = {id: id, status: "queued", tools: [], findings: [], tool_results: []};
+      }
+      return true;
     }
 
     const sonarLink = document.querySelector("#sonar-link");
@@ -2553,7 +2846,8 @@
     const reportsOpen = new Set();
     let scansMenuOpen = true;
     let settingsMenuOpen = false;
-    const SETTINGS_VIEWS = ["users", "access", "projects", "groups", "connections", "sonar-setup"];
+    const SETTINGS_VIEWS = ["users", "access", "projects", "groups", "connections", "schedules", "sonar-setup"];
+    let schedules = [];
     function csrfToken() {
       const match = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/);
       return match ? decodeURIComponent(match[1]) : "";
@@ -2654,6 +2948,7 @@
       document.querySelector("#nav-access").hidden = !hasCap(user, "tool_access.manage");
       document.querySelector("#nav-sonar-setup").hidden = !hasCap(user, "sonar.setup");
       document.querySelector("#nav-connections").hidden = !hasCap(user, "connections.manage");
+      document.querySelector("#nav-schedules").hidden = !hasCap(user, "projects.manage_all");
       document.querySelector("#group-new").hidden = user.role === "viewer";
       document.querySelector("#project-new").hidden = user.role === "viewer";
       const sonarLink = document.querySelector("#sonar-link");
@@ -2662,6 +2957,7 @@
       if (!hasCap(user, "tool_access.manage") && state.view === "access") setView("scans");
       if (!hasCap(user, "sonar.setup") && state.view === "sonar-setup") setView("scans");
       if (!hasCap(user, "connections.manage") && state.view === "connections") setView("scans");
+      if (!hasCap(user, "projects.manage_all") && state.view === "schedules") setView("scans");
       loadConnections();
       loadProjects();
       loadGroups();
@@ -2864,7 +3160,7 @@
     }
 
     function firstSettingsView() {
-      const order = ["users", "access", "projects", "groups", "connections", "sonar-setup"];
+      const order = ["users", "access", "projects", "groups", "connections", "schedules", "sonar-setup"];
       const found = order.find((name) => {
         const button = document.querySelector('nav [data-view="' + name + '"]');
         return button && !button.hidden;
@@ -2874,7 +3170,7 @@
 
     function setView(view) {
       state.view = view;
-      ["dashboard", "scans", "triage", "knowledge", "users", "access", "projects", "groups", "connections", "sonar-setup"].forEach((name) => {
+      ["dashboard", "scans", "triage", "knowledge", "users", "access", "projects", "groups", "connections", "schedules", "sonar-setup"].forEach((name) => {
         document.querySelector("#view-" + name).hidden = view !== name;
       });
       syncLaunch();
@@ -2887,6 +3183,9 @@
       if (view === "users" || view === "access") loadAccounts();
       if (view === "sonar-setup") loadSonarSetup();
       if (view === "connections") loadConnections();
+      if (view === "schedules") {
+        loadProjects().then(() => loadSchedules());
+      }
       if (view === "projects") {
         loadProjects();
         if (!connections.length) loadConnections();
@@ -3206,24 +3505,91 @@
       return '<button type="button" class="retry" data-action="retry" data-id="' + esc(scan.id) + '">Retry</button>';
     }
 
+    function phaseToolKey(phase) {
+      const text = String(phase || "").trim().toLowerCase();
+      if (!text) return "";
+      if (text.includes("semgrep")) return "semgrep";
+      if (text.includes("checkov")) return "checkov";
+      if (text.includes("trivy")) return "trivy";
+      if (text.includes("sonar")) return "sonar";
+      return "";
+    }
+
+    function scanStatusLabel(scan) {
+      if (!scan) return "";
+      if (scanIsFailed(scan)) return "Failed";
+      if (scan.status === "queued") return queueLabel(scan) || "Queued";
+      if (scan.status === "running") {
+        const phase = String(scan.phase || "").trim();
+        return phase ? ("Running · " + phase) : "Running";
+      }
+      return STATUS[scan.status] || scan.status;
+    }
+
+    function toolPipelineRows(scan) {
+      const requested = (scan && scan.tools) || [];
+      if (!requested.length) return [];
+      const byTool = {};
+      ((scan && scan.tool_results) || []).forEach((row) => {
+        if (row && row.tool) byTool[row.tool] = row;
+      });
+      const active = scanIsActive(scan);
+      const current = phaseToolKey(scan && scan.phase);
+      const phaseText = String((scan && scan.phase) || "").trim().toLowerCase();
+      const preTool = active && phaseText && (
+        phaseText === "clone" || phaseText === "pull" || phaseText.includes("database")
+      );
+      return requested.map((tool) => {
+        const row = byTool[tool];
+        const label = (row && row.label) || TOOL_LABEL[tool] || tool;
+        if (row && row.status === "ok") {
+          return { tool, label, mark: "OK", tone: "ok", error: row.error || "" };
+        }
+        if (row && row.status === "failed") {
+          return { tool, label, mark: "Failed", tone: "bad", error: row.error || "" };
+        }
+        if (!active) {
+          return { tool, label, mark: "—", tone: "wait", error: "" };
+        }
+        if (preTool) {
+          return { tool, label, mark: "Waiting", tone: "wait", error: "" };
+        }
+        if (current && tool === current) {
+          return { tool, label, mark: "Running", tone: "run", error: "" };
+        }
+        if (current && requested.indexOf(tool) > requested.indexOf(current)) {
+          return { tool, label, mark: "Waiting", tone: "wait", error: "" };
+        }
+        if (current && requested.indexOf(tool) < requested.indexOf(current)) {
+          return { tool, label, mark: "OK", tone: "ok", error: "" };
+        }
+        return { tool, label, mark: "Waiting", tone: "wait", error: "" };
+      });
+    }
+
     function toolStatusLine(scan) {
-      const rows = (scan && scan.tool_results) || [];
-      if (!rows.length) return "";
-      return rows.map((row) => {
-        const label = row.label || TOOL_LABEL[row.tool] || row.tool;
-        return label + " " + (row.status === "ok" ? "OK" : "Failed");
-      }).join(" · ");
+      const rows = toolPipelineRows(scan);
+      if (!rows.length) {
+        const legacy = (scan && scan.tool_results) || [];
+        if (!legacy.length) return "";
+        return legacy.map((row) => {
+          const label = row.label || TOOL_LABEL[row.tool] || row.tool;
+          return label + " " + (row.status === "ok" ? "OK" : "Failed");
+        }).join(" · ");
+      }
+      return rows.map((row) => row.label + " " + row.mark).join(" · ");
     }
 
     function toolStatusHtml(scan) {
-      const rows = (scan && scan.tool_results) || [];
+      const rows = toolPipelineRows(scan);
       if (!rows.length) return "";
-      return '<div class="guest-tools">' + rows.map((row) => {
-        const ok = row.status === "ok";
-        const label = row.label || TOOL_LABEL[row.tool] || row.tool;
-        const mark = ok ? "OK" : "Failed";
+      const phase = scanIsActive(scan) ? String(scan.phase || "").trim() : "";
+      const phaseHtml = phase
+        ? '<div class="phase-line">Now scanning: ' + esc(phase) + "</div>"
+        : "";
+      return phaseHtml + '<div class="guest-tools">' + rows.map((row) => {
         const title = row.error ? ' title="' + esc(row.error) + '"' : "";
-        return '<span class="tool-pill ' + (ok ? "ok" : "bad") + '"' + title + ">" + esc(label) + " · " + mark + "</span>";
+        return '<span class="tool-pill ' + esc(row.tone) + '"' + title + ">" + esc(row.label) + " · " + esc(row.mark) + "</span>";
       }).join("") + "</div>";
     }
 
@@ -3245,7 +3611,7 @@
     }
 
     function scanWhen(item) {
-      const when = (item.created_at || "").replace(" UTC", "");
+      const when = formatStamp(item.created_at || "");
       const who = String(item.owner || "").trim();
       const sha = String(item.commit_sha || "").slice(0, 12);
       return [when, who, sha].filter(Boolean).join(" · ");
@@ -3265,10 +3631,20 @@
       return (item.findings || []).length || item.finding_count || 0;
     }
 
+    function isLatestProjectScan(item) {
+      if (!item) return false;
+      const key = projectKey(item);
+      const newest = state.scans.find((row) => projectKey(row) === key);
+      return Boolean(newest && newest.id === item.id);
+    }
+
     function canOpenInvestigate(item) {
       if (!currentUser || !item) return false;
       if (!(item.project_slug || item.project_id)) return false;
       if (scanIsActive(item)) return false;
+      // Only the newest scan for this project/target — short-interval rescans
+      // should not leave multiple Investigate buttons on older rows.
+      if (!isLatestProjectScan(item)) return false;
       const count = scanFindingCount(item);
       // Partial tool failure (e.g. Sonar) keeps findings; still allow triage.
       return count > 0 && (item.status === "done" || item.status === "failed");
@@ -3276,11 +3652,11 @@
 
     function reportScanRow(item) {
       const total = scanFindingCount(item);
-      const on = (state.pane === "report" || state.pane === "investigate") && state.scan && state.scan.id === item.id ? " on" : "";
+      const on = (state.pane === "report" || state.pane === "investigate" || state.pane === "execution") && state.scan && state.scan.id === item.id ? " on" : "";
       const inv = canOpenInvestigate(item)
-        ? ' <button type="button" class="ghost" data-action="triage-open" data-scan="' + esc(item.id) + '">Investigate</button>'
+        ? '<button type="button" class="ghost" data-action="triage-open" data-scan="' + esc(item.id) + '">Investigate</button>'
         : "";
-      return '<div class="rp-row" style="display:flex;align-items:center;gap:6px">'
+      return '<div class="rp-row">'
         + '<button type="button" class="rp' + historyTone(item) + on + '" data-action="open" data-id="' + esc(item.id) + '" style="flex:1"><span class="name">' + esc(historyName(item, total)) + '</span><span class="sub">' + esc(scanWhen(item)) + "</span></button>"
         + inv + "</div>";
     }
@@ -3309,7 +3685,7 @@
       const open = kindOpen.has(kind);
       const inScans = state.view === "scans";
       const scanOn = inScans && state.pane === "scan" && state.target === kind ? " on" : "";
-      const reportsOn = inScans && (state.pane === "report" || state.pane === "overview" || state.pane === "investigate") && state.target === kind ? " on" : "";
+      const reportsOn = inScans && (state.pane === "report" || state.pane === "overview" || state.pane === "investigate" || state.pane === "execution") && state.target === kind ? " on" : "";
       const body = open
         ? '<div class="kind-body">'
           + '<button type="button" class="mode' + scanOn + '" data-action="mode-scan" data-kind="' + kind + '">New scan</button>'
@@ -3353,7 +3729,7 @@
 
     function renderReportsNav() {
       const wrap = document.querySelector("#reports-nav");
-      const show = state.view === "scans" && (state.pane === "report" || state.pane === "overview" || state.pane === "investigate");
+      const show = state.view === "scans" && (state.pane === "report" || state.pane === "overview" || state.pane === "investigate" || state.pane === "execution");
       wrap.hidden = !show;
       if (!show) return;
       const wantImage = state.target === "image";
@@ -3374,11 +3750,14 @@
 
     function showPanes() {
       const report = (state.pane === "report" || state.pane === "investigate") && state.scan;
+      const executing = state.pane === "execution" && state.scan;
       const investigating = state.pane === "investigate";
       const starter = currentUser && currentUser.role !== "viewer";
       document.querySelector(".launch-wrap").hidden = !starter || state.view !== "scans" || state.pane !== "scan";
       document.querySelector("#scan-panel").hidden = !report;
       document.querySelector("#overview").hidden = state.pane !== "overview";
+      const execPanel = document.querySelector("#execution-panel");
+      if (execPanel) execPanel.hidden = !executing;
       const toolbar = document.querySelector("#scan-panel .toolbar");
       const sonar = document.querySelector("#sonar-card");
       const findings = document.querySelector("#findings");
@@ -3391,7 +3770,7 @@
       if (inv) inv.hidden = !investigating;
       renderReportsNav();
       const empty = document.querySelector("#empty");
-      empty.hidden = state.pane === "overview" || Boolean(report);
+      empty.hidden = state.pane === "overview" || Boolean(report) || Boolean(executing);
       if (!empty.hidden) {
         const imageMode = state.target === "image";
         const title = state.pane === "scan" ? (imageMode ? "Trivy image scan" : "Repository scan") : "No scan selected";
@@ -3401,6 +3780,7 @@
         document.querySelector("#empty-title").textContent = title;
         document.querySelector("#empty-text").textContent = text;
       }
+      if (executing) renderExecutionCenter();
     }
 
     function scanTally(item) {
@@ -3434,7 +3814,7 @@
         const tally = scanTally(item);
         const total = SEV.reduce((sum, sev) => sum + tally[sev[0]], 0);
         const pieces = SEV.map((sev) => tally[sev[0]] ? '<i style="width:' + (tally[sev[0]] / max * 100) + '%;background:' + sev[3] + '"></i>' : "").join("");
-        const when = (item.created_at || "").replace(" UTC", "");
+        const when = formatStamp(item.created_at || "");
         return '<button type="button" class="scan-bar" data-action="open" data-id="' + esc(item.id) + '"><span><b>' + esc(STATUS[item.status] || item.status) + '</b><span class="sub">' + esc(when) + '</span></span><span class="stack">' + pieces + '</span><span class="num">' + total + '</span></button>';
       }).join("");
       const hist = state.securityHistory && state.securityHistory.project_key === group.key
@@ -3472,13 +3852,13 @@
       const acceptance = gate.acceptance;
       const acceptanceLine = acceptance
         ? '<p class="meta">Last accepted by <b>' + esc(acceptance.accepted_by) + "</b> on "
-          + esc((acceptance.created_at || "").replace(" UTC", ""))
+          + esc(formatStamp(acceptance.created_at || ""))
           + (acceptance.commit_sha ? " · commit " + esc(acceptance.commit_sha.slice(0, 12)) : "")
           + "<br>" + esc(acceptance.reason) + "</p>"
         : '<p class="meta">No risk acceptance yet for this project.</p>';
       const done = (hist.scans || []).filter((item) => item.status === "done");
       const options = done.map((item) => {
-        const when = (item.created_at || "").replace(" UTC", "");
+        const when = formatStamp(item.created_at || "");
         const label = when + " · " + (item.finding_count || 0) + " findings · " + (item.id || "");
         return {id: item.id, label: label, when: when};
       });
@@ -3509,7 +3889,7 @@
         form = '<p class="meta">Run at least two successful scans to compare before and after.</p>';
       }
       const past = (hist.acceptances || []).slice(0, 5).map((item) => {
-        const stamp = (item.created_at || "").replace(" UTC", "");
+        const stamp = formatStamp(item.created_at || "");
         const live = item.active ? "active" : "revoked";
         return '<li><b>' + esc(item.accepted_by) + "</b> · " + esc(stamp)
           + " · fixed " + esc(item.fixed_count) + " · remaining " + esc(item.remaining_count)
@@ -3774,6 +4154,7 @@
           + '<textarea class="inv-reason" maxlength="2000" placeholder="'
           + (latest ? "New note (min 12 characters)" : "Write a note (min 12 characters)")
           + '"></textarea>'
+          + '<p class="inv-field-hint inv-note-hint">Note required (min 12 characters).</p>'
           + "</div>"
         );
       } else if (!latest) {
@@ -3875,16 +4256,15 @@
         const assigneeLocked = !canTriage || status === "accepted_risk";
         const thread = renderInvestigateThread(key, latest, older, historyOpen, canTriage, composeOpen);
         const checked = state.invSelected.has(key) ? " checked" : "";
-        const showCompose = canTriage && (!latest || composeOpen);
         let actions = '<span class="meta">—</span>';
         if (canTriage) {
           actions = '<div class="inv-row-actions">'
-            + '<button type="button" class="inv-submit" data-action="inv-submit"'
-            + (showCompose ? "" : " disabled") + ">Submit</button>";
+            + '<button type="button" class="inv-submit" data-action="inv-submit" disabled>Submit</button>';
           if (latest) {
             actions += '<button type="button" class="inv-new-note" data-action="inv-compose" data-key="'
               + esc(key) + '">' + (composeOpen ? "Cancel" : "New note") + "</button>";
           }
+          actions += '<p class="inv-field-error inv-row-error" hidden></p>';
           actions += "</div>";
         }
         return '<tr data-finding-key="' + esc(key) + '" data-index="' + fullIndex + '">'
@@ -3912,8 +4292,10 @@
           + '<div class="inv-bulk-count"><b id="inv-bulk-count">' + selectedCount + "</b><span>selected</span></div>"
           + '<label><span class="field-label">Status</span><select id="inv-bulk-status">' + bulkStatusOpts + "</select></label>"
           + '<label><span class="field-label">Assigned to</span><select id="inv-bulk-assignee">' + bulkAssignOpts + "</select></label>"
-          + '<label><span class="field-label">Note</span><textarea id="inv-bulk-reason" maxlength="2000" placeholder="Note for every selected row (min 12 characters)"></textarea></label>'
-          + '<div class="inv-bulk-actions"><button type="button" class="inv-bulk-apply" data-action="inv-bulk-apply">Apply to selected</button></div>'
+          + '<label><span class="field-label">Note</span><textarea id="inv-bulk-reason" maxlength="2000" placeholder="Note for every selected row (min 12 characters)"></textarea>'
+          + '<p class="inv-field-hint" id="inv-bulk-hint">Note required (min 12 characters).</p></label>'
+          + '<div class="inv-bulk-actions"><button type="button" class="inv-bulk-apply" data-action="inv-bulk-apply" disabled>Apply to selected</button></div>'
+          + '<div class="inv-bulk-feedback"><p class="inv-field-error" id="inv-bulk-error" hidden></p></div>'
           + "</div>"
         : "";
       const head = '<tr>'
@@ -3946,6 +4328,70 @@
             + rows + "</tbody></table>"
           : '<div class="empty"><strong>Nothing in this filter</strong>Choose another chip or clear the filter.</div>')
         + sticky;
+      syncAllInvestigateValidity();
+    }
+
+    function investigateNoteHint(len) {
+      const need = Math.max(0, 12 - len);
+      if (len <= 0) return "Note required (min 12 characters).";
+      if (need > 0) return need + " more character" + (need === 1 ? "" : "s") + " needed.";
+      return "Ready to submit.";
+    }
+
+    function setInvInlineError(el, text) {
+      if (!el) return;
+      const message = String(text || "").trim();
+      el.textContent = message;
+      el.hidden = !message;
+    }
+
+    function syncInvestigateRowValidity(tr) {
+      if (!tr) return;
+      const statusEl = tr.querySelector(".inv-status");
+      const reasonEl = tr.querySelector(".inv-reason");
+      const submitBtn = tr.querySelector(".inv-submit");
+      const hint = tr.querySelector(".inv-note-hint");
+      const err = tr.querySelector(".inv-row-error");
+      if (!submitBtn) return;
+      const status = statusEl ? statusEl.value : "";
+      const reason = reasonEl ? String(reasonEl.value || "").trim() : "";
+      const showCompose = !!reasonEl;
+      if (hint) {
+        hint.textContent = showCompose ? investigateNoteHint(reason.length) : "";
+        hint.hidden = !showCompose;
+      }
+      const ok = showCompose && !!status && reason.length >= 12;
+      if (submitBtn.textContent !== "Saving…") {
+        submitBtn.disabled = !ok;
+      }
+      if (ok) setInvInlineError(err, "");
+    }
+
+    function syncInvestigateBulkValidity() {
+      const statusEl = document.querySelector("#inv-bulk-status");
+      const assigneeEl = document.querySelector("#inv-bulk-assignee");
+      const reasonEl = document.querySelector("#inv-bulk-reason");
+      const applyBtn = document.querySelector('[data-action="inv-bulk-apply"]');
+      const hint = document.querySelector("#inv-bulk-hint");
+      const err = document.querySelector("#inv-bulk-error");
+      if (!applyBtn) return;
+      const status = statusEl ? statusEl.value : "";
+      const assignee = assigneeEl ? assigneeEl.value : "";
+      const reason = reasonEl ? String(reasonEl.value || "").trim() : "";
+      if (hint) hint.textContent = investigateNoteHint(reason.length);
+      const statusOk = !!status || !!assignee;
+      const ok = statusOk && reason.length >= 12;
+      if (applyBtn.textContent !== "Applying…") {
+        applyBtn.disabled = !ok;
+      }
+      if (ok) setInvInlineError(err, "");
+    }
+
+    function syncAllInvestigateValidity() {
+      document.querySelectorAll("#investigate-panel tbody tr").forEach((tr) => {
+        syncInvestigateRowValidity(tr);
+      });
+      syncInvestigateBulkValidity();
     }
 
     async function saveInvestigateRow(index, opts) {
@@ -3963,29 +4409,26 @@
       const assigneeEl = node.querySelector(".inv-assignee");
       const reason = reasonEl ? reasonEl.value : "";
       let assignee = assigneeEl ? assigneeEl.value : "";
+      const rowError = node.querySelector(".inv-row-error");
       if (status === "accepted_risk" && currentUser && currentUser.username) {
         assignee = currentUser.username;
         if (assigneeEl) assigneeEl.value = assignee;
       }
-      const msg = document.querySelector("#inv-gate-msg");
       if (!status) {
-        if (msg) {
-          msg.className = "meta bad";
-          msg.textContent = "Choose a disposition status.";
-        }
+        setInvInlineError(rowError, "Choose a disposition status.");
+        syncInvestigateRowValidity(node);
         return;
       }
       if (String(reason).trim().length < 12) {
         if (!(opts && opts.allowShort)) {
-          if (msg) {
-            msg.className = "meta bad";
-            msg.textContent = "Write a note of at least 12 characters.";
-          }
+          setInvInlineError(rowError, "Write a note of at least 12 characters.");
+          syncInvestigateRowValidity(node);
           return;
         }
         return;
       }
       const submitBtn = node.querySelector(".inv-submit");
+      setInvInlineError(rowError, "");
       if (submitBtn) {
         submitBtn.disabled = true;
         submitBtn.textContent = "Saving…";
@@ -4005,13 +4448,10 @@
         const body = await response.json().catch(() => ({}));
         if (!response.ok) {
           if (submitBtn) {
-            submitBtn.disabled = false;
             submitBtn.textContent = "Submit";
           }
-          if (msg) {
-            msg.className = "meta bad";
-            msg.textContent = body.error || "Could not save disposition.";
-          }
+          setInvInlineError(rowError, body.error || "Could not save disposition.");
+          syncInvestigateRowValidity(node);
           return;
         }
         if (body.disposition) {
@@ -4025,13 +4465,10 @@
         loadTriageInbox();
       } catch (err) {
         if (submitBtn) {
-          submitBtn.disabled = false;
           submitBtn.textContent = "Submit";
         }
-        if (msg) {
-          msg.className = "meta bad";
-          msg.textContent = "Could not save disposition.";
-        }
+        setInvInlineError(rowError, "Could not save disposition.");
+        syncInvestigateRowValidity(node);
       }
     }
 
@@ -4074,20 +4511,22 @@
 
     async function applyInvestigateBulk() {
       const data = state.investigate;
-      const msg = document.querySelector("#inv-gate-msg");
       if (!data || !state.scan || !state.invSelected || !state.invSelected.size) return;
       const statusEl = document.querySelector("#inv-bulk-status");
       const assigneeEl = document.querySelector("#inv-bulk-assignee");
       const reasonEl = document.querySelector("#inv-bulk-reason");
       const applyBtn = document.querySelector('[data-action="inv-bulk-apply"]');
-      const status = statusEl ? statusEl.value : "";
+      const bulkError = document.querySelector("#inv-bulk-error");
+      let status = statusEl ? statusEl.value : "";
       let assignee = assigneeEl ? assigneeEl.value : "";
       const reason = reasonEl ? reasonEl.value : "";
+      if (!status && assignee) {
+        status = "needs_review";
+        if (statusEl) statusEl.value = status;
+      }
       if (!status) {
-        if (msg) {
-          msg.className = "meta bad";
-          msg.textContent = "Choose a status for the bulk update.";
-        }
+        setInvInlineError(bulkError, "Choose a status for the bulk update.");
+        syncInvestigateBulkValidity();
         return;
       }
       if (status === "accepted_risk" && currentUser && currentUser.username) {
@@ -4095,18 +4534,18 @@
         if (assigneeEl) assigneeEl.value = assignee;
       }
       if (String(reason).trim().length < 12) {
-        if (msg) {
-          msg.className = "meta bad";
-          msg.textContent = "Write a note of at least 12 characters for the bulk update.";
-        }
+        setInvInlineError(bulkError, "Write a note of at least 12 characters for the bulk update.");
+        syncInvestigateBulkValidity();
         return;
       }
       const keys = [...state.invSelected];
+      setInvInlineError(bulkError, "");
       if (applyBtn) {
         applyBtn.disabled = true;
         applyBtn.textContent = "Applying…";
       }
       let failed = 0;
+      let lastError = "";
       for (const key of keys) {
         const result = await putInvestigateDisposition(key, {
           status: status,
@@ -4115,10 +4554,7 @@
         });
         if (!result.ok) {
           failed += 1;
-          if (msg) {
-            msg.className = "meta bad";
-            msg.textContent = (result.body && result.body.error) || "Could not save one of the selected rows.";
-          }
+          lastError = (result.body && result.body.error) || "Could not save one of the selected rows.";
           continue;
         }
         if (result.body.disposition) {
@@ -4127,11 +4563,14 @@
         if (result.body.readiness) data.readiness = result.body.readiness;
       }
       if (applyBtn) {
-        applyBtn.disabled = false;
         applyBtn.textContent = "Apply to selected";
       }
       if (!failed) state.invSelected = new Set();
       refreshInvestigatePanel(failed ? ("Updated with " + failed + " error(s).") : ("Updated " + keys.length + " finding(s)."));
+      if (failed) {
+        setInvInlineError(document.querySelector("#inv-bulk-error"), lastError);
+        syncInvestigateBulkValidity();
+      }
       loadTriageInbox();
     }
 
@@ -4499,7 +4938,7 @@
         const gate = dashGate(row);
         const gateClass = gate === "Fail" ? "fail" : (gate === "Pass" ? "pass" : "");
         const tone = row.trust === "failed" ? "bad" : (dashRank(row) > 0 && dashRank(row) < 5 ? "hot" : "");
-        const when = (row.latest.created_at || "").replace(" UTC", "");
+        const when = formatStamp(row.latest.created_at || "");
         return '<tr class="' + tone + '" data-action="open" data-id="' + esc(row.latest.id) + '"><td><b>' + esc(row.name) + "</b></td><td>" + esc(when) + "</td><td>" + code + "</td><td>" + sonar + '</td><td class="' + gateClass + '">' + esc(gate) + "</td><td>" + esc(dashChange(row)) + " " + retryButton(row.latest) + "</td></tr>";
       }).join("");
       queue.className = "dash-panel";
@@ -4514,13 +4953,103 @@
           ? queueLabel(item)
           : (item.status === "running" ? "Running" : (failed ? "Failed" : "Finished"));
         const kind = scanIsActive(item) ? (item.status === "queued" ? "queued" : "running") : (failed ? "failed" : "done");
-        return '<tr data-action="open" data-id="' + esc(item.id) + '"><td>' + esc((item.created_at || "").replace(" UTC", "")) + "</td><td>" + esc(scanTitle(item)) + '</td><td><span class="dash-status ' + kind + '">' + esc(label) + "</span> " + (failed ? retryButton(item) : "") + "</td></tr>";
+        return '<tr data-action="open" data-id="' + esc(item.id) + '"><td>' + esc(formatStamp(item.created_at)) + "</td><td>" + esc(scanTitle(item)) + '</td><td><span class="dash-status ' + kind + '">' + esc(label) + "</span> " + (failed ? retryButton(item) : "") + "</td></tr>";
       }).join("") + "</tbody></table>";
+    }
+
+    function renderExecutionCenter() {
+      const box = document.querySelector("#execution-panel");
+      const scan = state.scan;
+      if (!box || state.pane !== "execution" || !scan) return;
+      const math = window.ExecutionMath || {};
+      const progress = math.scanProgress ? math.scanProgress(scan) : {percent: 0, label: "queued", complete_success: false, ok: 0, total: 0};
+      const elapsed = math.scanElapsed ? math.scanElapsed(scan, Date.now()) : {kind: "waiting", text: ""};
+      const failed = scanIsFailed(scan) || scan.status === "failed";
+      const statusLabel = scanStatusLabel(scan);
+      const pctClass = failed || progress.label === "failed"
+        ? " failed"
+        : (progress.label === "done_partial" ? " partial" : (progress.label === "queued" ? " queued" : ""));
+      const progressCaption = progress.complete_success
+        ? "Pipeline complete"
+        : (failed ? "Pipeline failed (stage-based)" : (progress.label === "done_partial"
+          ? "Finished with tool failures"
+          : (progress.label === "queued" ? "Queued — waiting to start" : "Stage-based pipeline progress")));
+      const elapsedHtml = elapsed.kind === "waiting"
+        ? '<div><b>Execution time:</b> Waiting in queue</div>'
+        : '<div><b>Elapsed:</b> <span id="exec-elapsed">' + esc(elapsed.text) + "</span>"
+          + (elapsed.kind === "frozen" ? " (final)" : "") + "</div>";
+      const startedHtml = scan.started_at
+        ? "<div><b>Started:</b> " + esc(formatStamp(scan.started_at)) + "</div>"
+        : "<div><b>Started:</b> —</div>";
+      const rows = toolPipelineRows(scan);
+      const byTool = {};
+      (scan.tool_results || []).forEach((row) => { if (row && row.tool) byTool[row.tool] = row; });
+      const findingCount = (tool) => (scan.findings || []).filter((row) => row.tool === tool).length;
+      const toolsHtml = rows.length
+        ? rows.map((row) => {
+          const stored = byTool[row.tool] || {};
+          const err = stored.error || row.error || "";
+          const findings = findingCount(row.tool);
+          const body = '<div class="detail">'
+            + (findings ? ("Findings: " + findings + "\n") : "")
+            + (err ? ("Error:\n" + err) : (row.mark === "OK" ? "Completed." : (row.mark === "Running" ? "In progress." : "Not finished yet.")))
+            + "</div>";
+          return '<details class="exec-tool"><summary>' + esc(row.label)
+            + '<span class="mark ' + esc(row.tone) + '">' + esc(row.mark) + "</span></summary>"
+            + body + "</details>";
+        }).join("")
+        : '<p class="meta">No tools requested on this scan.</p>';
+      const sonar = scan.sonar;
+      let sonarHtml = "";
+      if (sonar && (sonar.quality_gate || sonar.project_key || sonar.url || sonar.error)) {
+        const gate = sonar.quality_gate ? ("Quality Gate " + sonar.quality_gate) : (sonar.error ? "Did not finish" : "");
+        const open = (currentUser && currentUser.access && currentUser.access.sonar_ui && sonar.url)
+          ? ' <a class="ghost" href="' + esc(publicSonarUrl(sonar.url)) + '" target="_blank" rel="noopener">Open dashboard</a>'
+          : "";
+        sonarHtml = '<div class="exec-tool" style="margin-top:12px"><strong>SonarQube</strong>'
+          + (gate ? (' <span class="mark">' + esc(gate) + "</span>") : "")
+          + '<div class="detail">Project key: ' + esc(sonar.project_key || "—")
+          + (sonar.error ? ("\n" + sonar.error) : "")
+          + "</div>" + open + "</div>";
+      } else if (phaseToolKey(scan.phase) === "sonar" && scanIsActive(scan)) {
+        sonarHtml = '<div class="exec-tool" style="margin-top:12px"><strong>SonarQube</strong><span class="mark run">Analyzing</span></div>';
+      }
+      const tally = scanTally(scan);
+      const findingsSummary = "Findings — critical " + (tally.critical || 0)
+        + ", high " + (tally.high || 0)
+        + ", medium " + (tally.medium || 0)
+        + ", low " + (tally.low || 0)
+        + ", info " + (tally.info || 0);
+      const errNote = (failed ? String(scan.error || "").trim() : "")
+        ? '<div class="note" style="margin-top:12px">' + esc(String(scan.error || "").trim()) + "</div>"
+        : "";
+      box.innerHTML = '<div class="scan-head"><div><h1>' + esc(scanTitle(scan) || "Scan") + "</h1>"
+        + '<div class="repo">' + esc(isImageScan(scan) ? (scan.image || "Image") : (scan.repo || "")) + "</div>"
+        + '<div class="meta">Scan ID ' + esc(scan.id) + (scan.project_slug ? (" · project " + esc(scan.project_slug)) : "") + "</div></div>"
+        + '<div class="scan-actions"><span class="badge ' + esc(failed ? "failed" : scan.status) + '">' + esc(statusLabel) + "</span>"
+        + retryButton(scan)
+        + '<button type="button" class="ghost" data-action="execution-report">Findings report</button></div></div>'
+        + '<div class="exec-hero"><div class="exec-pct' + pctClass + '"><b>' + esc(String(progress.percent)) + "%</b><span>" + esc(progressCaption) + "</span></div>"
+        + '<div class="exec-meta-grid">'
+        + "<div><b>Phase:</b> " + esc(scan.phase || (scan.status === "queued" ? "Queued" : "—")) + "</div>"
+        + startedHtml
+        + elapsedHtml
+        + "<div><b>Tools ok:</b> " + esc(String(progress.ok)) + " / " + esc(String(progress.total)) + "</div>"
+        + "<div>" + esc(findingsSummary) + "</div>"
+        + "</div></div>"
+        + '<h2 style="margin:0 0 8px;font-size:15px">Tool pipeline</h2>'
+        + '<div class="exec-tools">' + toolsHtml + "</div>"
+        + sonarHtml
+        + errNote;
     }
 
     function renderScanHead() {
       showPanes();
       if (state.pane === "overview") renderOverview();
+      if (state.pane === "execution") {
+        renderExecutionCenter();
+        return;
+      }
       const scan = state.scan;
       if ((state.pane !== "report" && state.pane !== "investigate") || !scan) return;
       const names = TOOL_LABEL;
@@ -4528,17 +5057,15 @@
       const subtitle = isImageScan(scan) ? "Image" : scan.repo;
       const failed = scanIsFailed(scan);
       const badge = failed ? "failed" : scan.status;
-      const label = failed
-        ? "Failed"
-        : (scan.status === "queued" ? (queueLabel(scan) || "Queued") : (STATUS[scan.status] || scan.status));
+      const label = scanStatusLabel(scan);
       const projectScan = Boolean(scan.project_slug || scan.project_id);
       const canInvestigate = canOpenInvestigate(scan);
       const invBtn = canInvestigate
         ? (state.pane === "investigate"
           ? '<button type="button" class="ghost" data-action="report-back">Back to report</button>'
-          : '<button type="button" data-action="investigate">Investigate</button>')
+          : '<button type="button" class="ghost" data-action="investigate">Investigate</button>')
         : "";
-      document.querySelector("#scan-head").innerHTML = '<div class="scan-head"><div><h1>' + esc(scanTitle(scan)) + '</h1><div class="repo">' + esc(subtitle) + '</div><div class="meta">' + esc(tools) + " · " + esc((scan.created_at || "").replace(" UTC", "")) + (scan.finished_at ? " to " + esc(scan.finished_at.replace(" UTC", "")) : "") + (scan.project_slug ? " · project " + esc(scan.project_slug) : " · ad-hoc (no project)") + '</div></div><div class="scan-actions"><span class="badge ' + esc(badge) + '">' + esc(label) + "</span>" + invBtn + retryButton(scan) + "</div></div>";
+      document.querySelector("#scan-head").innerHTML = '<div class="scan-head"><div><h1>' + esc(scanTitle(scan)) + '</h1><div class="repo">' + esc(subtitle) + '</div><div class="meta">' + esc(tools) + " · " + esc(formatStamp(scan.created_at)) + (scan.finished_at ? " to " + esc(formatStamp(scan.finished_at)) : "") + (scan.project_slug ? " · project " + esc(scan.project_slug) : " · ad-hoc (no project)") + '</div></div><div class="scan-actions"><span class="badge ' + esc(badge) + '">' + esc(label) + "</span>" + invBtn + retryButton(scan) + "</div></div>";
       const error = document.querySelector("#scan-error");
       const problem = failed ? String(scan.error || "").trim() : scanErrorText(scan);
       error.innerHTML = toolStatusHtml(scan) + (problem ? '<div class="note">' + esc(problem) + "</div>" : "");
@@ -4590,8 +5117,10 @@
         box.innerHTML = "";
         return;
       }
-      if (state.tool === "sonar" && !sonar && !(wants && scanIsActive(scan))) {
-        box.innerHTML = '<div class="sonar-card"><div class="empty"><strong>This scan has no SonarQube result</strong>Check SonarQube above and run it again.</div></div>';
+      if (!sonar && wants && !scanIsActive(scan)) {
+        const detail = String(scan.error || "").trim()
+          || "SonarQube did not finish for this scan.";
+        box.innerHTML = '<div class="sonar-card"><div class="sonar-top"><h2>SonarQube</h2><span class="badge failed">Did not finish</span></div><div class="note">' + esc(detail) + "</div></div>";
         return;
       }
       if (!sonar && !(wants && scanIsActive(scan))) {
@@ -4599,6 +5128,12 @@
         return;
       }
       if (!sonar) {
+        // Only show Analyzing while Sonar itself is the active phase.
+        // Earlier tools left this card saying Analyzing while Semgrep/Checkov ran.
+        if (phaseToolKey(scan.phase) !== "sonar") {
+          box.innerHTML = "";
+          return;
+        }
         box.innerHTML = '<div class="sonar-card"><div class="sonar-top"><h2>SonarQube</h2><span class="badge running">Analyzing</span></div></div>';
         return;
       }
@@ -4747,23 +5282,28 @@
     function syncScan() {
       const scan = state.scan;
       const sonar = (scan && scan.sonar) || {};
-      const stamp = scan ? [scan.id, scan.status, scan.queue_position || "", (scan.findings || []).length, scan.finished_at, scan.error, scan.phase || "", sonar.quality_gate || "", sonar.error || "", (sonar.issues || []).length, (sonar.hotspot_list || []).length, toolStatusLine(scan)].join("|") : "";
+      const toolStamp = JSON.stringify(scan && scan.tool_results || []);
+      const stamp = scan ? [scan.id, scan.status, scan.queue_position || "", (scan.findings || []).length, scan.started_at || "", scan.finished_at, scan.error, scan.phase || "", sonar.quality_gate || "", sonar.error || "", (sonar.issues || []).length, (sonar.hotspot_list || []).length, toolStamp, state.pane].join("|") : "";
       const active = state.scans.some((item) => scanIsActive(item));
       document.querySelector("#go").disabled = false;
       document.querySelector("#progress").hidden = !active;
-      if (stamp === scanStamp) return;
+      if (stamp === scanStamp) {
+        if (state.pane === "execution") updateExecutionElapsed();
+        return;
+      }
       if (!scan || scan.id !== state.seenId) {
         state.seenId = scan && scan.id;
         state.sev = "";
         state.tool = "all";
         state.q = "";
         state.open = new Set();
-        document.querySelector("#q").value = "";
+        const q = document.querySelector("#q");
+        if (q) q.value = "";
       }
       scanStamp = stamp;
       alignReportTool();
       renderScanHead();
-      if (scan) {
+      if (scan && (state.pane === "report" || state.pane === "investigate")) {
         renderSonar();
         renderSummary();
         paintFilters();
@@ -4773,7 +5313,7 @@
           msg.className = "";
           msg.textContent = scan.status === "queued"
             ? (queueLabel(scan) || "Queued...")
-            : (scan.phase ? "Running " + scan.phase + "..." : "Running...");
+            : (scan.phase ? ("Running · " + scan.phase + "...") : "Running...");
         }
       }
       if (state.pendingMsg && scan && scan.id === state.pendingMsg && !scanIsActive(scan)) {
@@ -4783,6 +5323,15 @@
         msg.textContent = failed ? "Scan failed." : "Scan finished.";
         state.pendingMsg = null;
       }
+    }
+
+    function updateExecutionElapsed() {
+      if (state.pane !== "execution" || !state.scan) return;
+      const el = document.querySelector("#exec-elapsed");
+      const math = window.ExecutionMath;
+      if (!el || !math || !math.scanElapsed) return;
+      const elapsed = math.scanElapsed(state.scan, Date.now());
+      if (elapsed.kind === "running") el.textContent = elapsed.text;
     }
 
     document.addEventListener("click", (event) => {
@@ -5050,14 +5599,25 @@
         const scan = state.scans.find((item) => item.id === el.dataset.id) || (state.scan && state.scan.id === el.dataset.id ? state.scan : null);
         retryScan(scan, el);
       }
-      if (action === "open") {
+      if (action === "execution-report") {
+        if (!state.scan) return;
         state.pane = "report";
+        history.pushState({scanId: state.scan.id, pane: "report"}, "", "/");
+        scanStamp = null;
+        syncScan();
+        renderHistory();
+        return;
+      }
+      if (action === "open") {
         state.overviewKey = "";
         state.scan = state.scans.find((item) => item.id === el.dataset.id) || state.scan;
         if (state.scan) {
           state.target = isImageScan(state.scan) ? "image" : "repo";
           showOnlyProject(projectKey(state.scan));
           kindOpen.add(state.target);
+          goExecution(state.scan.id);
+        } else {
+          state.pane = "report";
         }
         setView("scans");
         scanStamp = null;
@@ -5142,6 +5702,171 @@
       renderConnectionChoices();
       renderConnections();
     }
+
+    function fillScheduleProjectOptions(selected) {
+      const select = document.querySelector("#schedule-project");
+      if (!select) return;
+      const current = selected || select.value || "";
+      select.innerHTML = '<option value="">Select a project</option>'
+        + (state.projects || []).map((item) =>
+          '<option value="' + esc(item.slug) + '"'
+          + (item.slug === current ? " selected" : "") + ">"
+          + esc(item.name) + " (" + esc(item.slug) + ")</option>"
+        ).join("");
+    }
+
+    function scheduleToolValues() {
+      return Array.from(document.querySelectorAll('input[name="schedule-tool"]:checked'))
+        .map((el) => el.value);
+    }
+
+    function setScheduleToolValues(tools) {
+      const chosen = new Set(tools || []);
+      document.querySelectorAll('input[name="schedule-tool"]').forEach((el) => {
+        el.checked = chosen.size ? chosen.has(el.value) : el.value !== "sonar";
+      });
+    }
+
+    function resetScheduleForm() {
+      const form = document.querySelector("#schedule-form");
+      if (!form) return;
+      document.querySelector("#schedule-interval").value = "7";
+      document.querySelector("#schedule-enabled").checked = true;
+      setScheduleToolValues(["semgrep", "checkov", "trivy"]);
+      fillScheduleProjectOptions("");
+      document.querySelector("#schedule-msg").textContent = "";
+    }
+
+    async function loadSchedules() {
+      fillScheduleProjectOptions();
+      const response = await api("/api/schedules");
+      const box = document.querySelector("#schedule-error");
+      if (!response.ok) {
+        if (box) {
+          box.hidden = false;
+          box.textContent = "Could not load schedules.";
+        }
+        return;
+      }
+      if (box) box.hidden = true;
+      const body = await response.json().catch(() => []);
+      schedules = Array.isArray(body) ? body : [];
+      renderSchedules();
+    }
+
+    function renderSchedules() {
+      const box = document.querySelector("#schedule-list");
+      if (!box) return;
+      if (!schedules.length) {
+        box.innerHTML = '<div class="empty"><strong>No schedules yet</strong>Pick a project below and set how often it should rescan.</div>';
+        return;
+      }
+      box.innerHTML = schedules.map((item) => {
+        const tools = (item.tools || []).join(", ") || "defaults per target";
+        const stateLabel = item.enabled ? "Enabled" : "Paused";
+        return '<div class="schedule-row" data-slug="' + esc(item.project_slug) + '">'
+          + "<strong>" + esc(item.project_name || item.project_slug) + "</strong>"
+          + '<div class="meta">' + esc(item.project_slug)
+          + " · every " + esc(String(item.interval_days)) + " day(s)"
+          + " · " + stateLabel
+          + " · " + esc(String(item.target_count || 0)) + " targets"
+          + " · tools: " + esc(tools) + "</div>"
+          + '<div class="meta">Next: ' + esc(item.next_run_at || "—")
+          + " · Last queued: " + esc(item.last_enqueued_at || "—") + "</div>"
+          + '<div class="row-actions" style="margin-top:8px">'
+          + '<button type="button" class="ghost" data-action="schedule-edit" data-slug="' + esc(item.project_slug) + '">Edit</button>'
+          + '<button type="button" class="ghost" data-action="schedule-run" data-slug="' + esc(item.project_slug) + '">Run now</button>'
+          + '<button type="button" class="ghost" data-action="schedule-delete" data-slug="' + esc(item.project_slug) + '">Delete</button>'
+          + "</div></div>";
+      }).join("");
+    }
+
+    document.querySelector("#schedule-cancel").addEventListener("click", resetScheduleForm);
+
+    document.querySelector("#schedule-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const slug = document.querySelector("#schedule-project").value;
+      const box = document.querySelector("#schedule-error");
+      const msg = document.querySelector("#schedule-msg");
+      if (!slug) {
+        box.hidden = false;
+        box.textContent = "Select a project.";
+        return;
+      }
+      const payload = {
+        enabled: document.querySelector("#schedule-enabled").checked,
+        interval_days: Number(document.querySelector("#schedule-interval").value),
+        tools: scheduleToolValues()
+      };
+      const response = await api("/api/schedules/" + encodeURIComponent(slug), {
+        method: "PUT",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(payload)
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        box.hidden = false;
+        box.textContent = body.error || "Could not save.";
+        return;
+      }
+      box.hidden = true;
+      msg.textContent = "Schedule saved.";
+      resetScheduleForm();
+      await loadSchedules();
+    });
+
+    document.querySelector("#schedule-list").addEventListener("click", async (event) => {
+      const button = event.target.closest("[data-action]");
+      if (!button) return;
+      const slug = button.dataset.slug || "";
+      const item = schedules.find((row) => row.project_slug === slug);
+      const box = document.querySelector("#schedule-error");
+      const msg = document.querySelector("#schedule-msg");
+      if (button.dataset.action === "schedule-edit") {
+        if (!item) return;
+        fillScheduleProjectOptions(item.project_slug);
+        document.querySelector("#schedule-interval").value = String(item.interval_days || 7);
+        document.querySelector("#schedule-enabled").checked = !!item.enabled;
+        setScheduleToolValues(item.tools || []);
+        msg.textContent = "Editing " + (item.project_name || item.project_slug) + ".";
+        return;
+      }
+      if (button.dataset.action === "schedule-run") {
+        const response = await api("/api/schedules/" + encodeURIComponent(slug) + "/run", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: "{}"
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          box.hidden = false;
+          box.textContent = body.error || "Could not queue scans.";
+          return;
+        }
+        box.hidden = true;
+        msg.textContent = "Queued " + (body.enqueued || 0) + " scan(s).";
+        await loadSchedules();
+        return;
+      }
+      if (button.dataset.action === "schedule-delete") {
+        if (!window.confirm("Delete the schedule for " + slug + "?")) return;
+        const response = await api("/api/schedules/" + encodeURIComponent(slug), {
+          method: "DELETE"
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          box.hidden = false;
+          box.textContent = body.error || "Could not delete.";
+          return;
+        }
+        box.hidden = true;
+        msg.textContent = "Schedule deleted.";
+        resetScheduleForm();
+        await loadSchedules();
+      }
+    });
+
+    resetScheduleForm();
 
     function renderConnections() {
       const box = document.querySelector("#connection-list");
@@ -5308,7 +6033,6 @@
     function showQueuedScan(body) {
       const imageMode = isImageScan(body);
       state.pendingMsg = body.reused ? null : body.id;
-      state.pane = "report";
       state.overviewKey = "";
       state.scan = body;
       scansMenuOpen = true;
@@ -5316,6 +6040,7 @@
       reportsOpen.add(imageMode ? "image" : "repo");
       showOnlyProject(projectKey(body));
       state.scans = [body, ...state.scans.filter((item) => item.id !== body.id)];
+      goExecution(body.id);
       setView("scans");
       scanStamp = null;
       histStamp = null;
@@ -5472,6 +6197,7 @@
         const count = document.querySelector("#inv-bulk-count");
         if (bulk) bulk.hidden = state.invSelected.size === 0;
         if (count) count.textContent = String(state.invSelected.size);
+        syncInvestigateBulkValidity();
         return;
       }
       const rowCheck = event.target.closest(".inv-row-check");
@@ -5491,14 +6217,43 @@
         const count = document.querySelector("#inv-bulk-count");
         if (bulk) bulk.hidden = state.invSelected.size === 0;
         if (count) count.textContent = String(state.invSelected.size);
+        syncInvestigateBulkValidity();
         return;
       }
       const bulkStatus = event.target.closest("#inv-bulk-status");
       if (bulkStatus) {
         const assigneeField = document.querySelector("#inv-bulk-assignee");
         const me = currentUser && currentUser.username ? currentUser.username : "";
-        if (!assigneeField) return;
-        if (bulkStatus.value === "accepted_risk" && me) {
+        if (assigneeField) {
+          if (bulkStatus.value === "accepted_risk" && me) {
+            if (![...assigneeField.options].some((option) => option.value === me)) {
+              const option = document.createElement("option");
+              option.value = me;
+              option.textContent = me;
+              assigneeField.appendChild(option);
+            }
+            assigneeField.value = me;
+            assigneeField.disabled = true;
+          } else {
+            assigneeField.disabled = false;
+          }
+        }
+        syncInvestigateBulkValidity();
+        return;
+      }
+      const bulkAssignee = event.target.closest("#inv-bulk-assignee");
+      if (bulkAssignee) {
+        syncInvestigateBulkValidity();
+        return;
+      }
+      const statusField = event.target.closest(".inv-status");
+      if (!statusField) return;
+      const tr = statusField.closest("tr");
+      if (!tr) return;
+      const assigneeField = tr.querySelector(".inv-assignee");
+      if (assigneeField) {
+        const me = currentUser && currentUser.username ? currentUser.username : "";
+        if (statusField.value === "accepted_risk" && me) {
           if (![...assigneeField.options].some((option) => option.value === me)) {
             const option = document.createElement("option");
             option.value = me;
@@ -5508,29 +6263,22 @@
           assigneeField.value = me;
           assigneeField.disabled = true;
         } else {
-          assigneeField.disabled = false;
+          assigneeField.disabled = !state.investigate || !state.investigate.can_triage;
         }
+      }
+      syncInvestigateRowValidity(tr);
+    });
+
+    document.addEventListener("input", (event) => {
+      if (!event.target.closest("#investigate-panel")) return;
+      if (event.target.closest("#inv-bulk-reason")) {
+        syncInvestigateBulkValidity();
         return;
       }
-      const statusField = event.target.closest(".inv-status");
-      if (!statusField) return;
-      const tr = statusField.closest("tr");
-      if (!tr) return;
-      const assigneeField = tr.querySelector(".inv-assignee");
-      if (!assigneeField) return;
-      const me = currentUser && currentUser.username ? currentUser.username : "";
-      if (statusField.value === "accepted_risk" && me) {
-        if (![...assigneeField.options].some((option) => option.value === me)) {
-          const option = document.createElement("option");
-          option.value = me;
-          option.textContent = me;
-          assigneeField.appendChild(option);
-        }
-        assigneeField.value = me;
-        assigneeField.disabled = true;
-      } else {
-        assigneeField.disabled = !state.investigate || !state.investigate.can_triage;
-      }
+      const reason = event.target.closest(".inv-reason");
+      if (!reason) return;
+      const tr = reason.closest("tr");
+      if (tr) syncInvestigateRowValidity(tr);
     });
 
     function groupLines(value) {
@@ -5775,9 +6523,9 @@
           const before = dashCode(previous);
           row.delta = {critical: tally.critical - before.critical, high: tally.high - before.high};
         }
-        return '<tr data-action="open" data-id="' + esc(latest.id) + '"><td><b>' + esc(label) + "</b></td><td>" + esc((latest.created_at || "").replace(" UTC", "")) + "</td><td>" + esc(latest.owner || "") + "</td><td>" + code + "</td><td>" + esc(sonarText) + "</td><td>" + esc(dashGate(row)) + "</td><td>" + esc(dashChange(row)) + " " + retryButton(latest) + "</td></tr>";
+        return '<tr data-action="open" data-id="' + esc(latest.id) + '"><td><b>' + esc(label) + "</b></td><td>" + esc(formatStamp(latest.created_at)) + "</td><td>" + esc(latest.owner || "") + "</td><td>" + code + "</td><td>" + esc(sonarText) + "</td><td>" + esc(dashGate(row)) + "</td><td>" + esc(dashChange(row)) + " " + retryButton(latest) + "</td></tr>";
       }).join("");
-      const events = (group.events || []).map((event) => "<li>" + esc((event.created_at || "").replace("T", " ").slice(0, 16)) + " · " + esc(event.actor) + " " + esc(event.action) + (event.detail ? " · " + esc(event.detail) : "") + "</li>").join("");
+      const events = (group.events || []).map((event) => "<li>" + esc(formatStamp(event.created_at || "").slice(0, 16)) + " · " + esc(event.actor) + " " + esc(event.action) + (event.detail ? " · " + esc(event.detail) : "") + "</li>").join("");
       return '<div class="dash-panel"><h2>' + esc(group.name) + '</h2><p class="meta">' + esc(group.description || "Latest scan of each project in this group.") + '</p><table class="dash-table"><thead><tr><th>Project</th><th>Latest scan</th><th>Who ran it</th><th>Code</th><th>SonarQube</th><th>Gate</th><th>Since previous</th></tr></thead><tbody>' + rows + "</tbody></table>" + (events ? "<h2>Recent changes</h2><ul>" + events + "</ul>" : "") + "</div>";
     }
 
@@ -5917,18 +6665,43 @@
         const scanResponse = await api("/api/scans");
         if (!currentUser) return;
         if (!scanResponse.ok) {
-          if (scanResponse.status === 401) showLogin(true);
+          if (scanResponse.status === 401) {
+            showLogin(true);
+            return;
+          }
+          // Keep polling after transient console errors (e.g. 503 during restart).
+          if (currentUser) {
+            document.querySelector("#form-msg").textContent = "Lost contact with the console. Retrying…";
+          }
           return;
         }
         const scans = await scanResponse.json();
         state.scans = Array.isArray(scans) ? scans : [];
-        if (!state.scan && state.scans[0]) {
+        const wanted = urlScanId() || (state.pane === "execution" && state.scan && state.scan.id) || "";
+        // URL / execution id wins over defaulting to the first list row.
+        if (wanted) {
+          let fresh = state.scans.find((item) => item.id === wanted);
+          if (!fresh) {
+            const detail = await api("/api/scans/" + encodeURIComponent(wanted));
+            if (detail.ok) {
+              fresh = await detail.json().catch(() => null);
+              if (fresh && fresh.id) {
+                state.scans = [fresh, ...state.scans.filter((item) => item.id !== fresh.id)];
+              }
+            }
+          }
+          if (fresh) {
+            state.scan = fresh;
+            state.target = isImageScan(fresh) ? "image" : "repo";
+          }
+        } else if (!state.scan && state.scans[0]) {
           state.scan = state.scans[0];
           state.target = isImageScan(state.scan) ? "image" : "repo";
           showOnlyProject(projectKey(state.scan));
+        } else {
+          const fresh = state.scans.find((item) => state.scan && item.id === state.scan.id);
+          if (fresh) state.scan = fresh;
         }
-        const fresh = state.scans.find((item) => state.scan && item.id === state.scan.id);
-        if (fresh) state.scan = fresh;
         renderHistory();
         syncScan();
         if (state.view === "dashboard" && isElevated(currentUser)) {
@@ -5938,10 +6711,12 @@
         renderDashboard();
         if (state.view === "groups") renderGroups();
       } catch (err) {
-        if (currentUser) document.querySelector("#form-msg").textContent = "Lost contact with the console.";
+        if (currentUser) document.querySelector("#form-msg").textContent = "Lost contact with the console. Retrying…";
+      } finally {
+        if (!currentUser) return;
+        const active = state.scans.some((item) => scanIsActive(item));
+        setTimeout(tick, active ? 3000 : 5000);
       }
-      const active = state.scans.some((item) => scanIsActive(item));
-      setTimeout(tick, active ? 3000 : 5000);
     }
 
     document.addEventListener("click", (event) => {
@@ -6484,7 +7259,7 @@
       document.querySelector("#login-error").hidden = true;
     });
 
-    const guest = {target: "repo", scans: [], scan: null, timer: null};
+    const guest = {target: "repo", scans: [], scan: null, timer: null, historyOpen: false};
     const GUEST_PLACEHOLDER = {
       repo: "https://gitlab.example.com/team/app.git",
       image: "registry.example.com/team/app:1.0 or nginx:1.27"
@@ -6518,13 +7293,32 @@
     }
 
     function guestWhen(scan) {
-      return String(scan.created_at || "").replace(" UTC", "");
+      return formatStamp(scan.created_at || "");
     }
 
     function renderGuestList() {
       const wrap = document.querySelector("#guest-mine");
-      wrap.hidden = !guest.scans.length;
-      document.querySelector("#guest-list").innerHTML = guest.scans.map((scan) => {
+      const list = document.querySelector("#guest-list");
+      const toggle = document.querySelector("#guest-history-toggle");
+      const count = guest.scans.length;
+      wrap.hidden = false;
+      const openHistory = Boolean(guest.historyOpen);
+      list.hidden = !openHistory;
+      if (toggle) {
+        toggle.setAttribute("aria-expanded", openHistory ? "true" : "false");
+        toggle.textContent = openHistory
+          ? (count ? "Hide history (" + count + ")" : "Hide history")
+          : (count ? "History (" + count + ")" : "History");
+      }
+      if (!openHistory) {
+        list.innerHTML = "";
+        return;
+      }
+      if (!count) {
+        list.innerHTML = '<p class="meta">No scans in this browser yet. Run a scan to see it here.</p>';
+        return;
+      }
+      list.innerHTML = guest.scans.map((scan) => {
         const open = guest.scan && guest.scan.id === scan.id;
         const on = open ? " on" : "";
         const rowOn = open ? " open" : "";
@@ -6706,6 +7500,7 @@
           guestMessage("Scan started.");
         }
         guest.scan = body;
+        guest.historyOpen = true;
         await loadGuestScans();
         renderGuestList();
         scrollOpenGuestRow();
@@ -6718,6 +7513,11 @@
 
     document.querySelectorAll("[data-guest-target]").forEach((button) => {
       button.addEventListener("click", () => setGuestTarget(button.dataset.guestTarget));
+    });
+    document.querySelector("#guest-history-toggle").addEventListener("click", () => {
+      guest.historyOpen = !guest.historyOpen;
+      renderGuestList();
+      if (guest.historyOpen) scrollOpenGuestRow();
     });
     document.querySelector("#guest-form").addEventListener("submit", (event) => {
       event.preventDefault();
@@ -6758,6 +7558,7 @@
 
     async function boot() {
       const askedLogin = location.pathname === "/login";
+      const deepScan = urlScanId();
       if (askedLogin) history.replaceState(null, "", "/" + location.search + location.hash);
       try {
         let response = await fetch("/api/auth/me", {headers: {"Accept": "application/json"}, credentials: "same-origin"});
@@ -6787,13 +7588,38 @@
           return;
         }
         const user = await response.json();
+        if (deepScan) hydrateFromUrl();
         showApp(user);
+        if (deepScan) {
+          setView("scans");
+          scanStamp = null;
+          syncScan();
+        }
         if (!user.must_change_password) tick();
       } catch (err) {
         showLogin(askedLogin);
       }
     }
-    setView("dashboard");
+
+    window.addEventListener("popstate", () => {
+      if (!currentUser) return;
+      if (hydrateFromUrl()) {
+        setView("scans");
+        scanStamp = null;
+        syncScan();
+        renderHistory();
+        return;
+      }
+      if (state.pane === "execution") {
+        state.pane = "report";
+        scanStamp = null;
+        syncScan();
+      }
+    });
+
+    setInterval(updateExecutionElapsed, 1000);
+    if (!urlScanId()) setView("dashboard");
+    else setView("scans");
     boot();
   </script>
 </body>

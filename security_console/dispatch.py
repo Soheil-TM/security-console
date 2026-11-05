@@ -83,17 +83,44 @@ def _remote_scan(
     on_update: Update | None = None,
 ) -> dict[str, Any]:
     _request("POST", "/v1/jobs", job, timeout=30)
+    return poll_remote_job(str(job["id"]), on_phase, on_update)
+
+
+def probe_remote_job(scan_id: str) -> dict[str, Any] | None:
+    """Return the worker job payload, or None when the worker no longer has it."""
+
+    if not scanner_url():
+        return None
+    try:
+        payload = _request("GET", "/v1/jobs/" + scan_id, None, timeout=30)
+    except JobGone:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return payload
+
+
+def poll_remote_job(
+    scan_id: str,
+    on_phase: Phase,
+    on_update: Update | None = None,
+) -> dict[str, Any]:
+    """Poll an existing worker job until it finishes. Does not POST a new job."""
+
     limit = _deadline()
     started = time.monotonic()
     deadline = started + limit
     last_phase = ""
     while True:
         if time.monotonic() > deadline:
-            partial = _partial_on_timeout(job["id"], last_phase)
+            partial = _partial_on_timeout(scan_id, last_phase)
             if partial is not None:
                 return partial
             raise RuntimeError("The scan timed out.")
-        payload = _request("GET", "/v1/jobs/" + job["id"], None, timeout=30)
+        try:
+            payload = _request("GET", "/v1/jobs/" + scan_id, None, timeout=30)
+        except JobGone as exc:
+            raise RuntimeError("The scanner no longer has this scan.") from exc
         if not isinstance(payload, dict):
             raise RuntimeError("The scanner returned an unexpected result.")
         phase = payload.get("phase") or ""
@@ -125,6 +152,10 @@ def _remote_scan(
         time.sleep(2)
 
 
+class JobGone(RuntimeError):
+    """The scanner worker has no record of this scan id."""
+
+
 def _request(method: str, path: str, body: dict[str, Any] | None, timeout: int) -> Any:
     token = scanner_token()
     if len(token) < 16:
@@ -145,6 +176,10 @@ def _request(method: str, path: str, body: dict[str, Any] | None, timeout: int) 
             raw = response.read().decode("utf-8")
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", "replace")[:300]
+        if exc.code == 404:
+            raise JobGone(
+                f"The scanner rejected the scan ({exc.code}). {detail}"
+            ) from exc
         raise RuntimeError(
             f"The scanner rejected the scan ({exc.code}). {detail}"
         ) from exc
@@ -171,7 +206,7 @@ def _partial_on_timeout(scan_id: str, last_phase: str) -> dict[str, Any] | None:
 
     try:
         payload = _request("GET", "/v1/jobs/" + scan_id, None, timeout=30)
-    except Exception:
+    except (JobGone, Exception):
         return None
     if not isinstance(payload, dict):
         return None

@@ -160,9 +160,11 @@ def install_auth(app: Flask) -> None:
     from security_console.audit import install_audit
     from security_console.groups import install_groups
     from security_console.integrations import install_integrations
+    from security_console.ci_scans import install_ci_scans
     from security_console.investigate import install_investigate
     from security_console.projects import install_projects
     from security_console.risk import install_risk
+    from security_console.schedules import install_schedules
     from security_console.tasks import install_tasks
     from security_console.users import install_users
 
@@ -170,6 +172,8 @@ def install_auth(app: Flask) -> None:
     install_groups(app)
     install_projects(app)
     install_integrations(app)
+    install_schedules(app)
+    install_ci_scans(app)
     install_risk(app)
     install_investigate(app)
     install_tasks(app)
@@ -205,6 +209,8 @@ def _guard_request() -> Reply | None:
         return None
     if request.method == "GET" and request.path == "/api/security/gate":
         return _gate_guard()
+    if _is_ci_scan_path():
+        return _ci_scan_guard()
     if not request.path.startswith("/api/"):
         return None
     user = _current_user()
@@ -277,6 +283,42 @@ def _gate_guard() -> Reply | None:
     expired = _reject_expired_session()
     if expired is not None:
         return expired
+    return None
+
+
+def _is_ci_scan_path() -> bool:
+    path = request.path or ""
+    if request.method == "POST" and path == "/api/ci/scans":
+        return True
+    if request.method == "GET" and path.startswith("/api/ci/scans/"):
+        rest = path[len("/api/ci/scans/") :]
+        return bool(rest) and "/" not in rest
+    return False
+
+
+def _ci_scan_guard() -> Reply | None:
+    """Allow CI scan enqueue/poll with CI_SCAN_TOKEN only (not gate or cookies)."""
+
+    from security_console.secrets import read_secret, same_secret
+
+    expected = read_secret("CI_SCAN_TOKEN", "CI_SCAN_TOKEN_FILE")
+    if not expected:
+        return jsonify({"error": "CI scan token is not configured."}), 503
+    header = request.headers.get("Authorization", "")
+    presented = (
+        header[7:].strip()
+        if header.lower().startswith("bearer ")
+        else request.headers.get("X-CI-Scan-Token", "").strip()
+    )
+    if not presented or not same_secret(presented, expected):
+        return jsonify({"error": "You are not signed in."}), 401
+    # Scoped principal for these routes only: tool visibility + project bypass.
+    g.user = {
+        "id": 0,
+        "username": "ci",
+        "role": "super_admin",
+        "capabilities": {},
+    }
     return None
 
 

@@ -329,6 +329,28 @@ SCHEMA = (
     CREATE INDEX IF NOT EXISTS task_events_task_time
         ON task_events (task_id, created_at)
     """,
+    """
+    CREATE TABLE IF NOT EXISTS project_scan_schedules (
+        id bigserial PRIMARY KEY,
+        project_id bigint NOT NULL UNIQUE
+            REFERENCES projects (id) ON DELETE CASCADE,
+        enabled boolean NOT NULL DEFAULT true,
+        interval_days integer NOT NULL
+            CHECK (interval_days >= 1 AND interval_days <= 90),
+        tools jsonb NOT NULL DEFAULT '[]'::jsonb,
+        next_run_at timestamptz NOT NULL DEFAULT now(),
+        last_enqueued_at timestamptz,
+        created_by bigint REFERENCES users (id) ON DELETE SET NULL,
+        updated_by bigint REFERENCES users (id) ON DELETE SET NULL,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS project_scan_schedules_due
+        ON project_scan_schedules (next_run_at)
+        WHERE enabled
+    """,
 )
 
 
@@ -686,6 +708,13 @@ MIGRATIONS = (
         FROM finding_disposition_notes AS n
         WHERE n.project_key = d.project_key
           AND n.finding_key = d.finding_key
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS sonar_repo_keys (
+        repo_key text PRIMARY KEY,
+        sonar_project_key text NOT NULL UNIQUE,
+        created_at timestamptz NOT NULL DEFAULT now()
     )
     """,
 )
@@ -1077,7 +1106,7 @@ def upsert_scan(item: dict[str, Any]) -> None:
                 Jsonb(list(item.get("findings") or [])),
                 Jsonb(item["sonar"]) if item.get("sonar") is not None else None,
                 Jsonb(list(item.get("tool_results") or [])),
-                int(item.get("priority") or 0),
+                int(0 if item.get("priority") is None else item.get("priority")),
                 created,
                 started,
                 finished,
@@ -1138,7 +1167,7 @@ def claim_next_queued() -> dict[str, Any] | None:
 
 
 def fail_running_scans(message: str) -> list[str]:
-    """Mark every running scan failed. Used when the console restarts."""
+    """Mark every running scan failed. Kept for tests / emergency ops."""
 
     with connect() as conn:
         rows = conn.execute(
@@ -1155,6 +1184,55 @@ def fail_running_scans(message: str) -> list[str]:
         ).fetchall()
         conn.commit()
     return [str(row["id"]) for row in rows]
+
+
+def ensure_sonar_repo_key(repo_key: str, sonar_project_key: str) -> str:
+    """Persist the mapping for one repo. Returns the stored Sonar project key.
+
+    Inserts on first sight. A rename of the git URL is a new repo_key; the old
+    mapping is left untouched.
+    """
+
+    key = str(repo_key or "").strip().lower()
+    sonar = str(sonar_project_key or "").strip()
+    if not key or not sonar:
+        raise RuntimeError("Sonar repository key is incomplete.")
+    with connect() as conn:
+        row = conn.execute(
+            """
+            INSERT INTO sonar_repo_keys (repo_key, sonar_project_key)
+            VALUES (%s, %s)
+            ON CONFLICT (repo_key) DO UPDATE
+                SET repo_key = EXCLUDED.repo_key
+            RETURNING sonar_project_key
+            """,
+            (key, sonar),
+        ).fetchone()
+        conn.commit()
+    if row is None:
+        return sonar
+    return str(row["sonar_project_key"])
+
+
+def get_sonar_repo_key(repo_key: str) -> str | None:
+    """Return the stored Sonar project key for a normalized repo, if any."""
+
+    key = str(repo_key or "").strip().lower()
+    if not key:
+        return None
+    with connect() as conn:
+        row = conn.execute(
+            """
+            SELECT sonar_project_key
+            FROM sonar_repo_keys
+            WHERE repo_key = %s
+            """,
+            (key,),
+        ).fetchone()
+        conn.commit()
+    if row is None:
+        return None
+    return str(row["sonar_project_key"] or "") or None
 
 
 def count_users() -> int:
@@ -2927,9 +3005,21 @@ def user_in_project_groups(user_id: int, project_key: str) -> bool:
     return row is not None
 
 
+def _require_test_db_wipe() -> None:
+    """Refuse destructive test wipes unless explicitly opted in."""
+
+    if os.environ.get("CONSOLE_ALLOW_TEST_DB_WIPE", "").strip() == "1":
+        return
+    raise RuntimeError(
+        "refusing destructive database wipe; set CONSOLE_ALLOW_TEST_DB_WIPE=1 "
+        "only against a disposable test database"
+    )
+
+
 def reset_auth_tables() -> None:
     """Delete auth rows. Used by tests so each case starts empty."""
 
+    _require_test_db_wipe()
     with connect() as conn:
         conn.execute(
             "TRUNCATE refresh_tokens, revoked_access, login_attempts, "
@@ -2942,6 +3032,7 @@ def reset_auth_tables() -> None:
 def reset_scan_table() -> None:
     """Delete scan rows. Used by queue tests."""
 
+    _require_test_db_wipe()
     with connect() as conn:
         conn.execute("TRUNCATE scans")
         conn.commit()
@@ -3159,3 +3250,260 @@ def _task_from_row(row: dict[str, Any]) -> dict[str, Any]:
         "created_at": _stamp(row.get("created_at")),
         "updated_at": _stamp(row.get("updated_at")),
     }
+
+
+def _schedule_from_row(
+    row: dict[str, Any],
+    *,
+    project: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    tools = row.get("tools") or []
+    if isinstance(tools, str):
+        try:
+            tools = json.loads(tools)
+        except json.JSONDecodeError:
+            tools = []
+    if not isinstance(tools, list):
+        tools = []
+    out: dict[str, Any] = {
+        "id": int(row["id"]),
+        "project_id": int(row["project_id"]),
+        "enabled": bool(row.get("enabled")),
+        "interval_days": int(row["interval_days"]),
+        "tools": [str(item) for item in tools],
+        "next_run_at": _stamp(row.get("next_run_at")),
+        "last_enqueued_at": _stamp(row.get("last_enqueued_at")),
+        "created_by": row.get("created_by"),
+        "updated_by": row.get("updated_by"),
+        "created_at": _stamp(row.get("created_at")),
+        "updated_at": _stamp(row.get("updated_at")),
+    }
+    if project is not None:
+        out["project_slug"] = str(project.get("slug") or "")
+        out["project_name"] = str(project.get("name") or "")
+        out["targets"] = list(project.get("targets") or [])
+        out["target_count"] = len(out["targets"])
+    return out
+
+
+def list_project_schedules() -> list[dict[str, Any]]:
+    """Return every schedule joined with project metadata."""
+
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT s.id, s.project_id, s.enabled, s.interval_days, s.tools,
+                   s.next_run_at, s.last_enqueued_at, s.created_by, s.updated_by,
+                   s.created_at, s.updated_at
+            FROM project_scan_schedules AS s
+            ORDER BY s.id
+            """
+        ).fetchall()
+        out: list[dict[str, Any]] = []
+        for row in rows:
+            project = _load_project(conn, int(row["project_id"]))
+            if project is None:
+                continue
+            out.append(_schedule_from_row(dict(row), project=project))
+        conn.commit()
+    out.sort(key=lambda item: str(item.get("project_name") or "").lower())
+    return out
+
+
+def get_schedule_by_project_id(project_id: int) -> dict[str, Any] | None:
+    """Return one schedule for a project id, or None."""
+
+    with connect() as conn:
+        row = conn.execute(
+            """
+            SELECT id, project_id, enabled, interval_days, tools,
+                   next_run_at, last_enqueued_at, created_by, updated_by,
+                   created_at, updated_at
+            FROM project_scan_schedules
+            WHERE project_id = %s
+            """,
+            (project_id,),
+        ).fetchone()
+        if row is None:
+            conn.commit()
+            return None
+        project = _load_project(conn, project_id)
+        conn.commit()
+    if project is None:
+        return None
+    return _schedule_from_row(dict(row), project=project)
+
+
+def upsert_project_schedule(
+    *,
+    project_id: int,
+    enabled: bool,
+    interval_days: int,
+    tools: list[str],
+    user_id: int | None,
+    reset_next_run: bool,
+) -> dict[str, Any]:
+    """Insert or update the schedule for one project."""
+
+    with connect() as conn:
+        existing = conn.execute(
+            """
+            SELECT id, interval_days, enabled
+            FROM project_scan_schedules
+            WHERE project_id = %s
+            """,
+            (project_id,),
+        ).fetchone()
+        if existing is None:
+            row = conn.execute(
+                """
+                INSERT INTO project_scan_schedules (
+                    project_id, enabled, interval_days, tools,
+                    next_run_at, created_by, updated_by
+                )
+                VALUES (%s, %s, %s, %s, now(), %s, %s)
+                RETURNING id, project_id, enabled, interval_days, tools,
+                          next_run_at, last_enqueued_at, created_by, updated_by,
+                          created_at, updated_at
+                """,
+                (
+                    project_id,
+                    enabled,
+                    interval_days,
+                    Jsonb(tools),
+                    user_id,
+                    user_id,
+                ),
+            ).fetchone()
+        else:
+            next_sql = "next_run_at"
+            if reset_next_run:
+                next_sql = "now()"
+            row = conn.execute(
+                f"""
+                UPDATE project_scan_schedules
+                SET enabled = %s,
+                    interval_days = %s,
+                    tools = %s,
+                    updated_by = %s,
+                    updated_at = now(),
+                    next_run_at = {next_sql}
+                WHERE project_id = %s
+                RETURNING id, project_id, enabled, interval_days, tools,
+                          next_run_at, last_enqueued_at, created_by, updated_by,
+                          created_at, updated_at
+                """,
+                (
+                    enabled,
+                    interval_days,
+                    Jsonb(tools),
+                    user_id,
+                    project_id,
+                ),
+            ).fetchone()
+        project = _load_project(conn, project_id)
+        conn.commit()
+    if row is None or project is None:
+        raise RuntimeError("schedule upsert failed")
+    return _schedule_from_row(dict(row), project=project)
+
+
+def delete_project_schedule(project_id: int) -> bool:
+    """Delete the schedule for a project. Return whether a row was removed."""
+
+    with connect() as conn:
+        row = conn.execute(
+            """
+            DELETE FROM project_scan_schedules
+            WHERE project_id = %s
+            RETURNING id
+            """,
+            (project_id,),
+        ).fetchone()
+        conn.commit()
+    return row is not None
+
+
+def list_due_schedules(*, limit: int = 10) -> list[dict[str, Any]]:
+    """Return enabled schedules whose next_run_at is due."""
+
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, project_id, enabled, interval_days, tools,
+                   next_run_at, last_enqueued_at, created_by, updated_by,
+                   created_at, updated_at
+            FROM project_scan_schedules
+            WHERE enabled AND next_run_at <= now()
+            ORDER BY next_run_at ASC
+            FOR UPDATE SKIP LOCKED
+            LIMIT %s
+            """,
+            (max(1, min(limit, 50)),),
+        ).fetchall()
+        out: list[dict[str, Any]] = []
+        for row in rows:
+            project = _load_project(conn, int(row["project_id"]))
+            if project is None:
+                continue
+            out.append(_schedule_from_row(dict(row), project=project))
+        conn.commit()
+    return out
+
+
+def bump_schedule_next_run(
+    schedule_id: int,
+    *,
+    delay: timedelta,
+    mark_enqueued: bool,
+) -> None:
+    """Move next_run_at forward by delay from now()."""
+
+    with connect() as conn:
+        if mark_enqueued:
+            conn.execute(
+                """
+                UPDATE project_scan_schedules
+                SET next_run_at = now() + %s,
+                    last_enqueued_at = now(),
+                    updated_at = now()
+                WHERE id = %s
+                """,
+                (delay, schedule_id),
+            )
+        else:
+            conn.execute(
+                """
+                UPDATE project_scan_schedules
+                SET next_run_at = now() + %s,
+                    updated_at = now()
+                WHERE id = %s
+                """,
+                (delay, schedule_id),
+            )
+        conn.commit()
+
+
+def touch_schedule_enqueued(schedule_id: int) -> None:
+    """Record last_enqueued_at without changing next_run_at (manual run)."""
+
+    with connect() as conn:
+        conn.execute(
+            """
+            UPDATE project_scan_schedules
+            SET last_enqueued_at = now(),
+                updated_at = now()
+            WHERE id = %s
+            """,
+            (schedule_id,),
+        )
+        conn.commit()
+
+
+def reset_schedule_table() -> None:
+    """Delete schedule rows. Used by tests."""
+
+    _require_test_db_wipe()
+    with connect() as conn:
+        conn.execute("TRUNCATE project_scan_schedules RESTART IDENTITY CASCADE")
+        conn.commit()

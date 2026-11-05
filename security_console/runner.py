@@ -196,17 +196,18 @@ def _repo_scan(
             )
         if "sonar" in job["tools"]:
             phase("SonarQube")
-            sonar = _run_sonar(client, host_path, job["id"])
+            sonar = _run_sonar(client, host_path, job["id"], job=job)
             sonar_error = str((sonar or {}).get("error") or "").strip()
             if sonar_error:
+                classified = _classify_sonar_error(sonar_error)
                 tool_results.append(
                     {
                         "tool": "sonar",
                         "status": "failed",
-                        "error": sonar_error[:500],
+                        "error": classified[:500],
                     }
                 )
-                failures.append("SonarQube: " + sonar_error[:500])
+                failures.append("SonarQube: " + classified[:500])
             else:
                 tool_results.append({"tool": "sonar", "status": "ok", "error": ""})
             if progress is not None:
@@ -324,11 +325,20 @@ def _image_scan(job: dict[str, Any], phase: Phase) -> dict[str, Any]:
             shutil.rmtree(local_path, ignore_errors=True)
 
 
-def _run_sonar(client: Any, host_path: str, scan_id: str) -> dict[str, Any]:
+def _run_sonar(
+    client: Any,
+    host_path: str,
+    scan_id: str,
+    *,
+    job: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     key = ""
     try:
-        key = _sonar_key()
+        from security_console.sonar_keys import sonar_key_for_job
+
+        key = sonar_key_for_job(job or {})
         token = _sonar_token()
+        _ensure_sonar_project(key, token)
     except Exception as exc:
         # Semgrep and Checkov already ran. A missing token must not discard them.
         detail = str(exc).strip() or type(exc).__name__
@@ -344,7 +354,9 @@ def _run_sonar(client: Any, host_path: str, scan_id: str) -> dict[str, Any]:
         try:
             code, stdout, stderr = _run(client, spec, SONAR_TIMEOUT)
         except Exception as exc:
-            return _empty_sonar(key, _redact(str(exc), token))
+            return _empty_sonar(
+                key, _classify_sonar_error(_redact(str(exc), token))
+            )
         logs = _redact(stdout + "\n" + stderr, token)
         uploaded = any(
             marker in logs
@@ -355,13 +367,93 @@ def _run_sonar(client: Any, host_path: str, scan_id: str) -> dict[str, Any]:
             )
         )
         if not uploaded:
-            return _empty_sonar(key, _sonar_failure_detail(logs, code))
+            return _empty_sonar(
+                key, _classify_sonar_error(_sonar_failure_detail(logs, code))
+            )
         try:
             return _fetch_sonar_summary(key, token)
         except Exception as exc:
             return _empty_sonar(key, _redact(str(exc), token)[:1500])
     finally:
         _remove_sonar_token(scan_id)
+
+
+def _classify_sonar_error(detail: str) -> str:
+    """Tag timeout / OOM / ES failures so the UI shows a clear cause."""
+
+    text = str(detail or "").strip()
+    lowered = text.lower()
+    if "timed out" in lowered or "timeout" in lowered:
+        prefix = "SonarQube timeout: "
+    elif (
+        "outofmemory" in lowered
+        or "java heap space" in lowered
+        or "cannot allocate memory" in lowered
+    ):
+        prefix = "SonarQube out of memory: "
+    elif "elasticsearch" in lowered or "fshealth" in lowered:
+        prefix = "SonarQube search engine: "
+    else:
+        return text[:1500]
+    if text.lower().startswith(prefix.lower()):
+        return text[:1500]
+    return (prefix + text)[:1500]
+
+
+def _ensure_sonar_project(key: str, token: str) -> None:
+    """Create the Sonar project when missing. Already-exists is success."""
+
+    import json
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+
+    base = _sonar_url().rstrip("/")
+    search = (
+        base
+        + "/api/projects/search?"
+        + urllib.parse.urlencode({"projects": key})
+    )
+    req = urllib.request.Request(
+        search,
+        headers={"Authorization": "Bearer " + token, "Accept": "application/json"},
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as response:
+            payload = json.loads(response.read().decode("utf-8") or "{}")
+    except Exception as exc:
+        raise RuntimeError("Could not reach SonarQube to prepare the project.") from exc
+    components = payload.get("components") if isinstance(payload, dict) else None
+    if isinstance(components, list) and any(
+        isinstance(item, dict) and item.get("key") == key for item in components
+    ):
+        return
+    body = urllib.parse.urlencode({"project": key, "name": key}).encode("utf-8")
+    create = urllib.request.Request(
+        base + "/api/projects/create",
+        data=body,
+        headers={
+            "Authorization": "Bearer " + token,
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Accept": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(create, timeout=30) as response:
+            response.read()
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", "replace")[:300]
+        if exc.code == 400 and (
+            "already" in detail.lower() or "key already exists" in detail.lower()
+        ):
+            return
+        raise RuntimeError(
+            f"Could not create the SonarQube project ({exc.code})."
+        ) from exc
+    except Exception as exc:
+        raise RuntimeError("Could not create the SonarQube project.") from exc
 
 
 _SONAR_LIST_TEXT = 200
@@ -1071,15 +1163,6 @@ def _image_limit() -> int:
 
 def _sonar_url() -> str:
     return os.environ.get("SONAR_URL", "http://sonarqube:9000/sonar").strip()
-
-
-def _sonar_key() -> str:
-    import re
-
-    key = os.environ.get("SONAR_PROJECT_KEY", "security-console")
-    if not re.fullmatch(r"[A-Za-z0-9_.:-]{1,200}", key):
-        raise RuntimeError("The SonarQube project key is invalid.")
-    return key
 
 
 def _sonar_token() -> str:

@@ -286,6 +286,9 @@ def present_scan(
     if scan.get("project_slug"):
         shown["project_slug"] = scan.get("project_slug")
         shown["project_name"] = scan.get("project_name") or scan.get("project_slug")
+    ci_meta = scan.get("ci_meta")
+    if isinstance(ci_meta, dict) and ci_meta:
+        shown["ci_meta"] = dict(ci_meta)
     position = scan.get("queue_position")
     if position is not None:
         shown["queue_position"] = position

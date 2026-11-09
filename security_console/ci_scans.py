@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 import uuid
+from collections import deque
 from collections.abc import Callable
 from typing import Any
 
@@ -16,10 +18,16 @@ from security_console.access import (
     expand_sonar_findings,
     find_reusable_scan,
     present_scan,
-    severity_bucket,
+    project_key,
     severity_counts,
 )
 from security_console.audit import record
+from security_console.gitlab_ci import (
+    GitLabCiError,
+    normalize_gitlab_base_url,
+    resolve_gitlab_project,
+    slug_for_gitlab,
+)
 from security_console.images import valid_image_ref
 from security_console.queue import QUEUE_CAP, attach_queue_position
 from security_console.repos import normalize_commit_sha, valid_repo
@@ -30,6 +38,12 @@ log = logging.getLogger("security_console")
 
 _REPO_TOOLS = ("semgrep", "checkov", "sonar", "trivy")
 _ALLOWED = frozenset(_REPO_TOOLS)
+_CI_RATE_LIMIT = 30
+_CI_RATE_PROJECT_LIMIT = 10
+_CI_RATE_WINDOW = 60.0
+_rate_lock = threading.Lock()
+_rate_hits: deque[float] = deque()
+_rate_project_hits: dict[tuple[str, int], deque[float]] = {}
 
 _lock: threading.Lock | None = None
 _scans: dict[str, dict[str, Any]] | None = None
@@ -153,34 +167,159 @@ def _default_tools(target: str, requested: list[str]) -> list[str]:
     return list(_REPO_TOOLS)
 
 
-def _parse_create_body(
-    body: Any,
-) -> tuple[dict[str, Any] | None, str, int]:
+def _prune_hits(hits: deque[float], now: float) -> None:
+    while hits and now - hits[0] > _CI_RATE_WINDOW:
+        hits.popleft()
+
+
+def _ci_rate_limited(project_key: tuple[str, int] | None = None) -> bool:
+    """Return True when global or per-GitLab-project POST budget is exhausted.
+
+    Single console process (``python /app/app.py``): in-memory counters are
+    correct. Multiple workers would each keep a separate window.
+    """
+
+    now = time.monotonic()
+    with _rate_lock:
+        _prune_hits(_rate_hits, now)
+        if len(_rate_hits) >= _CI_RATE_LIMIT:
+            return True
+        if project_key is not None:
+            bucket = _rate_project_hits.setdefault(project_key, deque())
+            _prune_hits(bucket, now)
+            if len(bucket) >= _CI_RATE_PROJECT_LIMIT:
+                return True
+            bucket.append(now)
+        _rate_hits.append(now)
+        return False
+
+
+def reset_ci_rate_limit() -> None:
+    """Test helper: clear global and per-project CI POST rate-limit windows."""
+
+    with _rate_lock:
+        _rate_hits.clear()
+        _rate_project_hits.clear()
+
+
+def _rate_project_key_from_body(body: Any) -> tuple[str, int] | None:
     if not isinstance(body, dict):
-        return None, "Invalid scan.", 400
+        return None
+    if body.get("gitlab_project_id") is None and not body.get("gitlab_base_url"):
+        return None
+    base = normalize_gitlab_base_url(str(body.get("gitlab_base_url") or ""))
+    if base is None:
+        return None
+    try:
+        project_id = int(body.get("gitlab_project_id"))
+    except (TypeError, ValueError):
+        return None
+    if project_id < 1:
+        return None
+    return base, project_id
+
+
+def _parse_tools(body: dict[str, Any], target: str) -> tuple[list[str] | None, str]:
+    raw_tools = body.get("tools")
+    if raw_tools is None:
+        return _default_tools(target, []), ""
+    if not isinstance(raw_tools, list):
+        return None, "Tools must be a list."
+    tools: list[str] = []
+    for item in raw_tools:
+        if not isinstance(item, str) or item not in _ALLOWED:
+            return None, "One or more tools are invalid."
+        if item not in tools:
+            tools.append(item)
+    tools = _default_tools(target, tools)
+    if target == "image" and tools != ["trivy"]:
+        return None, "Image scans run with Trivy only."
+    if target == "repo" and not tools:
+        return None, "Select at least one tool."
+    return tools, ""
+
+
+def _ci_meta_from_body(body: dict[str, Any]) -> dict[str, Any]:
+    meta: dict[str, Any] = {}
+    ref = str(body.get("ref") or "").strip()
+    if ref and len(ref) <= 200:
+        meta["ref"] = ref
+    pipeline_id = str(body.get("pipeline_id") or "").strip()
+    if pipeline_id and len(pipeline_id) <= 64:
+        meta["pipeline_id"] = pipeline_id
+    pipeline_url = str(body.get("pipeline_url") or "").strip()
+    if pipeline_url and len(pipeline_url) <= 500 and "://" in pipeline_url:
+        meta["pipeline_url"] = pipeline_url
+    trigger = str(body.get("trigger") or "").strip()
+    if trigger and len(trigger) <= 64:
+        meta["trigger"] = trigger
+    return meta
+
+
+def _parse_gitlab_mode(
+    body: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str, int]:
+    raw_id = body.get("gitlab_project_id")
+    try:
+        gitlab_project_id = int(raw_id)
+    except (TypeError, ValueError):
+        return None, "gitlab_project_id is invalid.", 400
+    tools, tool_error = _parse_tools(body, "repo")
+    if tools is None:
+        return None, tool_error, 400
+    try:
+        resolved = resolve_gitlab_project(
+            gitlab_base_url=str(body.get("gitlab_base_url") or ""),
+            gitlab_project_id=gitlab_project_id,
+            requested_sha=str(body.get("requested_sha") or ""),
+        )
+    except GitLabCiError as exc:
+        return None, exc.message, exc.status
+
+    slug = slug_for_gitlab(resolved["base_url"], resolved["gitlab_project_id"])
+    target_key = project_key({"repo": resolved["repo_url"], "image": ""})
+    project = db.upsert_gitlab_linked_project(
+        base_url=resolved["base_url"],
+        gitlab_project_id=resolved["gitlab_project_id"],
+        gitlab_path=resolved["path"],
+        name=resolved["name"],
+        repo_url=resolved["repo_url"],
+        slug=slug,
+        target_key=target_key,
+    )
+    ci_meta = _ci_meta_from_body(body)
+    ci_meta["gitlab_project_id"] = resolved["gitlab_project_id"]
+    ci_meta["gitlab_base_url"] = resolved["base_url"]
+    ci_meta["gitlab_path"] = resolved["path"]
+    return {
+        "project": project,
+        "target": "repo",
+        "repo": resolved["repo_url"],
+        "image": "",
+        "tools": tools,
+        "requested_sha": resolved["sha"],
+        "force": bool(body.get("force")),
+        "ci_meta": ci_meta,
+        "gitlab": {
+            "base_url": resolved["base_url"],
+            "project_id": resolved["gitlab_project_id"],
+            "path": resolved["path"],
+        },
+    }, "", 200
+
+
+def _parse_slug_mode(
+    body: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str, int]:
     slug = str(body.get("project") or "").strip().lower()
     if not slug:
-        return None, "project is required.", 400
+        return None, "project or gitlab_project_id is required.", 400
     target = str(body.get("target") or "repo").strip().lower()
     if target not in {"repo", "image"}:
         return None, "Invalid scan type.", 400
-    raw_tools = body.get("tools")
-    if raw_tools is None:
-        tools = _default_tools(target, [])
-    elif not isinstance(raw_tools, list):
-        return None, "Tools must be a list.", 400
-    else:
-        tools = []
-        for item in raw_tools:
-            if not isinstance(item, str) or item not in _ALLOWED:
-                return None, "One or more tools are invalid.", 400
-            if item not in tools:
-                tools.append(item)
-        tools = _default_tools(target, tools)
-        if target == "image" and tools != ["trivy"]:
-            return None, "Image scans run with Trivy only.", 400
-        if target == "repo" and not tools:
-            return None, "Select at least one tool.", 400
+    tools, tool_error = _parse_tools(body, target)
+    if tools is None:
+        return None, tool_error, 400
 
     project = db.get_project_by_slug(slug)
     if project is None:
@@ -232,13 +371,28 @@ def _parse_create_body(
         "tools": tools,
         "requested_sha": requested_sha,
         "force": bool(body.get("force")),
+        "ci_meta": _ci_meta_from_body(body),
+        "gitlab": project.get("gitlab"),
     }, "", 200
+
+
+def _parse_create_body(
+    body: Any,
+) -> tuple[dict[str, Any] | None, str, int]:
+    if not isinstance(body, dict):
+        return None, "Invalid scan.", 400
+    if body.get("gitlab_project_id") is not None or body.get("gitlab_base_url"):
+        return _parse_gitlab_mode(body)
+    return _parse_slug_mode(body)
 
 
 def _create() -> Reply:
     if _lock is None or _scans is None or _save is None or _utcnow is None:
         return jsonify({"error": "CI scan API is not ready."}), 503
-    parsed, error, code = _parse_create_body(request.get_json(silent=True))
+    body = request.get_json(silent=True)
+    if _ci_rate_limited(_rate_project_key_from_body(body)):
+        return jsonify({"error": "Too many CI scan requests. Try again shortly."}), 429
+    parsed, error, code = _parse_create_body(body)
     if parsed is None:
         return jsonify({"error": error}), code
 
@@ -298,20 +452,27 @@ def _create() -> Reply:
             "project_id": int(project["id"]),
             "project_slug": str(project.get("slug") or ""),
             "project_name": str(project.get("name") or project.get("slug") or ""),
+            "ci_meta": dict(parsed.get("ci_meta") or {}),
+            "tool_results": [],
         }
         _scans[scan_id] = item
         _save(item)
         shown = _public_scan(user, item)
+    detail = {
+        "scan_id": scan_id,
+        "target": parsed["target"],
+        "tools": parsed["tools"],
+        "requested_sha": parsed["requested_sha"],
+    }
+    gitlab = parsed.get("gitlab")
+    if isinstance(gitlab, dict):
+        detail["gitlab_project_id"] = gitlab.get("project_id")
+        detail["gitlab_path"] = gitlab.get("path")
     record(
         action="ci.scan.create",
         target_type="project",
         target_id=str(project.get("slug") or ""),
-        detail={
-            "scan_id": scan_id,
-            "target": parsed["target"],
-            "tools": parsed["tools"],
-            "requested_sha": parsed["requested_sha"],
-        },
+        detail=detail,
     )
     return jsonify(shown or attach_queue_position(item, list(_scans.values()))), 202
 
@@ -347,6 +508,29 @@ def _public_scan(user: dict[str, Any], item: dict[str, Any]) -> dict[str, Any] |
     findings = list(shown.get("findings") or [])
     shown["severity"] = severity_counts(findings)
     shown["policy"] = policy
+    shown["project_id"] = item.get("project_id")
+    shown["project_slug"] = item.get("project_slug") or shown.get("project_slug")
+    ci_meta = item.get("ci_meta") if isinstance(item.get("ci_meta"), dict) else {}
+    if ci_meta:
+        shown["ci_meta"] = {
+            key: ci_meta[key]
+            for key in (
+                "ref",
+                "pipeline_id",
+                "pipeline_url",
+                "trigger",
+                "gitlab_project_id",
+                "gitlab_base_url",
+                "gitlab_path",
+            )
+            if key in ci_meta
+        }
+        if ci_meta.get("gitlab_base_url") and ci_meta.get("gitlab_project_id"):
+            shown["gitlab"] = {
+                "base_url": ci_meta.get("gitlab_base_url"),
+                "project_id": ci_meta.get("gitlab_project_id"),
+                "path": ci_meta.get("gitlab_path") or "",
+            }
     if isinstance(shown.get("sonar"), dict):
         sonar = shown["sonar"]
         shown["sonar"] = {

@@ -99,7 +99,7 @@ def parse_project(body: Any) -> tuple[dict[str, Any] | None, str]:
 def public_project(project: dict[str, Any], *, can_edit: bool) -> dict[str, Any]:
     """Return project fields the browser may see."""
 
-    return {
+    payload = {
         "id": int(project["id"]),
         "slug": project["slug"],
         "name": project["name"],
@@ -116,6 +116,14 @@ def public_project(project: dict[str, Any], *, can_edit: bool) -> dict[str, Any]
         ],
         "group_ids": [int(item) for item in project.get("group_ids") or []],
     }
+    gitlab = project.get("gitlab")
+    if isinstance(gitlab, dict) and gitlab.get("project_id") is not None:
+        payload["gitlab"] = {
+            "base_url": str(gitlab.get("base_url") or ""),
+            "project_id": int(gitlab["project_id"]),
+            "path": str(gitlab.get("path") or ""),
+        }
+    return payload
 
 
 def _list_projects() -> Response:

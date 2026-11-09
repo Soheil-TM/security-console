@@ -1,5 +1,7 @@
-# Example GitLab CI job: enqueue a console project scan, poll, fail on policy.
-# Set CI/CD variables: CONSOLE_URL, CI_SCAN_TOKEN (masked), CONSOLE_PROJECT_SLUG.
+# Example GitLab CI job: enqueue via GitLab project identity, poll, fail on policy.
+# Set group CI/CD variables: CONSOLE_URL, CI_SCAN_TOKEN (masked).
+# No CONSOLE_PROJECT_SLUG — the Console auto-provisions from CI_PROJECT_ID.
+# Requires a Console Integration (kind=gitlab) whose base_url matches CI_SERVER_URL.
 
 stages:
   - security
@@ -16,7 +18,7 @@ console_scan:
       CREATE=$(curl -fsS -X POST "$CONSOLE_URL/api/ci/scans" \
         -H "Authorization: Bearer $CI_SCAN_TOKEN" \
         -H "Content-Type: application/json" \
-        -d "{\"project\":\"$CONSOLE_PROJECT_SLUG\",\"target\":\"repo\",\"tools\":[\"semgrep\",\"checkov\",\"sonar\",\"trivy\"],\"requested_sha\":\"$CI_COMMIT_SHA\",\"force\":true}")
+        -d "{\"gitlab_base_url\":\"$CI_SERVER_URL\",\"gitlab_project_id\":$CI_PROJECT_ID,\"requested_sha\":\"$CI_COMMIT_SHA\",\"ref\":\"$CI_COMMIT_REF_NAME\",\"pipeline_id\":\"$CI_PIPELINE_ID\",\"pipeline_url\":\"$CI_PIPELINE_URL\",\"tools\":[\"semgrep\",\"checkov\",\"sonar\",\"trivy\"],\"force\":true}")
       SCAN_ID=$(printf '%s' "$CREATE" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)
       test -n "$SCAN_ID"
       echo "Console Execution Center: $CONSOLE_URL/scans/$SCAN_ID"

@@ -717,6 +717,27 @@ MIGRATIONS = (
         created_at timestamptz NOT NULL DEFAULT now()
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS project_gitlab_links (
+        project_id bigint NOT NULL UNIQUE
+            REFERENCES projects (id) ON DELETE CASCADE,
+        gitlab_base_url text NOT NULL,
+        gitlab_project_id bigint NOT NULL,
+        gitlab_path text NOT NULL DEFAULT '',
+        last_seen_at timestamptz NOT NULL DEFAULT now(),
+        created_at timestamptz NOT NULL DEFAULT now(),
+        UNIQUE (gitlab_base_url, gitlab_project_id)
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS project_gitlab_links_lookup
+        ON project_gitlab_links (gitlab_base_url, gitlab_project_id)
+    """,
+    """
+    ALTER TABLE scans
+        ADD COLUMN IF NOT EXISTS ci_meta jsonb
+        NOT NULL DEFAULT '{}'::jsonb
+    """,
 )
 
 
@@ -945,7 +966,8 @@ _SCAN_SELECT = """
     SELECT s.id, s.target, s.repo, s.image, s.project_id, s.tools, s.status,
            s.phase, s.error, s.failure_reason, s.owner, s.guest, s.guest_ip,
            s.private, s.requested_sha, s.commit_sha, s.findings, s.sonar,
-           s.tool_results, s.priority, s.created_at, s.started_at, s.finished_at,
+           s.tool_results, s.ci_meta, s.priority, s.created_at, s.started_at,
+           s.finished_at,
            p.slug AS project_slug, p.name AS project_name
     FROM scans AS s
     LEFT JOIN projects AS p ON p.id = s.project_id
@@ -964,6 +986,11 @@ def scan_from_row(row: dict[str, Any]) -> dict[str, Any]:
     tool_results = row.get("tool_results") or []
     if isinstance(tool_results, str):
         tool_results = json.loads(tool_results)
+    ci_meta = row.get("ci_meta") or {}
+    if isinstance(ci_meta, str):
+        ci_meta = json.loads(ci_meta)
+    if not isinstance(ci_meta, dict):
+        ci_meta = {}
     sonar = row.get("sonar")
     if isinstance(sonar, str):
         sonar = json.loads(sonar)
@@ -982,6 +1009,7 @@ def scan_from_row(row: dict[str, Any]) -> dict[str, Any]:
         "commit_sha": str(row.get("commit_sha") or ""),
         "findings": list(findings),
         "tool_results": list(tool_results),
+        "ci_meta": dict(ci_meta),
         "sonar": sonar,
         "priority": int(row.get("priority") or 0),
         "created_at": _stamp(row.get("created_at")),
@@ -1053,14 +1081,14 @@ def upsert_scan(item: dict[str, Any]) -> None:
             INSERT INTO scans (
                 id, target, repo, image, project_id, tools, status, phase, error,
                 failure_reason, owner, guest, guest_ip, private,
-                requested_sha, commit_sha, findings, sonar, tool_results, priority,
-                created_at, started_at, finished_at
+                requested_sha, commit_sha, findings, sonar, tool_results, ci_meta,
+                priority, created_at, started_at, finished_at
             )
             VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, %s,
-                %s, %s, %s
+                %s, %s, %s, %s
             )
             ON CONFLICT (id) DO UPDATE SET
                 target = EXCLUDED.target,
@@ -1081,6 +1109,7 @@ def upsert_scan(item: dict[str, Any]) -> None:
                 findings = EXCLUDED.findings,
                 sonar = EXCLUDED.sonar,
                 tool_results = EXCLUDED.tool_results,
+                ci_meta = EXCLUDED.ci_meta,
                 priority = EXCLUDED.priority,
                 created_at = EXCLUDED.created_at,
                 started_at = EXCLUDED.started_at,
@@ -1106,6 +1135,11 @@ def upsert_scan(item: dict[str, Any]) -> None:
                 Jsonb(list(item.get("findings") or [])),
                 Jsonb(item["sonar"]) if item.get("sonar") is not None else None,
                 Jsonb(list(item.get("tool_results") or [])),
+                Jsonb(
+                    item.get("ci_meta")
+                    if isinstance(item.get("ci_meta"), dict)
+                    else {}
+                ),
                 int(0 if item.get("priority") is None else item.get("priority")),
                 created,
                 started,
@@ -2306,8 +2340,9 @@ def _project_from_row(
     row: dict[str, Any],
     targets: list[dict[str, Any]],
     group_ids: list[int] | None = None,
+    gitlab: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return {
+    item = {
         "id": int(row["id"]),
         "slug": str(row["slug"]),
         "name": str(row["name"]),
@@ -2324,6 +2359,9 @@ def _project_from_row(
         ],
         "group_ids": list(group_ids or []),
     }
+    if gitlab:
+        item["gitlab"] = gitlab
+    return item
 
 
 def _load_project(
@@ -2358,10 +2396,27 @@ def _load_project(
         """,
         (project_id,),
     ).fetchall()
+    link = conn.execute(
+        """
+        SELECT gitlab_base_url, gitlab_project_id, gitlab_path, last_seen_at
+        FROM project_gitlab_links
+        WHERE project_id = %s
+        """,
+        (project_id,),
+    ).fetchone()
+    gitlab = None
+    if link is not None:
+        gitlab = {
+            "base_url": str(link["gitlab_base_url"]),
+            "project_id": int(link["gitlab_project_id"]),
+            "path": str(link.get("gitlab_path") or ""),
+            "last_seen_at": _stamp(link.get("last_seen_at")),
+        }
     return _project_from_row(
         dict(row),
         [dict(item) for item in targets],
         [int(item["group_id"]) for item in groups],
+        gitlab,
     )
 
 
@@ -2448,7 +2503,7 @@ def insert_project(
     slug: str,
     name: str,
     description: str,
-    created_by: int,
+    created_by: int | None,
     targets: list[dict[str, str]],
     group_ids: list[int],
 ) -> dict[str, Any]:
@@ -2472,6 +2527,222 @@ def insert_project(
     if loaded is None:
         raise RuntimeError("project insert could not be reloaded")
     return loaded
+
+
+_CI_AUTO_GROUP_NAME = "CI auto projects"
+
+
+def ensure_ci_auto_group_id(
+    conn: psycopg.Connection[dict[str, Any]],
+) -> int:
+    """Return the id of the shared CI auto-projects group, creating it once."""
+
+    row = conn.execute(
+        "SELECT id FROM project_groups WHERE name = %s",
+        (_CI_AUTO_GROUP_NAME,),
+    ).fetchone()
+    if row is not None:
+        return int(row["id"])
+    created = conn.execute(
+        """
+        INSERT INTO project_groups (name, description, created_by)
+        VALUES (%s, %s, NULL)
+        ON CONFLICT (name) DO NOTHING
+        RETURNING id
+        """,
+        (
+            _CI_AUTO_GROUP_NAME,
+            "Projects auto-created from GitLab CI scans.",
+        ),
+    ).fetchone()
+    if created is not None:
+        return int(created["id"])
+    again = conn.execute(
+        "SELECT id FROM project_groups WHERE name = %s",
+        (_CI_AUTO_GROUP_NAME,),
+    ).fetchone()
+    if again is None:
+        raise RuntimeError("CI auto group could not be created")
+    return int(again["id"])
+
+
+def upsert_gitlab_linked_project(
+    *,
+    base_url: str,
+    gitlab_project_id: int,
+    gitlab_path: str,
+    name: str,
+    repo_url: str,
+    slug: str,
+    target_key: str,
+) -> dict[str, Any]:
+    """Race-safe create/update of a Console project bound to a GitLab id.
+
+    Concurrent callers with the same (base_url, gitlab_project_id) share one
+    project row. The project is always linked to the CI auto group.
+    """
+
+    from psycopg.errors import UniqueViolation
+
+    description = "Auto-provisioned from GitLab CI."
+    path = (gitlab_path or "")[:200]
+    display = (name or path or slug)[:80]
+
+    with connect() as conn:
+        existing = conn.execute(
+            """
+            SELECT project_id
+            FROM project_gitlab_links
+            WHERE gitlab_base_url = %s AND gitlab_project_id = %s
+            """,
+            (base_url, int(gitlab_project_id)),
+        ).fetchone()
+        if existing is not None:
+            project_id = int(existing["project_id"])
+            _refresh_gitlab_linked_project(
+                conn,
+                project_id=project_id,
+                name=display,
+                path=path,
+                repo_url=repo_url,
+                target_key=target_key,
+                base_url=base_url,
+                gitlab_project_id=int(gitlab_project_id),
+            )
+            loaded = _load_project(conn, project_id)
+            conn.commit()
+            if loaded is None:
+                raise RuntimeError("gitlab project refresh could not reload")
+            return loaded
+
+        group_id = ensure_ci_auto_group_id(conn)
+        try:
+            row = conn.execute(
+                """
+                INSERT INTO projects (slug, name, description, created_by)
+                VALUES (%s, %s, %s, NULL)
+                RETURNING id
+                """,
+                (slug, display, description),
+            ).fetchone()
+            if row is None:
+                raise RuntimeError("gitlab project insert returned no id")
+            project_id = int(row["id"])
+            conn.execute(
+                """
+                INSERT INTO project_targets (
+                    project_id, kind, target, target_key
+                )
+                VALUES (%s, 'repo', %s, %s)
+                ON CONFLICT DO NOTHING
+                """,
+                (project_id, repo_url, target_key),
+            )
+            conn.execute(
+                """
+                INSERT INTO group_projects (group_id, project_id)
+                VALUES (%s, %s)
+                ON CONFLICT DO NOTHING
+                """,
+                (group_id, project_id),
+            )
+            conn.execute(
+                """
+                INSERT INTO project_gitlab_links (
+                    project_id, gitlab_base_url, gitlab_project_id,
+                    gitlab_path, last_seen_at
+                )
+                VALUES (%s, %s, %s, %s, now())
+                """,
+                (project_id, base_url, int(gitlab_project_id), path),
+            )
+            loaded = _load_project(conn, project_id)
+            conn.commit()
+        except UniqueViolation:
+            conn.rollback()
+            raced = conn.execute(
+                """
+                SELECT project_id
+                FROM project_gitlab_links
+                WHERE gitlab_base_url = %s AND gitlab_project_id = %s
+                """,
+                (base_url, int(gitlab_project_id)),
+            ).fetchone()
+            if raced is None:
+                # Likely a slug collision with a non-GitLab project.
+                raise
+            project_id = int(raced["project_id"])
+            _refresh_gitlab_linked_project(
+                conn,
+                project_id=project_id,
+                name=display,
+                path=path,
+                repo_url=repo_url,
+                target_key=target_key,
+                base_url=base_url,
+                gitlab_project_id=int(gitlab_project_id),
+            )
+            loaded = _load_project(conn, project_id)
+            conn.commit()
+            if loaded is None:
+                raise RuntimeError("gitlab project race reload failed")
+            return loaded
+    if loaded is None:
+        raise RuntimeError("gitlab project insert could not be reloaded")
+    return loaded
+
+
+def _refresh_gitlab_linked_project(
+    conn: psycopg.Connection[dict[str, Any]],
+    *,
+    project_id: int,
+    name: str,
+    path: str,
+    repo_url: str,
+    target_key: str,
+    base_url: str,
+    gitlab_project_id: int,
+) -> None:
+    conn.execute(
+        """
+        UPDATE projects
+        SET name = %s, description = %s
+        WHERE id = %s
+        """,
+        (name, "Auto-provisioned from GitLab CI.", project_id),
+    )
+    conn.execute(
+        """
+        UPDATE project_gitlab_links
+        SET gitlab_path = %s, last_seen_at = now()
+        WHERE gitlab_base_url = %s AND gitlab_project_id = %s
+        """,
+        (path, base_url, gitlab_project_id),
+    )
+    conn.execute(
+        """
+        DELETE FROM project_targets
+        WHERE project_id = %s AND kind = 'repo'
+        """,
+        (project_id,),
+    )
+    conn.execute(
+        """
+        INSERT INTO project_targets (project_id, kind, target, target_key)
+        VALUES (%s, 'repo', %s, %s)
+        ON CONFLICT DO NOTHING
+        """,
+        (project_id, repo_url, target_key),
+    )
+    group_id = ensure_ci_auto_group_id(conn)
+    conn.execute(
+        """
+        INSERT INTO group_projects (group_id, project_id)
+        VALUES (%s, %s)
+        ON CONFLICT DO NOTHING
+        """,
+        (group_id, project_id),
+    )
 
 
 def update_project(

@@ -98,9 +98,22 @@ Command-line `-D` properties outrank `sonar-project.properties`. The scanner com
 
 ## CI scan API (async poll)
 
-GitLab (or other CI) can enqueue a **project** scan with a machine token. The console runs the existing scanner pipeline; open `/scans/<id>` in the UI for the Execution Center. Do not put a GitLab Runner on this host unless you accept the security and resource trade-offs.
+GitLab (or other CI) can enqueue a scan with a machine token. The console runs the existing scanner pipeline; open `/scans/<id>` in the UI for the Execution Center. Do not put a GitLab Runner on this host unless you accept the security and resource trade-offs.
 
 Create `secrets/ci_scan_token.txt` with `./scripts/init-secrets.sh` (mode 600). Compose mounts it as `CI_SCAN_TOKEN_FILE`. This token is **not** the push-gate token.
+
+### GitLab auto-provision (preferred)
+
+Save a Console **Integration** (`kind=gitlab`) whose `base_url` matches your GitLab. The CI job sends `gitlab_base_url` + `gitlab_project_id` + `requested_sha`. The console verifies the project and commit via the GitLab API (using the Integration token), creates or reuses a Console project, and clones the **canonical** `http_url_to_repo` — never a runner-supplied URL. Group CI variables: `CONSOLE_URL` and `CI_SCAN_TOKEN` only. See `examples/gitlab-ci-scan.yml`.
+
+```bash
+curl -fsS -X POST "$CONSOLE_URL/api/ci/scans" \
+  -H "Authorization: Bearer $(cat secrets/ci_scan_token.txt)" \
+  -H "Content-Type: application/json" \
+  -d '{"gitlab_base_url":"https://gitlab.example","gitlab_project_id":42,"requested_sha":"'"$CI_COMMIT_SHA"'","force":true}'
+```
+
+### Legacy project slug
 
 ```bash
 # Enqueue (project slug must exist; target must be one of its repos/images)
@@ -108,8 +121,11 @@ curl -fsS -X POST "$CONSOLE_URL/api/ci/scans" \
   -H "Authorization: Bearer $(cat secrets/ci_scan_token.txt)" \
   -H "Content-Type: application/json" \
   -d '{"project":"my-app","target":"repo","tools":["semgrep","checkov","sonar"],"requested_sha":"'"$CI_COMMIT_SHA"'"}'
+```
 
-# Poll until status is done or failed
+### Poll
+
+```bash
 curl -fsS \
   -H "Authorization: Bearer $(cat secrets/ci_scan_token.txt)" \
   "$CONSOLE_URL/api/ci/scans/<scan_id>"
@@ -117,7 +133,7 @@ curl -fsS \
 
 You may send the same value as `X-CI-Scan-Token` instead of `Authorization: Bearer`.
 
-While the scan is `queued` or `running`, `policy.pending` is true and `policy.passed` is null. When finished, `policy.passed` is a boolean. **Fail the pipeline when `policy.passed` is false.** Reasons can include `scan_failed`, `tool_failed:<name>`, `severity_critical`, `severity_high`, and `sonar_quality_gate_error`. Medium/low/info findings alone do not fail. See `examples/gitlab-ci-scan.yml` for a poll loop.
+While the scan is `queued` or `running`, `policy.pending` is true and `policy.passed` is null. When finished, `policy.passed` is a boolean. **Fail the pipeline when `policy.passed` is false.** Reasons can include `scan_failed`, `tool_failed:<name>`, `severity_critical`, `severity_high`, and `sonar_quality_gate_error`. Medium/low/info findings alone do not fail.
 
 ## CI push gate
 

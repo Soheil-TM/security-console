@@ -5065,7 +5065,14 @@
           ? '<button type="button" class="ghost" data-action="report-back">Back to report</button>'
           : '<button type="button" class="ghost" data-action="investigate">Investigate</button>')
         : "";
-      document.querySelector("#scan-head").innerHTML = '<div class="scan-head"><div><h1>' + esc(scanTitle(scan)) + '</h1><div class="repo">' + esc(subtitle) + '</div><div class="meta">' + esc(tools) + " · " + esc(formatStamp(scan.created_at)) + (scan.finished_at ? " to " + esc(formatStamp(scan.finished_at)) : "") + (scan.project_slug ? " · project " + esc(scan.project_slug) : " · ad-hoc (no project)") + '</div></div><div class="scan-actions"><span class="badge ' + esc(badge) + '">' + esc(label) + "</span>" + invBtn + retryButton(scan) + "</div></div>";
+      const meta = scan.ci_meta && typeof scan.ci_meta === "object" ? scan.ci_meta : null;
+      const ciBits = [];
+      if (scan.commit_sha || scan.requested_sha) ciBits.push("commit " + String(scan.commit_sha || scan.requested_sha).slice(0, 12));
+      if (meta && meta.ref) ciBits.push("ref " + meta.ref);
+      if (meta && meta.pipeline_url) ciBits.push('<a href="' + esc(meta.pipeline_url) + '" target="_blank" rel="noopener">pipeline</a>');
+      else if (meta && meta.pipeline_id) ciBits.push("pipeline " + esc(String(meta.pipeline_id)));
+      const ciMetaLine = ciBits.length ? '<div class="meta">' + ciBits.join(" · ") + "</div>" : "";
+      document.querySelector("#scan-head").innerHTML = '<div class="scan-head"><div><h1>' + esc(scanTitle(scan)) + '</h1><div class="repo">' + esc(subtitle) + '</div><div class="meta">' + esc(tools) + " · " + esc(formatStamp(scan.created_at)) + (scan.finished_at ? " to " + esc(formatStamp(scan.finished_at)) : "") + (scan.project_slug ? " · project " + esc(scan.project_slug) : " · ad-hoc (no project)") + '</div>' + ciMetaLine + '</div><div class="scan-actions"><span class="badge ' + esc(badge) + '">' + esc(label) + "</span>" + invBtn + retryButton(scan) + "</div></div>";
       const error = document.querySelector("#scan-error");
       const problem = failed ? String(scan.error || "").trim() : scanErrorText(scan);
       error.innerHTML = toolStatusHtml(scan) + (problem ? '<div class="note">' + esc(problem) + "</div>" : "");
@@ -6367,7 +6374,11 @@
         const actions = project.can_edit
           ? ' <button type="button" class="ghost" data-action="project-edit" data-slug="' + esc(project.slug) + '">Edit</button> <button type="button" class="ghost" data-action="project-delete" data-slug="' + esc(project.slug) + '">Delete</button>'
           : "";
-        return "<tr><td><b>" + esc(project.name) + '</b><div class="meta">' + esc(project.slug) + "</div></td><td>" + esc(targets || "—") + "</td><td>" + groupsCell + "</td><td>" + actions + "</td></tr>";
+        const gl = project.gitlab && typeof project.gitlab === "object" ? project.gitlab : null;
+        const glBadge = gl
+          ? '<div class="meta">GitLab #' + esc(String(gl.project_id)) + (gl.path ? (" · " + esc(gl.path)) : "") + "</div>"
+          : "";
+        return "<tr><td><b>" + esc(project.name) + '</b><div class="meta">' + esc(project.slug) + "</div>" + glBadge + "</td><td>" + esc(targets || "—") + "</td><td>" + groupsCell + "</td><td>" + actions + "</td></tr>";
       }).join("");
       list.innerHTML = '<div class="dash-panel"><table class="dash-table"><thead><tr><th>Project</th><th>Targets</th><th>Groups</th><th></th></tr></thead><tbody>' + body + "</tbody></table></div>";
     }

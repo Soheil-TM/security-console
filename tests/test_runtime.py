@@ -340,6 +340,76 @@ def test_a_tool_timeout_keeps_earlier_findings(
     ]
 
 
+def test_checkov_run_records_coverage_for_no_targets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from security_console.runner import _run_recorded
+
+    findings: list[dict[str, object]] = []
+    notes: list[str] = []
+    failures: list[str] = []
+    tool_results: list[dict[str, object]] = []
+    payload = (
+        '{"passed":0,"failed":0,"skipped":0,"parsing_errors":0,'
+        '"resource_count":0,"checkov_version":"3.3.26"}'
+    )
+
+    def fake_run(*_args: object, **_kwargs: object) -> tuple[int, str, str]:
+        return 0, payload, ""
+
+    monkeypatch.setattr("security_console.runner._run", fake_run)
+    _run_recorded(
+        object(),
+        {"image": "bridgecrew/checkov:3.3.26"},
+        1200,
+        findings,
+        notes,
+        failures,
+        tool_results,
+        {"id": "abc123def456"},
+        "Checkov",
+        lambda _raw: [],
+    )
+
+    assert findings == []
+    assert failures == []
+    assert tool_results[0]["status"] == "ok"
+    assert tool_results[0]["coverage"] == "no_targets"
+    assert tool_results[0]["summary"]["resource_count"] == 0
+
+
+def test_checkov_run_marks_bad_json_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from security_console.runner import _run_recorded
+
+    findings: list[dict[str, object]] = []
+    notes: list[str] = []
+    failures: list[str] = []
+    tool_results: list[dict[str, object]] = []
+
+    def fake_run(*_args: object, **_kwargs: object) -> tuple[int, str, str]:
+        return 0, "<<<not json>>>", ""
+
+    monkeypatch.setattr("security_console.runner._run", fake_run)
+    _run_recorded(
+        object(),
+        {"image": "bridgecrew/checkov:3.3.26"},
+        1200,
+        findings,
+        notes,
+        failures,
+        tool_results,
+        {"id": "abc123def456"},
+        "Checkov",
+        lambda _raw: [],
+    )
+
+    assert tool_results[0]["status"] == "failed"
+    assert "coverage" not in tool_results[0]
+    assert failures
+
+
 def test_wait_timeout_becomes_a_clear_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -840,8 +840,19 @@ def _run_recorded(
                 list(tool_results),
             )
         return
-    _record(findings, notes, name, parser, code, stdout, stderr)
-    tool_results.append({"tool": key, "status": "ok", "error": ""})
+    if key == "checkov":
+        _record_checkov(
+            findings,
+            notes,
+            failures,
+            tool_results,
+            code,
+            stdout,
+            stderr,
+        )
+    else:
+        _record(findings, notes, name, parser, code, stdout, stderr)
+        tool_results.append({"tool": key, "status": "ok", "error": ""})
     if progress is not None:
         progress(
             list(findings),
@@ -849,6 +860,60 @@ def _run_recorded(
             list(failures),
             list(tool_results),
         )
+
+
+def _record_checkov(
+    findings: list[dict[str, Any]],
+    notes: list[str],
+    failures: list[str],
+    tool_results: list[dict[str, Any]],
+    code: int,
+    stdout: str,
+    stderr: str,
+) -> None:
+    """Record Checkov findings plus coverage metadata; fail on unusable output."""
+
+    try:
+        items, summary, coverage = analyze_checkov(stdout)
+    except json.JSONDecodeError:
+        detail = "Checkov output was not usable JSON"
+        notes.append(detail + ":\n" + (stdout or stderr)[-1500:])
+        failures.append("Checkov: " + detail)
+        tool_results.append(
+            {"tool": "checkov", "status": "failed", "error": detail[:500]}
+        )
+        return
+    findings.extend(items)
+    if code not in (0, 1):
+        detail = (stderr or "Checkov exited with an error").strip()[-500:]
+        notes.append(stderr[-1500:] if stderr else detail)
+        failures.append("Checkov: " + detail)
+        tool_results.append(
+            {"tool": "checkov", "status": "failed", "error": detail[:500]}
+        )
+        return
+    parsing_errors = int(summary.get("parsing_errors") or 0)
+    if (
+        parsing_errors > 0
+        and not items
+        and coverage == "no_targets"
+    ):
+        detail = "Checkov reported parsing errors without evaluated checks"
+        notes.append(detail)
+        failures.append("Checkov: " + detail)
+        tool_results.append(
+            {"tool": "checkov", "status": "failed", "error": detail[:500]}
+        )
+        return
+    tool_results.append(
+        {
+            "tool": "checkov",
+            "status": "ok",
+            "error": "",
+            "coverage": coverage,
+            "summary": summary,
+        }
+    )
 
 
 def _tool_label(spec: dict[str, Any]) -> str:
@@ -1214,30 +1279,208 @@ def _parse_semgrep(raw: str) -> list[dict[str, Any]]:
 
 
 def _parse_checkov(raw: str) -> list[dict[str, Any]]:
+    """Return Checkov findings only (tests and legacy callers)."""
+
+    findings, _summary, _coverage = analyze_checkov(raw)
+    return findings
+
+
+def analyze_checkov(
+    raw: str,
+) -> tuple[list[dict[str, Any]], dict[str, Any], str]:
+    """Parse Checkov JSON into findings, summary counters, and coverage.
+
+    Coverage values: ``with_findings``, ``no_findings``, ``no_targets``.
+
+    ``no_findings`` requires evidence that checks were evaluated (passed /
+    failed / skipped counters or non-empty check lists). ``resource_count``
+    alone is not enough. Raises ``json.JSONDecodeError`` when stdout has no
+    usable Checkov JSON structure.
+    """
+
     data = _parse_json_blob(raw)
-    if isinstance(data, list):
-        data = data[0] if data else {}
-    if not isinstance(data, dict):
-        return []
-    findings = []
-    failed = (data.get("results") or {}).get("failed_checks") or []
-    for item in failed:
-        if not isinstance(item, dict):
-            continue
-        line_range = item.get("file_line_range") or [None]
-        findings.append(
-            {
+    _checkov_require_shape(data)
+    reports = _checkov_reports(data)
+    findings: list[dict[str, Any]] = []
+    seen: set[tuple[Any, ...]] = set()
+    passed = 0
+    failed = 0
+    skipped = 0
+    parsing_errors = 0
+    resource_count = 0
+    frameworks: list[str] = []
+    version = ""
+
+    for report in reports:
+        check_type = str(report.get("check_type") or "").strip()
+        if check_type and check_type not in frameworks:
+            frameworks.append(check_type)
+        if not version:
+            version = str(report.get("checkov_version") or "").strip()
+
+        summary = report.get("summary")
+        if isinstance(summary, dict):
+            p, f, s, pe, rc, used = _checkov_counter_fields(summary)
+        else:
+            p, f, s, pe, rc, used = _checkov_counter_fields(report)
+        if used:
+            passed += p
+            failed += f
+            skipped += s
+            parsing_errors += pe
+            resource_count += rc
+
+        results = report.get("results")
+        failed_checks: list[Any] = []
+        if isinstance(results, dict):
+            failed_checks = list(results.get("failed_checks") or [])
+            if not used:
+                # Count from check lists when summary counters are absent.
+                passed += len(results.get("passed_checks") or [])
+                failed += len(failed_checks)
+                skipped += len(results.get("skipped_checks") or [])
+
+        for item in failed_checks:
+            if not isinstance(item, dict):
+                continue
+            line_range = item.get("file_line_range") or [None]
+            line = (
+                line_range[0]
+                if isinstance(line_range, list) and line_range
+                else None
+            )
+            check_id = str(item.get("check_id") or "")
+            path = str(item.get("file_path") or "")
+            item_type = str(
+                item.get("check_type") or check_type or ""
+            ).strip()
+            dedup = (check_id, path, line, item_type)
+            if dedup in seen:
+                continue
+            seen.add(dedup)
+            finding: dict[str, Any] = {
                 "tool": "checkov",
                 "severity": item.get("severity") or "UNKNOWN",
-                "check": item.get("check_id") or "",
-                "path": item.get("file_path") or "",
-                "line": line_range[0]
-                if isinstance(line_range, list) and line_range
-                else None,
+                "check": check_id,
+                "path": path,
+                "line": line,
                 "message": item.get("check_name") or "",
             }
-        )
-    return findings
+            if item_type:
+                finding["check_type"] = item_type
+                finding["framework"] = item_type
+            findings.append(finding)
+
+    # Flat zero-resource payload is a single dict without reports/results.
+    if not reports and isinstance(data, dict):
+        if not version:
+            version = str(data.get("checkov_version") or "").strip()
+        p, f, s, pe, rc, used = _checkov_counter_fields(data)
+        if used:
+            passed, failed, skipped, parsing_errors, resource_count = (
+                p,
+                f,
+                s,
+                pe,
+                rc,
+            )
+
+    summary_out: dict[str, Any] = {
+        "passed": passed,
+        "failed": failed,
+        "skipped": skipped,
+        "parsing_errors": parsing_errors,
+        "resource_count": resource_count,
+        "frameworks": list(frameworks),
+    }
+    if version:
+        summary_out["checkov_version"] = version
+
+    if findings:
+        coverage = "with_findings"
+    elif _checkov_had_evaluation(
+        passed=passed,
+        failed=failed,
+        skipped=skipped,
+        reports=reports,
+    ):
+        coverage = "no_findings"
+    else:
+        coverage = "no_targets"
+
+    return findings, summary_out, coverage
+
+
+def _checkov_require_shape(data: Any) -> None:
+    """Reject JSON that is syntactically valid but not a Checkov report."""
+
+    if isinstance(data, dict):
+        return
+    if isinstance(data, list):
+        if all(isinstance(item, dict) for item in data):
+            return
+        raise json.JSONDecodeError("checkov list must contain objects", "", 0)
+    raise json.JSONDecodeError("checkov root must be object or array", "", 0)
+
+
+def _checkov_reports(data: Any) -> list[dict[str, Any]]:
+    if isinstance(data, list):
+        return [item for item in data if isinstance(item, dict)]
+    if not isinstance(data, dict):
+        return []
+    # Framework report: has results or check_type.
+    if isinstance(data.get("results"), dict) or data.get("check_type"):
+        return [data]
+    return []
+
+
+def _checkov_counter_fields(
+    data: dict[str, Any],
+) -> tuple[int, int, int, int, int, bool]:
+    """Return passed, failed, skipped, parsing_errors, resource_count, used."""
+
+    keys = ("passed", "failed", "skipped", "parsing_errors", "resource_count")
+    if not any(key in data for key in keys):
+        return 0, 0, 0, 0, 0, False
+
+    def _num(name: str) -> int:
+        value = data.get(name)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return 0
+        return int(value)
+
+    return (
+        _num("passed"),
+        _num("failed"),
+        _num("skipped"),
+        _num("parsing_errors"),
+        _num("resource_count"),
+        True,
+    )
+
+
+def _checkov_had_evaluation(
+    *,
+    passed: int,
+    failed: int,
+    skipped: int,
+    reports: list[dict[str, Any]],
+) -> bool:
+    """True when Checkov actually ran policy checks (not resource discovery alone)."""
+
+    if passed > 0 or failed > 0 or skipped > 0:
+        return True
+    for report in reports:
+        results = report.get("results")
+        if not isinstance(results, dict):
+            continue
+        if (
+            results.get("passed_checks")
+            or results.get("failed_checks")
+            or results.get("skipped_checks")
+        ):
+            return True
+    return False
 
 
 def _parse_trivy(raw: str) -> list[dict[str, Any]]:

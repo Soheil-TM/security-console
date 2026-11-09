@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-_LABELS = {
+_LABELS: dict[str, str] = {
     "semgrep": "Semgrep",
     "checkov": "Checkov",
     "trivy": "Trivy",
@@ -18,12 +18,12 @@ def normalize_tool_results(
     error: str = "",
     findings: object = None,
     status: str = "",
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     """Return one row per requested tool. Derive from error/findings when missing."""
 
     active = str(status or "").strip().lower() in {"running", "queued"}
     failed_scan = str(status or "").strip().lower() == "failed"
-    by_tool: dict[str, dict[str, str]] = {}
+    by_tool: dict[str, dict[str, Any]] = {}
     if isinstance(raw, list):
         for item in raw:
             if not isinstance(item, dict):
@@ -34,12 +34,19 @@ def normalize_tool_results(
             row_status = str(item.get("status") or "").strip().lower()
             if row_status not in {"ok", "failed"}:
                 row_status = "failed" if item.get("error") else "ok"
-            by_tool[tool] = {
+            row: dict[str, Any] = {
                 "tool": tool,
                 "status": row_status,
                 "error": str(item.get("error") or "")[:500],
                 "label": _LABELS.get(tool, tool),
             }
+            coverage = str(item.get("coverage") or "").strip().lower()
+            if coverage in {"with_findings", "no_findings", "no_targets"}:
+                row["coverage"] = coverage
+            summary = item.get("summary")
+            if isinstance(summary, dict):
+                row["summary"] = summary
+            by_tool[tool] = row
     # In-flight scans only expose tools the worker has already recorded.
     if active:
         ordered = [
@@ -65,7 +72,7 @@ def normalize_tool_results(
         if key in by_tool:
             last_recorded = index
     detail = str(error or "").strip()[:500]
-    rows: list[dict[str, str]] = []
+    rows: list[dict[str, Any]] = []
     for index, key in enumerate(ordered):
         if key in by_tool:
             rows.append(by_tool[key])

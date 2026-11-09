@@ -396,10 +396,16 @@ def load_settings() -> DbSettings:
 
 
 def connect() -> psycopg.Connection[dict[str, Any]]:
-    """Open one application connection. Caller closes it."""
+    """Open one application connection. Caller closes it.
+
+    When ``CONSOLE_ALLOW_TEST_DB_WIPE=1`` (pytest), refuse the live
+    ``security_console_db`` name so a missing env var cannot fall back to
+    production data. Unreachable disposable DBs fail closed (no live retry).
+    """
 
     settings = load_settings()
     if settings.database_url:
+        _reject_live_db_when_testing(settings.database_url, via_url=True)
         return psycopg.connect(
             settings.database_url,
             connect_timeout=5,
@@ -407,6 +413,7 @@ def connect() -> psycopg.Connection[dict[str, Any]]:
         )
     if not settings.app_password:
         raise RuntimeError("console database password is not configured")
+    _reject_live_db_when_testing(settings.app_name, via_url=False)
     return psycopg.connect(
         host=settings.app_host,
         port=5432,
@@ -737,6 +744,29 @@ MIGRATIONS = (
     ALTER TABLE scans
         ADD COLUMN IF NOT EXISTS ci_meta jsonb
         NOT NULL DEFAULT '{}'::jsonb
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS ci_api_tokens (
+        id bigserial PRIMARY KEY,
+        name text NOT NULL,
+        prefix text NOT NULL,
+        token_hash text NOT NULL,
+        created_by bigint REFERENCES users (id) ON DELETE SET NULL,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        expires_at timestamptz,
+        last_used_at timestamptz,
+        revoked_at timestamptz,
+        gitlab_path_prefix text NOT NULL DEFAULT ''
+    )
+    """,
+    """
+    CREATE UNIQUE INDEX IF NOT EXISTS ci_api_tokens_prefix_uidx
+        ON ci_api_tokens (prefix)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS ci_api_tokens_active_idx
+        ON ci_api_tokens (id)
+        WHERE revoked_at IS NULL
     """,
 )
 
@@ -2204,6 +2234,181 @@ def count_integrations() -> int:
     return int(row["n"])
 
 
+def _ci_api_token_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": int(row["id"]),
+        "name": str(row["name"]),
+        "prefix": str(row["prefix"]),
+        "token_hash": str(row["token_hash"]),
+        "created_by": row.get("created_by"),
+        "created_at": _stamp(row.get("created_at")),
+        "expires_at": row.get("expires_at"),
+        "last_used_at": row.get("last_used_at"),
+        "revoked_at": row.get("revoked_at"),
+        "gitlab_path_prefix": str(row.get("gitlab_path_prefix") or ""),
+    }
+
+
+def insert_ci_api_token(
+    *,
+    name: str,
+    prefix: str,
+    token_hash: str,
+    created_by: int | None,
+    expires_at: datetime | None,
+    gitlab_path_prefix: str = "",
+) -> dict[str, Any]:
+    """Insert one CI API token row (hash only) and return it."""
+
+    with connect() as conn:
+        row = conn.execute(
+            """
+            INSERT INTO ci_api_tokens (
+                name, prefix, token_hash, created_by, expires_at,
+                gitlab_path_prefix
+            )
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id, name, prefix, token_hash, created_by, created_at,
+                      expires_at, last_used_at, revoked_at, gitlab_path_prefix
+            """,
+            (
+                name,
+                prefix,
+                token_hash,
+                created_by,
+                expires_at,
+                gitlab_path_prefix,
+            ),
+        ).fetchone()
+        conn.commit()
+    if row is None:
+        raise RuntimeError("ci api token insert did not return a row")
+    return _ci_api_token_from_row(dict(row))
+
+
+def list_ci_api_tokens() -> list[dict[str, Any]]:
+    """Return all CI API tokens newest first (includes hash for server use)."""
+
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, name, prefix, token_hash, created_by, created_at,
+                   expires_at, last_used_at, revoked_at, gitlab_path_prefix
+            FROM ci_api_tokens
+            ORDER BY id DESC
+            """
+        ).fetchall()
+        conn.commit()
+    return [_ci_api_token_from_row(dict(row)) for row in rows]
+
+
+def get_ci_api_token_by_prefix(prefix: str) -> dict[str, Any] | None:
+    """Return one token by display/lookup prefix, or None."""
+
+    with connect() as conn:
+        row = conn.execute(
+            """
+            SELECT id, name, prefix, token_hash, created_by, created_at,
+                   expires_at, last_used_at, revoked_at, gitlab_path_prefix
+            FROM ci_api_tokens
+            WHERE prefix = %s
+            """,
+            (prefix,),
+        ).fetchone()
+        conn.commit()
+    return _ci_api_token_from_row(dict(row)) if row else None
+
+
+def revoke_ci_api_token(token_id: int) -> dict[str, Any] | None:
+    """Set revoked_at if not already set; return the row or None."""
+
+    with connect() as conn:
+        conn.execute(
+            """
+            UPDATE ci_api_tokens
+            SET revoked_at = COALESCE(revoked_at, now())
+            WHERE id = %s
+            """,
+            (token_id,),
+        )
+        row = conn.execute(
+            """
+            SELECT id, name, prefix, token_hash, created_by, created_at,
+                   expires_at, last_used_at, revoked_at, gitlab_path_prefix
+            FROM ci_api_tokens
+            WHERE id = %s
+            """,
+            (token_id,),
+        ).fetchone()
+        conn.commit()
+    return _ci_api_token_from_row(dict(row)) if row else None
+
+
+def delete_ci_api_token(token_id: int) -> dict[str, Any] | None:
+    """Delete a revoked token row; return the deleted public fields or None.
+
+    Active tokens are refused (caller should revoke first). Missing id → None.
+    """
+
+    with connect() as conn:
+        row = conn.execute(
+            """
+            SELECT id, name, prefix, token_hash, created_by, created_at,
+                   expires_at, last_used_at, revoked_at, gitlab_path_prefix
+            FROM ci_api_tokens
+            WHERE id = %s
+            """,
+            (token_id,),
+        ).fetchone()
+        if row is None:
+            conn.commit()
+            return None
+        parsed = _ci_api_token_from_row(dict(row))
+        if not parsed.get("revoked_at"):
+            conn.commit()
+            raise ValueError("revoke the token before deleting it")
+        conn.execute("DELETE FROM ci_api_tokens WHERE id = %s", (token_id,))
+        conn.commit()
+    return parsed
+
+
+def touch_ci_api_token_last_used(token_id: int) -> None:
+    """Update last_used_at at most about once per minute."""
+
+    with connect() as conn:
+        conn.execute(
+            """
+            UPDATE ci_api_tokens
+            SET last_used_at = now()
+            WHERE id = %s
+              AND (
+                last_used_at IS NULL
+                OR last_used_at < now() - interval '1 minute'
+              )
+            """,
+            (token_id,),
+        )
+        conn.commit()
+
+
+def count_usable_ci_api_tokens() -> int:
+    """Count non-revoked tokens that are not past expires_at."""
+
+    with connect() as conn:
+        row = conn.execute(
+            """
+            SELECT count(*) AS n
+            FROM ci_api_tokens
+            WHERE revoked_at IS NULL
+              AND (expires_at IS NULL OR expires_at > now())
+            """
+        ).fetchone()
+        conn.commit()
+    if row is None:
+        return 0
+    return int(row["n"])
+
+
 def insert_integration(
     kind: str,
     name: str,
@@ -3276,15 +3481,60 @@ def user_in_project_groups(user_id: int, project_key: str) -> bool:
     return row is not None
 
 
-def _require_test_db_wipe() -> None:
-    """Refuse destructive test wipes unless explicitly opted in."""
+# Operational console database name — never accept destructive test wipes here.
+_LIVE_DB_NAMES = frozenset({"security_console_db"})
 
-    if os.environ.get("CONSOLE_ALLOW_TEST_DB_WIPE", "").strip() == "1":
+
+def connected_database_name() -> str:
+    """Return the Postgres database name for the current connection settings."""
+
+    settings = load_settings()
+    if settings.database_url:
+        from urllib.parse import urlparse
+
+        path = urlparse(settings.database_url).path.lstrip("/")
+        return path.split("?")[0].strip()
+    return str(settings.app_name or "").strip()
+
+
+def _reject_live_db_when_testing(target: str, *, via_url: bool) -> None:
+    """Fail closed: test mode must never open the live console database."""
+
+    if os.environ.get("CONSOLE_ALLOW_TEST_DB_WIPE", "").strip() != "1":
         return
-    raise RuntimeError(
-        "refusing destructive database wipe; set CONSOLE_ALLOW_TEST_DB_WIPE=1 "
-        "only against a disposable test database"
-    )
+    name = target
+    if via_url:
+        from urllib.parse import urlparse
+
+        name = urlparse(target).path.lstrip("/").split("?")[0].strip()
+    else:
+        name = str(target or "").strip()
+    if not name or name in _LIVE_DB_NAMES:
+        raise RuntimeError(
+            "test mode refuses the live database "
+            f"{name or '(unset/default)'!r}; set CONSOLE_DB_NAME="
+            "security_console_test (or a disposable DATABASE_URL) explicitly"
+        )
+
+
+def _require_test_db_wipe() -> None:
+    """Refuse destructive test wipes unless opted in against a disposable DB.
+
+    Enforced by every ``reset_*_table`` helper before TRUNCATE.
+    """
+
+    if os.environ.get("CONSOLE_ALLOW_TEST_DB_WIPE", "").strip() != "1":
+        raise RuntimeError(
+            "refusing destructive database wipe; set CONSOLE_ALLOW_TEST_DB_WIPE=1 "
+            "only against a disposable test database"
+        )
+    name = connected_database_name()
+    if not name or name in _LIVE_DB_NAMES:
+        raise RuntimeError(
+            "refusing wipe of live database "
+            f"{name or '(unknown)'!r}; point tests at "
+            "CONSOLE_DB_NAME=security_console_test or a disposable DATABASE_URL"
+        )
 
 
 def reset_auth_tables() -> None:
@@ -3294,7 +3544,7 @@ def reset_auth_tables() -> None:
     with connect() as conn:
         conn.execute(
             "TRUNCATE refresh_tokens, revoked_access, login_attempts, "
-            "task_events, tasks, audit_events, "
+            "task_events, tasks, audit_events, ci_api_tokens, "
             "users, app_flags RESTART IDENTITY CASCADE"
         )
         conn.commit()

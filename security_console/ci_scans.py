@@ -40,10 +40,13 @@ _REPO_TOOLS = ("semgrep", "checkov", "sonar", "trivy")
 _ALLOWED = frozenset(_REPO_TOOLS)
 _CI_RATE_LIMIT = 30
 _CI_RATE_PROJECT_LIMIT = 10
+_CI_RATE_TOKEN_LIMIT = 20
 _CI_RATE_WINDOW = 60.0
+_CI_RATE_KEY_CAP = 1024
 _rate_lock = threading.Lock()
 _rate_hits: deque[float] = deque()
 _rate_project_hits: dict[tuple[str, int], deque[float]] = {}
+_rate_token_hits: dict[str, deque[float]] = {}
 
 _lock: threading.Lock | None = None
 _scans: dict[str, dict[str, Any]] | None = None
@@ -172,17 +175,37 @@ def _prune_hits(hits: deque[float], now: float) -> None:
         hits.popleft()
 
 
-def _ci_rate_limited(project_key: tuple[str, int] | None = None) -> bool:
-    """Return True when global or per-GitLab-project POST budget is exhausted.
+def _prune_rate_maps(now: float) -> None:
+    """Drop empty/stale keyed deques so memory stays bounded."""
 
-    Single console process (``python /app/app.py``): in-memory counters are
-    correct. Multiple workers would each keep a separate window.
+    for store in (_rate_project_hits, _rate_token_hits):
+        dead = [
+            key
+            for key, bucket in store.items()
+            if not bucket or now - bucket[-1] > _CI_RATE_WINDOW
+        ]
+        for key in dead:
+            store.pop(key, None)
+        while len(store) > _CI_RATE_KEY_CAP:
+            store.pop(next(iter(store)))
+
+
+def _ci_rate_limited(project_key: tuple[str, int] | None = None) -> bool:
+    """Return True when global, per-token, or per-project budget is exhausted.
+
+    Order: global → per-token → per-GitLab-project. Single console process.
     """
 
     now = time.monotonic()
+    token_key = str(getattr(g, "ci_token_id", "") or "unknown")
     with _rate_lock:
         _prune_hits(_rate_hits, now)
+        _prune_rate_maps(now)
         if len(_rate_hits) >= _CI_RATE_LIMIT:
+            return True
+        token_bucket = _rate_token_hits.setdefault(token_key, deque())
+        _prune_hits(token_bucket, now)
+        if len(token_bucket) >= _CI_RATE_TOKEN_LIMIT:
             return True
         if project_key is not None:
             bucket = _rate_project_hits.setdefault(project_key, deque())
@@ -190,16 +213,18 @@ def _ci_rate_limited(project_key: tuple[str, int] | None = None) -> bool:
             if len(bucket) >= _CI_RATE_PROJECT_LIMIT:
                 return True
             bucket.append(now)
+        token_bucket.append(now)
         _rate_hits.append(now)
         return False
 
 
 def reset_ci_rate_limit() -> None:
-    """Test helper: clear global and per-project CI POST rate-limit windows."""
+    """Test helper: clear global, per-token, and per-project rate windows."""
 
     with _rate_lock:
         _rate_hits.clear()
         _rate_project_hits.clear()
+        _rate_token_hits.clear()
 
 
 def _rate_project_key_from_body(body: Any) -> tuple[str, int] | None:

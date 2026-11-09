@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import ipaddress
+import logging
 import os
 import secrets
 from collections.abc import Callable
@@ -158,9 +159,10 @@ def install_auth(app: Flask) -> None:
         return _call_db(app, _set_idle_timeout)
 
     from security_console.audit import install_audit
+    from security_console.ci_scans import install_ci_scans
+    from security_console.ci_tokens import install_ci_tokens
     from security_console.groups import install_groups
     from security_console.integrations import install_integrations
-    from security_console.ci_scans import install_ci_scans
     from security_console.investigate import install_investigate
     from security_console.projects import install_projects
     from security_console.risk import install_risk
@@ -174,6 +176,7 @@ def install_auth(app: Flask) -> None:
     install_integrations(app)
     install_schedules(app)
     install_ci_scans(app)
+    install_ci_tokens(app)
     install_risk(app)
     install_investigate(app)
     install_tasks(app)
@@ -287,7 +290,11 @@ def _gate_guard() -> Reply | None:
 
 
 def _is_ci_scan_path() -> bool:
+    """True only for machine CI scan enqueue/poll — not /api/ci/tokens*."""
+
     path = request.path or ""
+    if path.startswith("/api/ci/tokens"):
+        return False
     if request.method == "POST" and path == "/api/ci/scans":
         return True
     if request.method == "GET" and path.startswith("/api/ci/scans/"):
@@ -296,30 +303,73 @@ def _is_ci_scan_path() -> bool:
     return False
 
 
-def _ci_scan_guard() -> Reply | None:
-    """Allow CI scan enqueue/poll with CI_SCAN_TOKEN only (not gate or cookies)."""
+def _ci_file_token_enabled() -> bool:
+    """Return whether the Compose file CI_SCAN_TOKEN may authenticate."""
 
+    return os.environ.get("CI_SCAN_FILE_TOKEN", "1").strip() != "0"
+
+
+def _ci_scan_guard() -> Reply | None:
+    """Allow CI scan enqueue/poll via DB token or optional file fallback.
+
+    Always returns 401 for bad/missing credentials (never 503 for auth).
+    GATE_TOKEN and session cookies are not accepted on these paths.
+    """
+
+    from security_console import ci_api_tokens
     from security_console.secrets import read_secret, same_secret
 
-    expected = read_secret("CI_SCAN_TOKEN", "CI_SCAN_TOKEN_FILE")
-    if not expected:
-        return jsonify({"error": "CI scan token is not configured."}), 503
     header = request.headers.get("Authorization", "")
     presented = (
         header[7:].strip()
         if header.lower().startswith("bearer ")
         else request.headers.get("X-CI-Scan-Token", "").strip()
     )
-    if not presented or not same_secret(presented, expected):
+
+    file_enabled = _ci_file_token_enabled()
+    file_secret = (
+        read_secret("CI_SCAN_TOKEN", "CI_SCAN_TOKEN_FILE") if file_enabled else ""
+    )
+    usable_db = 0
+    try:
+        usable_db = ci_api_tokens.count_usable_tokens()
+    except Exception:  # noqa: BLE001 — auth path must stay fail-closed
+        app_logger = logging.getLogger("security_console")
+        app_logger.exception("ci token db lookup failed")
+        usable_db = 0
+    if usable_db == 0 and not file_secret:
+        logging.getLogger("security_console").warning(
+            "ci scan auth has no usable DB tokens and file fallback is empty/disabled"
+        )
+
+    if not presented:
         return jsonify({"error": "You are not signed in."}), 401
-    # Scoped principal for these routes only: tool visibility + project bypass.
-    g.user = {
-        "id": 0,
-        "username": "ci",
-        "role": "super_admin",
-        "capabilities": {},
-    }
-    return None
+
+    if presented.startswith("csc_"):
+        row = ci_api_tokens.verify_presented_token(presented)
+        if row is None:
+            return jsonify({"error": "You are not signed in."}), 401
+        g.user = {
+            "id": 0,
+            "username": "ci",
+            "role": "super_admin",
+            "capabilities": {},
+        }
+        g.ci_token_id = int(row["id"])
+        ci_api_tokens.touch_last_used(int(row["id"]))
+        return None
+
+    if file_secret and same_secret(presented, file_secret):
+        g.user = {
+            "id": 0,
+            "username": "ci",
+            "role": "super_admin",
+            "capabilities": {},
+        }
+        g.ci_token_id = "file"
+        return None
+
+    return jsonify({"error": "You are not signed in."}), 401
 
 
 def _login(app: Flask) -> Reply:

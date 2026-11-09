@@ -144,6 +144,29 @@ def test_policy_tool_failed_and_scan_failed() -> None:
     assert tool["passed"] is False
     assert "tool_failed:checkov" in tool["reasons"]
 
+
+def test_policy_checkov_no_targets_does_not_fail_tool() -> None:
+    result = evaluate_ci_policy(
+        {
+            "status": "done",
+            "tools": ["checkov", "semgrep"],
+            "tool_results": [
+                {
+                    "tool": "checkov",
+                    "status": "ok",
+                    "coverage": "no_targets",
+                    "summary": {"resource_count": 0, "passed": 0, "failed": 0},
+                },
+                {"tool": "semgrep", "status": "ok"},
+            ],
+            "findings": [],
+            "sonar": {"quality_gate": "OK"},
+        }
+    )
+    assert result["pending"] is False
+    assert result["passed"] is True
+    assert "tool_failed:checkov" not in result["reasons"]
+
     failed = evaluate_ci_policy(
         {
             "status": "failed",

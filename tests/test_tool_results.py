@@ -103,3 +103,35 @@ def test_normalize_marks_unfinished_tools_failed_after_restart() -> None:
         ("sonar", "failed"),
     ]
     assert "restarted" in rows[2]["error"]
+
+
+def test_normalize_keeps_checkov_coverage_and_summary() -> None:
+    rows = normalize_tool_results(
+        ["checkov", "semgrep"],
+        [
+            {
+                "tool": "checkov",
+                "status": "ok",
+                "coverage": "no_findings",
+                "summary": {
+                    "passed": 4,
+                    "failed": 0,
+                    "skipped": 0,
+                    "resource_count": 2,
+                    "frameworks": ["terraform"],
+                },
+            },
+            {"tool": "semgrep", "status": "ok"},
+        ],
+    )
+    assert rows[0]["coverage"] == "no_findings"
+    assert rows[0]["summary"]["frameworks"] == ["terraform"]
+    assert "coverage" not in rows[1]
+
+
+def test_normalize_ignores_unknown_checkov_coverage() -> None:
+    rows = normalize_tool_results(
+        ["checkov"],
+        [{"tool": "checkov", "status": "ok", "coverage": "weird"}],
+    )
+    assert "coverage" not in rows[0]

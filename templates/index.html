@@ -888,7 +888,8 @@
     }
     .pw-row { position: relative; display: block; }
     .pw-row input { width: 100%; padding-right: 44px; }
-    input[type="password"] { -webkit-text-security: disc; }
+    /* Scope to pw-row only — a global password rule fights browser autofill. */
+    .pw-row input[type="password"] { -webkit-text-security: disc; }
     .pw-row input::-ms-reveal,
     .pw-row input::-ms-clear {
       display: none;
@@ -1240,7 +1241,7 @@
     .scanner:has(input:focus-visible) { outline: 2px solid var(--teal); outline-offset: 2px; }
     .scanner b { display: block; font-size: 14px; }
     .scanner small { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; line-height: 1.45; }
-    #go, #user-new, #user-save, #connection-save, #project-save, #group-save, #pw-save, #idle-stay, .ghost {
+    #go, #user-new, #ci-token-new, #user-save, #connection-save, #project-save, #group-save, #pw-save, #idle-stay, .ghost {
       height: 42px;
       border-radius: 8px;
       padding: 0 16px;
@@ -1250,12 +1251,12 @@
       justify-content: center;
       white-space: nowrap;
     }
-    #go, #user-new, #user-save, #connection-save, #project-save, #group-save, #pw-save, #idle-stay {
+    #go, #user-new, #ci-token-new, #user-save, #connection-save, #project-save, #group-save, #pw-save, #idle-stay {
       background: var(--teal);
       color: #fff;
       border: 0;
     }
-    #go:hover, #user-new:hover, #user-save:hover, #connection-save:hover, #project-save:hover, #group-save:hover, #pw-save:hover, #idle-stay:hover {
+    #go:hover, #user-new:hover, #ci-token-new:hover, #user-save:hover, #connection-save:hover, #project-save:hover, #group-save:hover, #pw-save:hover, #idle-stay:hover {
       background: var(--teal-2);
       color: #fff;
     }
@@ -1267,6 +1268,7 @@
     #user-save:disabled, #project-save:disabled, #pw-save:disabled { cursor: not-allowed; }
     html.dark #go,
     html.dark #user-new,
+    html.dark #ci-token-new,
     html.dark #user-save,
     html.dark #connection-save,
     html.dark #project-save,
@@ -1278,6 +1280,7 @@
     }
     html.dark #go:hover,
     html.dark #user-new:hover,
+    html.dark #ci-token-new:hover,
     html.dark #user-save:hover,
     html.dark #connection-save:hover,
     html.dark #project-save:hover,
@@ -1437,7 +1440,7 @@
     html.dark .dash-chip.ok { background: #12382c; color: #86efac; }
     html.dark .dash-chip.bad { background: #3f1d28; color: #fda4af; }
     html.dark .dash-table tr[data-action]:hover td { background: #22364a; }
-    .schedule-row {
+    .schedule-row, .ci-token-row {
       background: #f4f8fb;
       border: 1px solid var(--line);
       border-radius: 10px;
@@ -1445,13 +1448,47 @@
       margin-bottom: 8px;
       color: var(--ink);
     }
-    html.dark .schedule-row {
+    html.dark .schedule-row,
+    html.dark .ci-token-row {
       background: #1b2c3d;
       border-color: #31475f;
       color: var(--ink);
     }
-    .schedule-row .meta { color: var(--muted); }
-    html.dark .schedule-row .meta { color: #9db0c3; }
+    .schedule-row .meta, .ci-token-row .meta { color: var(--muted); }
+    html.dark .schedule-row .meta,
+    html.dark .ci-token-row .meta { color: #9db0c3; }
+    .ci-token-status {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 650;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #dbeafe;
+      color: #1e3a8a;
+    }
+    .ci-token-status.active { background: #d1fae5; color: #065f46; }
+    .ci-token-status.expired { background: #fef3c7; color: #92400e; }
+    .ci-token-status.revoked { background: #fee2e2; color: #991b1b; }
+    html.dark .ci-token-status { background: #243648; color: #d5e4f0; }
+    html.dark .ci-token-status.active { background: #12382c; color: #86efac; }
+    html.dark .ci-token-status.expired { background: #3a2c14; color: #fcd34d; }
+    html.dark .ci-token-status.revoked { background: #3f1d28; color: #fda4af; }
+    .ci-token-once {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+      word-break: break-all;
+      background: #eef4f8;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      color: var(--ink);
+      margin: 8px 0;
+    }
+    html.dark .ci-token-once {
+      background: #152232;
+      border-color: #31475f;
+      color: #e8eef5;
+    }
     .exec-panel {
       background: var(--card);
       border: 1px solid var(--line);
@@ -2165,12 +2202,12 @@
       <div id="login-error" class="login-error" hidden></div>
       <label>
         <span class="field-label">Username</span>
-        <input id="username" name="username" autocomplete="username" required maxlength="64" dir="ltr">
+        <input id="username" name="username" autocomplete="username" required maxlength="64" dir="ltr" readonly>
       </label>
       <label>
         <span class="field-label">Password</span>
         <span class="pw-row">
-          <input id="password" name="password" type="password" autocomplete="current-password" required maxlength="128" dir="ltr">
+          <input id="password" name="password" type="password" autocomplete="current-password" required maxlength="128" dir="ltr" readonly>
           <button type="button" class="pw-toggle" id="toggle-password" data-target="password" aria-label="Toggle password visibility" aria-pressed="false">
             <svg class="eye-open" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
@@ -2267,6 +2304,7 @@
           <button type="button" class="mode" data-action="view" data-view="projects" id="nav-projects">Projects</button>
           <button type="button" class="mode" data-action="view" data-view="groups" id="nav-groups">Groups</button>
           <button type="button" class="mode" data-action="view" data-view="connections" id="nav-connections" hidden>Connections</button>
+          <button type="button" class="mode" data-action="view" data-view="ci-tokens" id="nav-ci-tokens" hidden>CI API tokens</button>
           <button type="button" class="mode" data-action="view" data-view="schedules" id="nav-schedules" hidden>Schedules</button>
           <button type="button" class="mode" data-action="view" data-view="sonar-setup" id="nav-sonar-setup" hidden>Sonar setup</button>
         </div>
@@ -2521,6 +2559,18 @@
             </div>
           </form>
         </section>
+        <section id="view-ci-tokens" hidden>
+          <div class="page-head">
+            <div>
+              <h1>CI API tokens</h1>
+              <p class="meta">Issue tokens for GitLab CI (and other runners). The full secret is shown once at create time; the console stores only a hash.</p>
+            </div>
+            <button type="button" id="ci-token-new">New token</button>
+          </div>
+          <div id="ci-token-error" class="login-error" hidden></div>
+          <p class="meta" id="ci-token-msg"></p>
+          <div id="ci-token-list"></div>
+        </section>
         <section id="view-schedules" hidden>
           <div class="page-head">
             <div>
@@ -2674,6 +2724,30 @@
       </form>
     </div>
   </div>
+  <div class="idle-warn" id="ci-token-dialog" hidden>
+    <div class="idle-card password-card" role="dialog" aria-modal="true" aria-labelledby="ci-token-dialog-title">
+      <h2 id="ci-token-dialog-title">New CI API token</h2>
+      <form id="ci-token-form" class="account-grid">
+        <div id="ci-token-form-error" class="login-error" hidden></div>
+        <label><span class="field-label">Name</span><input id="ci-token-name" required maxlength="80" autocomplete="off"></label>
+        <label id="ci-token-expires-wrap"><span class="field-label">Expires</span><input id="ci-token-expires" type="date"></label>
+        <label class="check"><input id="ci-token-never" type="checkbox"> Never expire</label>
+        <div class="idle-actions">
+          <button type="button" class="ghost" id="ci-token-cancel">Cancel</button>
+          <button type="submit" id="ci-token-save">Create</button>
+        </div>
+      </form>
+      <div id="ci-token-reveal" hidden>
+        <p class="meta"><strong>Copy this token now.</strong> It will not be shown again.</p>
+        <div class="ci-token-once" id="ci-token-once" dir="ltr"></div>
+        <div class="idle-actions">
+          <button type="button" class="ghost" id="ci-token-copy">Copy</button>
+          <button type="button" id="ci-token-done">Done</button>
+        </div>
+        <p class="meta" id="ci-token-copy-msg"></p>
+      </div>
+    </div>
+  </div>
   <div class="idle-warn" id="idle-warn" hidden>
     <div class="idle-card" role="alertdialog" aria-modal="true" aria-labelledby="idle-title">
       <h2 id="idle-title">Session ending</h2>
@@ -2710,12 +2784,6 @@
       const pad = (n) => String(n).padStart(2, "0");
       const local = d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate())
         + " " + pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
-      // #region agent log
-      if (!window.__stampLogged) {
-        window.__stampLogged = true;
-        fetch('http://127.0.0.1:7667/ingest/85be6dba-ebad-458a-a516-e76dc6ca519e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4a0a8b'},body:JSON.stringify({sessionId:'4a0a8b',runId:'tz-fix',hypothesisId:'TZ',location:'index.html:formatStamp',message:'utc to local',data:{raw:raw,local:local,tzOffsetMin:d.getTimezoneOffset()},timestamp:Date.now()})}).catch(()=>{});
-      }
-      // #endregion
       return local;
     }
 
@@ -2846,13 +2914,14 @@
     const reportsOpen = new Set();
     let scansMenuOpen = true;
     let settingsMenuOpen = false;
-    const SETTINGS_VIEWS = ["users", "access", "projects", "groups", "connections", "schedules", "sonar-setup"];
+    const SETTINGS_VIEWS = ["users", "access", "projects", "groups", "connections", "ci-tokens", "schedules", "sonar-setup"];
+    let ciTokens = [];
+    let revealedCiToken = "";
     let schedules = [];
     function csrfToken() {
       const match = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/);
       return match ? decodeURIComponent(match[1]) : "";
     }
-
 
     function hasCap(user, name) {
       if (!user) return false;
@@ -2910,13 +2979,49 @@
       loadGuestScans();
     }
 
+    function competingPasswordInputs() {
+      return Array.from(document.querySelectorAll('input[type="password"]')).filter(
+        (el) => el.id !== "password" && el.id !== "username"
+      );
+    }
+
+    function setLoginCompetingDisabled(disabled) {
+      competingPasswordInputs().forEach((el) => {
+        if (disabled) {
+          if (!el.dataset.loginPrevDisabled) {
+            el.dataset.loginPrevDisabled = el.disabled ? "1" : "0";
+          }
+          el.disabled = true;
+        } else if (el.dataset.loginPrevDisabled != null) {
+          el.disabled = el.dataset.loginPrevDisabled === "1";
+          delete el.dataset.loginPrevDisabled;
+        }
+      });
+    }
+
+    function armLoginReadonly() {
+      ["#username", "#password"].forEach((sel) => {
+        const el = document.querySelector(sel);
+        if (el) el.readOnly = true;
+      });
+    }
+
     function openLoginDialog() {
       document.body.classList.add("login-open");
-      setTimeout(() => document.querySelector("#username").focus(), 0);
+      setLoginCompetingDisabled(true);
+      armLoginReadonly();
+      const user = document.querySelector("#username");
+      setTimeout(() => {
+        if (!user) return;
+        // Only autofocus when empty so we never steal focus mid-type.
+        if (!user.value) user.focus();
+      }, 0);
     }
 
     function closeLoginDialog() {
       document.body.classList.remove("login-open");
+      setLoginCompetingDisabled(false);
+      armLoginReadonly();
     }
 
     function showIdleEnded(message) {
@@ -2948,6 +3053,7 @@
       document.querySelector("#nav-access").hidden = !hasCap(user, "tool_access.manage");
       document.querySelector("#nav-sonar-setup").hidden = !hasCap(user, "sonar.setup");
       document.querySelector("#nav-connections").hidden = !hasCap(user, "connections.manage");
+      document.querySelector("#nav-ci-tokens").hidden = !isElevated(user);
       document.querySelector("#nav-schedules").hidden = !hasCap(user, "projects.manage_all");
       document.querySelector("#group-new").hidden = user.role === "viewer";
       document.querySelector("#project-new").hidden = user.role === "viewer";
@@ -2957,6 +3063,7 @@
       if (!hasCap(user, "tool_access.manage") && state.view === "access") setView("scans");
       if (!hasCap(user, "sonar.setup") && state.view === "sonar-setup") setView("scans");
       if (!hasCap(user, "connections.manage") && state.view === "connections") setView("scans");
+      if (!isElevated(user) && state.view === "ci-tokens") setView("scans");
       if (!hasCap(user, "projects.manage_all") && state.view === "schedules") setView("scans");
       loadConnections();
       loadProjects();
@@ -3160,7 +3267,7 @@
     }
 
     function firstSettingsView() {
-      const order = ["users", "access", "projects", "groups", "connections", "schedules", "sonar-setup"];
+      const order = ["users", "access", "projects", "groups", "connections", "ci-tokens", "schedules", "sonar-setup"];
       const found = order.find((name) => {
         const button = document.querySelector('nav [data-view="' + name + '"]');
         return button && !button.hidden;
@@ -3170,7 +3277,7 @@
 
     function setView(view) {
       state.view = view;
-      ["dashboard", "scans", "triage", "knowledge", "users", "access", "projects", "groups", "connections", "schedules", "sonar-setup"].forEach((name) => {
+      ["dashboard", "scans", "triage", "knowledge", "users", "access", "projects", "groups", "connections", "ci-tokens", "schedules", "sonar-setup"].forEach((name) => {
         document.querySelector("#view-" + name).hidden = view !== name;
       });
       syncLaunch();
@@ -3183,6 +3290,7 @@
       if (view === "users" || view === "access") loadAccounts();
       if (view === "sonar-setup") loadSonarSetup();
       if (view === "connections") loadConnections();
+      if (view === "ci-tokens") loadCiTokens();
       if (view === "schedules") {
         loadProjects().then(() => loadSchedules());
       }
@@ -3526,6 +3634,59 @@
       return STATUS[scan.status] || scan.status;
     }
 
+    function checkovCoverageMark(row) {
+      const coverage = String((row && row.coverage) || "").trim().toLowerCase();
+      if (coverage === "no_targets") {
+        return {
+          mark: "No IaC targets",
+          tone: "wait",
+          detail: "No IaC policy checks were evaluated. Checkov had nothing actionable to assess."
+        };
+      }
+      if (coverage === "no_findings") {
+        return {
+          mark: "No violations",
+          tone: "ok",
+          detail: "IaC scan completed. No policy violations detected."
+        };
+      }
+      if (coverage === "with_findings") {
+        return {
+          mark: "Findings",
+          tone: "ok",
+          detail: "IaC scan completed with findings."
+        };
+      }
+      return null;
+    }
+
+    function checkovToolStatusLabel(row) {
+      if (!row || row.tool !== "checkov") return null;
+      const status = String(row.status || "").trim().toLowerCase();
+      if (status === "failed") return "Failed";
+      if (status === "ok") {
+        const cov = checkovCoverageMark(row);
+        if (cov) return cov.mark;
+        return "OK";
+      }
+      return null;
+    }
+
+    function checkovSummaryText(summary) {
+      if (!summary || typeof summary !== "object") return "";
+      const parts = [];
+      if (summary.resource_count != null) parts.push("Resources: " + summary.resource_count);
+      if (summary.passed != null) parts.push("Passed: " + summary.passed);
+      if (summary.failed != null) parts.push("Failed checks: " + summary.failed);
+      if (summary.skipped != null) parts.push("Skipped: " + summary.skipped);
+      if (summary.parsing_errors != null) parts.push("Parsing errors: " + summary.parsing_errors);
+      if (Array.isArray(summary.frameworks) && summary.frameworks.length) {
+        parts.push("Frameworks: " + summary.frameworks.join(", "));
+      }
+      if (summary.checkov_version) parts.push("Checkov " + summary.checkov_version);
+      return parts.join("\n");
+    }
+
     function toolPipelineRows(scan) {
       const requested = (scan && scan.tools) || [];
       if (!requested.length) return [];
@@ -3543,10 +3704,34 @@
         const row = byTool[tool];
         const label = (row && row.label) || TOOL_LABEL[tool] || tool;
         if (row && row.status === "ok") {
+          if (tool === "checkov") {
+            const cov = checkovCoverageMark(row);
+            if (cov) {
+              return {
+                tool,
+                label,
+                mark: cov.mark,
+                tone: cov.tone,
+                error: row.error || "",
+                detail: cov.detail,
+                summary: row.summary || null
+              };
+            }
+          }
           return { tool, label, mark: "OK", tone: "ok", error: row.error || "" };
         }
         if (row && row.status === "failed") {
-          return { tool, label, mark: "Failed", tone: "bad", error: row.error || "" };
+          const detail = tool === "checkov"
+            ? "Checkov execution or result parsing failed."
+            : "";
+          return {
+            tool,
+            label,
+            mark: "Failed",
+            tone: "bad",
+            error: row.error || "",
+            detail
+          };
         }
         if (!active) {
           return { tool, label, mark: "—", tone: "wait", error: "" };
@@ -4990,9 +5175,25 @@
           const stored = byTool[row.tool] || {};
           const err = stored.error || row.error || "";
           const findings = findingCount(row.tool);
+          const summaryText = row.tool === "checkov"
+            ? checkovSummaryText(row.summary || stored.summary)
+            : "";
+          let statusLine = "";
+          if (err) {
+            statusLine = "Error:\n" + err;
+          } else if (row.detail) {
+            statusLine = row.detail;
+          } else if (row.mark === "OK") {
+            statusLine = "Completed.";
+          } else if (row.mark === "Running") {
+            statusLine = "In progress.";
+          } else {
+            statusLine = "Not finished yet.";
+          }
           const body = '<div class="detail">'
             + (findings ? ("Findings: " + findings + "\n") : "")
-            + (err ? ("Error:\n" + err) : (row.mark === "OK" ? "Completed." : (row.mark === "Running" ? "In progress." : "Not finished yet.")))
+            + statusLine
+            + (summaryText ? ("\n" + summaryText) : "")
             + "</div>";
           return '<details class="exec-tool"><summary>' + esc(row.label)
             + '<span class="mark ' + esc(row.tone) + '">' + esc(row.mark) + "</span></summary>"
@@ -5875,6 +6076,233 @@
 
     resetScheduleForm();
 
+    function ciTokenDefaultExpiryDate() {
+      const stamp = new Date();
+      stamp.setUTCDate(stamp.getUTCDate() + 90);
+      return stamp.toISOString().slice(0, 10);
+    }
+
+    function formatCiTokenStamp(value) {
+      if (value == null || value === "") return "—";
+      const raw = String(value).trim();
+      if (raw.endsWith(" UTC") || /^\d{4}-\d{2}-\d{2} /.test(raw)) return formatStamp(raw);
+      try {
+        const date = new Date(raw);
+        if (!Number.isNaN(date.getTime())) return date.toLocaleString();
+      } catch (_err) { /* fall through */ }
+      return raw;
+    }
+
+    function clearRevealedCiToken() {
+      revealedCiToken = "";
+      const once = document.querySelector("#ci-token-once");
+      if (once) once.textContent = "";
+      const copyMsg = document.querySelector("#ci-token-copy-msg");
+      if (copyMsg) copyMsg.textContent = "";
+    }
+
+    function syncCiTokenNever() {
+      const never = document.querySelector("#ci-token-never").checked;
+      const expires = document.querySelector("#ci-token-expires");
+      const wrap = document.querySelector("#ci-token-expires-wrap");
+      expires.disabled = never;
+      wrap.hidden = never;
+      if (!never && !expires.value) expires.value = ciTokenDefaultExpiryDate();
+    }
+
+    function openCiTokenDialog() {
+      clearRevealedCiToken();
+      document.querySelector("#ci-token-form").hidden = false;
+      document.querySelector("#ci-token-reveal").hidden = true;
+      document.querySelector("#ci-token-form-error").hidden = true;
+      document.querySelector("#ci-token-form-error").textContent = "";
+      document.querySelector("#ci-token-name").value = "";
+      document.querySelector("#ci-token-never").checked = false;
+      document.querySelector("#ci-token-expires").value = ciTokenDefaultExpiryDate();
+      syncCiTokenNever();
+      document.querySelector("#ci-token-dialog").hidden = false;
+      setTimeout(() => document.querySelector("#ci-token-name").focus(), 0);
+    }
+
+    function closeCiTokenDialog() {
+      clearRevealedCiToken();
+      document.querySelector("#ci-token-dialog").hidden = true;
+      document.querySelector("#ci-token-form").hidden = false;
+      document.querySelector("#ci-token-reveal").hidden = true;
+    }
+
+    function showCreatedCiToken(token) {
+      revealedCiToken = String(token || "");
+      document.querySelector("#ci-token-form").hidden = true;
+      document.querySelector("#ci-token-reveal").hidden = false;
+      document.querySelector("#ci-token-once").textContent = revealedCiToken;
+      document.querySelector("#ci-token-copy-msg").textContent = "";
+    }
+
+    async function loadCiTokens() {
+      if (!isElevated(currentUser)) return;
+      const response = await api("/api/ci/tokens");
+      const box = document.querySelector("#ci-token-error");
+      if (!response.ok) {
+        if (box) {
+          box.hidden = false;
+          box.textContent = "Could not load CI API tokens.";
+        }
+        return;
+      }
+      if (box) box.hidden = true;
+      const body = await response.json().catch(() => []);
+      ciTokens = Array.isArray(body) ? body : [];
+      renderCiTokens();
+    }
+
+    function renderCiTokens() {
+      const box = document.querySelector("#ci-token-list");
+      if (!box) return;
+      if (!ciTokens.length) {
+        box.innerHTML = '<div class="empty"><strong>No CI API tokens yet</strong>Create one for GitLab CI. The secret is shown only once.</div>';
+        return;
+      }
+      box.innerHTML = ciTokens.map((item) => {
+        const status = String(item.status || "active");
+        const expires = item.expires_at == null || item.expires_at === ""
+          ? "Never"
+          : formatCiTokenStamp(item.expires_at);
+        const canRevoke = status !== "revoked";
+        const actions = canRevoke
+          ? '<button type="button" class="ghost" data-action="ci-token-revoke" data-id="'
+            + esc(String(item.id)) + '">Revoke</button>'
+          : '<button type="button" class="ghost" data-action="ci-token-delete" data-id="'
+            + esc(String(item.id)) + '">Delete</button>';
+        return '<div class="ci-token-row" data-id="' + esc(String(item.id)) + '">'
+          + "<strong>" + esc(item.name) + "</strong> "
+          + '<span class="ci-token-status ' + esc(status) + '">' + esc(status) + "</span>"
+          + '<div class="meta" dir="ltr">prefix ' + esc(item.prefix) + "</div>"
+          + '<div class="meta">Created ' + esc(formatCiTokenStamp(item.created_at))
+          + " · Expires " + esc(expires)
+          + " · Last used " + esc(formatCiTokenStamp(item.last_used_at)) + "</div>"
+          + '<div class="row-actions" style="margin-top:8px">' + actions + "</div>"
+          + "</div>";
+      }).join("");
+    }
+
+    document.querySelector("#ci-token-new").addEventListener("click", openCiTokenDialog);
+    document.querySelector("#ci-token-cancel").addEventListener("click", closeCiTokenDialog);
+    document.querySelector("#ci-token-done").addEventListener("click", closeCiTokenDialog);
+    document.querySelector("#ci-token-never").addEventListener("change", syncCiTokenNever);
+    function copyTextFallback(text) {
+      const area = document.createElement("textarea");
+      area.value = text;
+      area.setAttribute("readonly", "");
+      area.style.position = "fixed";
+      area.style.top = "0";
+      area.style.left = "0";
+      area.style.width = "1px";
+      area.style.height = "1px";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.focus();
+      area.select();
+      area.setSelectionRange(0, text.length);
+      let ok = false;
+      try {
+        ok = document.execCommand("copy");
+      } finally {
+        document.body.removeChild(area);
+      }
+      if (!ok) throw new Error("execCommand copy failed");
+    }
+
+    document.querySelector("#ci-token-copy").addEventListener("click", async () => {
+      const msg = document.querySelector("#ci-token-copy-msg");
+      if (!revealedCiToken) {
+        msg.textContent = "Nothing to copy.";
+        return;
+      }
+      try {
+        if (window.isSecureContext && navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(revealedCiToken);
+        } else {
+          copyTextFallback(revealedCiToken);
+        }
+        msg.textContent = "Copied.";
+      } catch (_err) {
+        msg.textContent = "Could not copy. Select the token and copy manually.";
+      }
+    });
+    document.querySelector("#ci-token-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const err = document.querySelector("#ci-token-form-error");
+      const name = document.querySelector("#ci-token-name").value.trim();
+      const never = document.querySelector("#ci-token-never").checked;
+      const payload = {name};
+      if (never) payload.never = true;
+      else {
+        const day = document.querySelector("#ci-token-expires").value;
+        if (!day) {
+          err.hidden = false;
+          err.textContent = "Pick an expiry date or choose Never expire.";
+          return;
+        }
+        payload.expires_at = day + "T23:59:59+00:00";
+      }
+      const response = await api("/api/ci/tokens", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(payload)
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        err.hidden = false;
+        err.textContent = body.error || "Could not create token.";
+        return;
+      }
+      err.hidden = true;
+      document.querySelector("#ci-token-msg").textContent = "Token created.";
+      showCreatedCiToken(body.token || "");
+      await loadCiTokens();
+    });
+    document.querySelector("#ci-token-list").addEventListener("click", async (event) => {
+      const button = event.target.closest("[data-action]");
+      if (!button) return;
+      const action = button.dataset.action || "";
+      if (action !== "ci-token-revoke" && action !== "ci-token-delete") return;
+      const id = button.dataset.id || "";
+      const item = ciTokens.find((row) => String(row.id) === id);
+      if (!item) return;
+      const box = document.querySelector("#ci-token-error");
+      const msg = document.querySelector("#ci-token-msg");
+      if (action === "ci-token-revoke") {
+        if (!window.confirm("Revoke token " + item.name + " (" + item.prefix + ")?")) return;
+        const response = await api("/api/ci/tokens/" + encodeURIComponent(id) + "/revoke", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: "{}"
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          box.hidden = false;
+          box.textContent = body.error || "Could not revoke.";
+          return;
+        }
+        box.hidden = true;
+        msg.textContent = "Token revoked.";
+        await loadCiTokens();
+        return;
+      }
+      if (!window.confirm("Delete revoked token " + item.name + " (" + item.prefix + ")? This removes it permanently.")) return;
+      const response = await api("/api/ci/tokens/" + encodeURIComponent(id), {method: "DELETE"});
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        box.hidden = false;
+        box.textContent = body.error || "Could not delete.";
+        return;
+      }
+      box.hidden = true;
+      msg.textContent = "Token deleted.";
+      await loadCiTokens();
+    });
+
     function renderConnections() {
       const box = document.querySelector("#connection-list");
       if (!box) return;
@@ -6740,10 +7168,25 @@
       button.setAttribute("aria-pressed", show ? "true" : "false");
     });
 
+    ["#username", "#password"].forEach((sel) => {
+      const el = document.querySelector(sel);
+      if (!el) return;
+      el.addEventListener("focus", () => {
+        el.readOnly = false;
+      });
+      el.addEventListener("pointerdown", () => {
+        el.readOnly = false;
+      });
+    });
+
     document.querySelector("#login-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       const button = document.querySelector("#login-submit");
       const error = document.querySelector("#login-error");
+      const userEl = document.querySelector("#username");
+      const passEl = document.querySelector("#password");
+      if (userEl) userEl.readOnly = false;
+      if (passEl) passEl.readOnly = false;
       error.hidden = true;
       button.disabled = true;
       button.textContent = "Signing in";
@@ -6753,8 +7196,8 @@
           headers: {"Content-Type": "application/json", "Accept": "application/json"},
           credentials: "same-origin",
           body: JSON.stringify({
-            username: document.querySelector("#username").value,
-            password: document.querySelector("#password").value
+            username: userEl.value,
+            password: passEl.value
           })
         });
         const body = await response.json().catch(() => ({}));
@@ -6763,7 +7206,8 @@
           error.textContent = body.error || "Sign-in failed.";
           return;
         }
-        document.querySelector("#password").value = "";
+        passEl.value = "";
+        armLoginReadonly();
         showApp(body);
         if (!body.must_change_password) tick();
       } catch (err) {
@@ -6808,6 +7252,7 @@
       if (event.key === "Escape") {
         if (document.body.classList.contains("login-open")) closeLoginDialog();
         else if (!document.querySelector("#password-dialog").hidden) closePasswordDialog();
+        else if (!document.querySelector("#ci-token-dialog").hidden) closeCiTokenDialog();
         else closeProfileMenu();
       }
     });
@@ -7336,6 +7781,8 @@
         const total = scan.finding_count || 0;
         const tools = (scan.tool_results || []).map((row) => {
           const label = row.label || TOOL_LABEL[row.tool] || row.tool;
+          const checkovMark = checkovToolStatusLabel(row);
+          if (checkovMark) return label + " " + checkovMark;
           return label + " " + (row.status === "ok" ? "OK" : "Failed");
         }).join(" · ");
         const detail = scan.status === "queued"
@@ -7559,9 +8006,7 @@
     });
     document.querySelector("#public-login").addEventListener("click", openLoginDialog);
     document.querySelector("#login-close").addEventListener("click", closeLoginDialog);
-    document.querySelector("#login-screen").addEventListener("click", (event) => {
-      if (event.target.id === "login-screen") closeLoginDialog();
-    });
+    // Backdrop clicks do not dismiss login — only the X (or Escape) closes it.
 
     function expiryBody(body) {
       return body && (body.code === "idle_expired" || body.code === "absolute_expired");

@@ -100,15 +100,23 @@ Command-line `-D` properties outrank `sonar-project.properties`. The scanner com
 
 GitLab (or other CI) can enqueue a scan with a machine token. The console runs the existing scanner pipeline; open `/scans/<id>` in the UI for the Execution Center. Do not put a GitLab Runner on this host unless you accept the security and resource trade-offs.
 
-Create `secrets/ci_scan_token.txt` with `./scripts/init-secrets.sh` (mode 600). Compose mounts it as `CI_SCAN_TOKEN_FILE`. This token is **not** the push-gate token.
+### Managed CI API tokens (preferred)
 
-### GitLab auto-provision (preferred)
+Admins create tokens under **Settings → CI API tokens**. The console stores only a SHA-256 hash; the full `csc_…` secret is shown once at create time. Put that value in the GitLab Group/Project CI variable `CI_SCAN_TOKEN` (masked). Revoke from the same Settings page when a runner is compromised or a job leaves the group.
 
-Save a Console **Integration** (`kind=gitlab`) whose `base_url` matches your GitLab. The CI job sends `gitlab_base_url` + `gitlab_project_id` + `requested_sha`. The console verifies the project and commit via the GitLab API (using the Integration token), creates or reuses a Console project, and clones the **canonical** `http_url_to_repo` — never a runner-supplied URL. Group CI variables: `CONSOLE_URL` and `CI_SCAN_TOKEN` only. See `examples/gitlab-ci-scan.yml`.
+### File token fallback
+
+Compose still mounts `secrets/ci_scan_token.txt` as `CI_SCAN_TOKEN_FILE` for bootstrap and emergency use. This token is **not** the push-gate token. Env `CI_SCAN_FILE_TOKEN` defaults to `1` (file token accepted). After every GitLab CI variable that still used the file value has been switched to a Console-issued DB token, set `CI_SCAN_FILE_TOKEN=0` and rotate/replace the old file in `secrets/ci_scan_token.txt` so the file value can no longer authenticate.
+
+Create the bootstrap file with `./scripts/init-secrets.sh` (mode 600) if you still need the fallback.
+
+### GitLab auto-provision (preferred request shape)
+
+Save a Console **Integration** (`kind=gitlab`) whose `base_url` matches your GitLab. The CI job sends `gitlab_base_url` + `gitlab_project_id` + `requested_sha`. The console verifies the project and commit via the GitLab API (using the Integration token), creates or reuses a Console project, and clones the **canonical** `http_url_to_repo` — never a runner-supplied URL. Group CI variables: `CONSOLE_URL` and `CI_SCAN_TOKEN` (DB-issued preferred) only. See `examples/gitlab-ci-scan.yml`.
 
 ```bash
 curl -fsS -X POST "$CONSOLE_URL/api/ci/scans" \
-  -H "Authorization: Bearer $(cat secrets/ci_scan_token.txt)" \
+  -H "Authorization: Bearer $CI_SCAN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"gitlab_base_url":"https://gitlab.example","gitlab_project_id":42,"requested_sha":"'"$CI_COMMIT_SHA"'","force":true}'
 ```
@@ -118,7 +126,7 @@ curl -fsS -X POST "$CONSOLE_URL/api/ci/scans" \
 ```bash
 # Enqueue (project slug must exist; target must be one of its repos/images)
 curl -fsS -X POST "$CONSOLE_URL/api/ci/scans" \
-  -H "Authorization: Bearer $(cat secrets/ci_scan_token.txt)" \
+  -H "Authorization: Bearer $CI_SCAN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"project":"my-app","target":"repo","tools":["semgrep","checkov","sonar"],"requested_sha":"'"$CI_COMMIT_SHA"'"}'
 ```
@@ -127,7 +135,7 @@ curl -fsS -X POST "$CONSOLE_URL/api/ci/scans" \
 
 ```bash
 curl -fsS \
-  -H "Authorization: Bearer $(cat secrets/ci_scan_token.txt)" \
+  -H "Authorization: Bearer $CI_SCAN_TOKEN" \
   "$CONSOLE_URL/api/ci/scans/<scan_id>"
 ```
 
@@ -157,8 +165,13 @@ Console and scanner expose unauthenticated `GET /health` returning `{"ok": true}
 
 ## Tests
 
+Pytest targets a disposable database (`security_console_test` by default on the same Postgres instance). It never wipes the live `security_console_db`. Set `CONSOLE_DB_PASSWORD` / `CONSOLE_DB_PASSWORD_FILE` (and `CONSOLE_DB_HOST` when needed); omit `CONSOLE_DB_NAME` or set it to `security_console_test`. Do not point `DATABASE_URL` or `CONSOLE_DB_NAME` at `security_console_db`.
+
 ```bash
-DATABASE_URL=postgresql://console:console@127.0.0.1:5432/security_console_db \
+CONSOLE_DB_HOST=db \
+CONSOLE_DB_NAME=security_console_test \
+CONSOLE_DB_PASSWORD_FILE=/run/secrets/console_db_password \
 CONSOLE_JWT_KEY=test-jwt-key-must-be-32-characters \
+CONSOLE_ALLOW_TEST_DB_WIPE=1 \
 pytest
 ```

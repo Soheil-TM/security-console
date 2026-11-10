@@ -5,3 +5,12 @@ __pycache__/
 .ruff_cache/
 frontend/node_modules/
 frontend/dist/
+
+# Local TLS certificates and private keys
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local deployment notes
+deployment-checkpoint.md

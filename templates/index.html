@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="console-shell-build" content="{{ shell_build|default('dev') }}">
   <title>Security console</title>
   <script>
     try {
@@ -1429,6 +1430,32 @@
     .idle-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
     .password-card { width: min(440px, 100%); }
     .password-card form { margin-top: 16px; }
+    /* Close (result mode): same primary chrome as Save; Cancel keeps .ghost. */
+    #password-cancel:not(.ghost) {
+      height: 42px;
+      border-radius: 8px;
+      padding: 0 16px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      white-space: nowrap;
+      background: var(--teal);
+      color: #042f2e;
+      border: 0;
+    }
+    #password-cancel:not(.ghost):hover {
+      background: var(--teal-2);
+      color: #042f2e;
+    }
+    html.dark #password-cancel:not(.ghost) {
+      background: #2dd4bf;
+      color: #042f2e;
+    }
+    html.dark #password-cancel:not(.ghost):hover {
+      background: #5eead4;
+      color: #042f2e;
+    }
 
     .main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
     .launch-wrap { padding: 16px 18px 0; }
@@ -1566,6 +1593,167 @@
     .ghost:hover { border-color: var(--teal); color: var(--teal-2); }
     .hint { margin: 8px 2px 0; color: var(--muted); font-size: 12px; }
     .member-pick { position: relative; margin-top: 8px; }
+    .pick-drop {
+      margin-top: 4px;
+      border: 1px solid #c5d1de;
+      border-radius: 8px;
+      background: #fff;
+    }
+    .pick-drop > summary {
+      list-style: none;
+      cursor: pointer;
+      height: 42px;
+      padding: 0 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      color: var(--ink);
+      font-size: 13px;
+      user-select: none;
+    }
+    .pick-drop > summary::-webkit-details-marker { display: none; }
+    .pick-drop > summary::after {
+      content: "";
+      width: 0;
+      height: 0;
+      border-left: 5px solid transparent;
+      border-right: 5px solid transparent;
+      border-top: 6px solid var(--muted);
+      flex: 0 0 auto;
+    }
+    .pick-drop[open] > summary::after { transform: rotate(180deg); }
+    .pick-drop-panel {
+      max-height: 220px;
+      overflow: auto;
+      border-top: 1px solid var(--line);
+      padding: 4px 0;
+    }
+    .pick-drop-option {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 8px 12px;
+      margin: 0;
+      cursor: pointer;
+      color: var(--ink);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+    .pick-drop-option input {
+      margin-top: 2px;
+      flex: 0 0 auto;
+    }
+    .pick-drop-option span {
+      direction: ltr;
+      unicode-bidi: isolate;
+      word-break: break-all;
+    }
+    .pick-drop-option:hover { background: #f0fdfa; }
+    html.dark .pick-drop {
+      background: var(--card);
+      border-color: var(--line);
+    }
+    html.dark .pick-drop > summary { color: var(--ink); }
+    html.dark .pick-drop-option:hover { background: #12343a; }
+    .target-mix { margin-top: 8px; }
+    .target-mix-box {
+      border: 1px solid #c5d1de;
+      border-radius: 8px;
+      background: #fff;
+      overflow: hidden;
+    }
+    html.dark .target-mix-box {
+      background: var(--card);
+      border-color: var(--line);
+    }
+    .target-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 8px 10px;
+      min-height: 0;
+    }
+    .target-chips:empty { display: none; }
+    .target-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      max-width: 100%;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: #ecfdf5;
+      border: 1px solid #99f6e4;
+      color: #0f766e;
+      font-size: 12px;
+      line-height: 1.3;
+    }
+    html.dark .target-chip {
+      background: #12343a;
+      border-color: #2dd4bf;
+      color: #ccfbf1;
+    }
+    .target-chip code {
+      direction: ltr;
+      unicode-bidi: isolate;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 28rem;
+      font-size: 12px;
+    }
+    .target-chip button {
+      border: 0;
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+      padding: 0;
+      font-size: 14px;
+      line-height: 1;
+      opacity: .75;
+    }
+    .target-chip button:hover { opacity: 1; }
+    .target-mix-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      padding: 8px 10px;
+      border-top: 1px solid var(--line);
+    }
+    .target-chips:empty + .target-mix-row { border-top: 0; }
+    .target-mix-row input {
+      flex: 1;
+      min-width: 0;
+      height: 36px;
+      border: 1px solid #c5d1de;
+      border-radius: 8px;
+      padding: 0 10px;
+      background: #fff;
+      outline: none;
+    }
+    html.dark .target-mix-row input {
+      background: var(--bg);
+      border-color: var(--line);
+      color: var(--ink);
+    }
+    .target-mix-row .ghost {
+      height: 36px;
+      padding: 0 12px;
+      flex: 0 0 auto;
+    }
+    .target-mix-box > .pick-drop {
+      margin: 0;
+      border: 0;
+      border-top: 1px solid var(--line);
+      border-radius: 0;
+      background: transparent;
+    }
+    .target-mix-box > .pick-drop > summary {
+      height: 38px;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 600;
+    }
     .member-list {
       position: absolute;
       z-index: 6;
@@ -2958,23 +3146,43 @@
               <label><span class="field-label">Slug</span><input id="project-slug" required maxlength="64" dir="ltr" placeholder="payments-api" pattern="[a-z0-9]+(?:-[a-z0-9]+)*"></label>
             </div>
             <label><span class="field-label">Description</span><input id="project-description" maxlength="500"></label>
-            <label><span class="field-label">Repositories, one https URL per line</span><textarea id="project-repos" rows="3" dir="ltr"></textarea></label>
-            <div id="project-repo-pick-wrap" hidden style="margin-top:8px">
-              <label><span class="field-label">Or pick from GitLab connections</span>
-                <select id="project-repo-pick" class="field" multiple size="5" dir="ltr"></select>
-              </label>
-              <p class="hint">Hold Ctrl/Cmd to select several. Picked repos are saved together with any URLs you typed above.</p>
+            <div class="target-mix" id="project-repos-mix">
+              <span class="field-label">Repositories</span>
+              <div class="target-mix-box">
+                <div class="target-chips" id="project-repo-chips"></div>
+                <div class="target-mix-row">
+                  <input id="project-repo-url" type="url" maxlength="500" dir="ltr" placeholder="https://gitlab.example.com/group/app.git" autocomplete="off">
+                  <button type="button" class="ghost" id="project-repo-add">Add</button>
+                </div>
+                <details class="pick-drop" id="project-repo-pick-drop" hidden>
+                  <summary id="project-repo-pick-summary">Or pick from GitLab…</summary>
+                  <div id="project-repo-pick" class="pick-drop-panel" dir="ltr"></div>
+                </details>
+              </div>
+              <p class="hint">Type a git URL and press Add, or open the list and pick from a connection.</p>
             </div>
-            <label><span class="field-label">Images, one name per line</span><textarea id="project-images" rows="2" dir="ltr"></textarea></label>
-            <div id="project-image-pick-wrap" hidden style="margin-top:8px">
-              <label><span class="field-label">Or pick from registry connections</span>
-                <select id="project-image-pick" class="field" multiple size="5" dir="ltr"></select>
-              </label>
-              <p class="hint">Hold Ctrl/Cmd to select several. Picked images are saved together with any names you typed above.</p>
+            <div class="target-mix" id="project-images-mix">
+              <span class="field-label">Images</span>
+              <div class="target-mix-box">
+                <div class="target-chips" id="project-image-chips"></div>
+                <div class="target-mix-row">
+                  <input id="project-image-ref" type="text" maxlength="300" dir="ltr" placeholder="registry.example.com/app:1.2" autocomplete="off" spellcheck="false">
+                  <button type="button" class="ghost" id="project-image-add">Add</button>
+                </div>
+                <details class="pick-drop" id="project-image-pick-drop" hidden>
+                  <summary id="project-image-pick-summary">Or pick from registry…</summary>
+                  <div id="project-image-pick" class="pick-drop-panel" dir="ltr"></div>
+                </details>
+              </div>
+              <p class="hint">Type an image name and press Add, or open the list and pick from a connection.</p>
             </div>
-            <label><span class="field-label">Groups that own this project</span>
-              <select id="project-groups" class="field" multiple size="4"></select>
-            </label>
+            <div id="project-groups-wrap" style="margin-top:8px">
+              <span class="field-label">Groups that own this project</span>
+              <details class="pick-drop" id="project-groups-drop">
+                <summary id="project-groups-summary">Choose groups…</summary>
+                <div id="project-groups" class="pick-drop-panel"></div>
+              </details>
+            </div>
             <p class="hint">Leads of the selected groups can edit this project. Members can scan it. With no group selected, only admins see the project's scans.</p>
             <p class="note" id="project-groups-warn" hidden>No groups selected. Only admins will see scans for this project.</p>
             <div style="display:flex;gap:8px;margin-top:12px">
@@ -3039,17 +3247,19 @@
   <div class="idle-warn" id="password-dialog" hidden>
     <div class="idle-card password-card" role="dialog" aria-modal="true" aria-labelledby="password-title">
       <h2 id="password-title">Change password</h2>
-      <p>Type the current password, then the new one twice. Use at least 12 characters.</p>
+      <p id="password-hint">Type the current password, then the new one twice. Use at least 12 characters.</p>
       <form id="password-form" class="account-grid">
         <div id="pw-error" class="login-error" hidden></div>
         <div id="pw-ok" class="meta" hidden>Password updated.</div>
-        <label><span class="field-label">Current password<span class="req" aria-hidden="true">*</span></span><input id="pw-current" type="password" required maxlength="128" dir="ltr" autocomplete="current-password"></label>
-        <label><span class="field-label">New password<span class="req" aria-hidden="true">*</span></span><input id="pw-new" type="password" required minlength="12" maxlength="128" dir="ltr" autocomplete="new-password"></label>
-        <label>
-          <span class="field-label">Repeat new password<span class="req" aria-hidden="true">*</span></span>
-          <input id="pw-again" type="password" required minlength="12" maxlength="128" dir="ltr" autocomplete="new-password">
-          <div id="pw-match" hidden>The new password and the repeat do not match.</div>
-        </label>
+        <div id="pw-fields">
+          <label><span class="field-label">Current password<span class="req" aria-hidden="true">*</span></span><input id="pw-current" type="password" required maxlength="128" dir="ltr" autocomplete="current-password"></label>
+          <label><span class="field-label">New password<span class="req" aria-hidden="true">*</span></span><input id="pw-new" type="password" required minlength="12" maxlength="128" dir="ltr" autocomplete="new-password"></label>
+          <label>
+            <span class="field-label">Repeat new password<span class="req" aria-hidden="true">*</span></span>
+            <input id="pw-again" type="password" required minlength="12" maxlength="128" dir="ltr" autocomplete="new-password">
+            <div id="pw-match" hidden>The new password and the repeat do not match.</div>
+          </label>
+        </div>
         <div class="idle-actions">
           <button type="button" class="ghost" id="password-cancel">Cancel</button>
           <button type="submit" id="pw-save" disabled>Save</button>
@@ -3269,6 +3479,7 @@
       invSort: {key: "severity", dir: "asc"},
       invAck: false,
       invFromTriage: false,
+      invScanId: "",
       assignments: [],
       needsTriage: [],
       triageByProject: {},
@@ -3323,11 +3534,23 @@
       return role === "super_admin";
     }
 
+    const SHELL_BUILD = document.querySelector('meta[name="console-shell-build"]')?.content || "";
+    let shellReloadArmed = true;
+    function noteShellBuild(response) {
+      const remote = response && response.headers && response.headers.get("X-Console-Shell-Build");
+      if (!remote || !shellReloadArmed) return;
+      if (remote !== SHELL_BUILD) {
+        shellReloadArmed = false;
+        location.reload();
+      }
+    }
+
     async function api(url, options, retried) {
       const opts = options || {};
       const headers = Object.assign({"Accept": "application/json"}, opts.headers || {});
       if (opts.method && opts.method !== "GET") headers["X-CSRF-Token"] = csrfToken();
       const response = await fetch(url, Object.assign({}, opts, {headers, credentials: "same-origin"}));
+      noteShellBuild(response);
       if (response.status === 401 && !retried && url !== "/api/auth/refresh" && url !== "/api/auth/login") {
         const body = await response.clone().json().catch(() => ({}));
         if (body.code === "idle_expired" || body.code === "absolute_expired") {
@@ -4576,6 +4799,7 @@
         ? found
         : Object.assign({}, (state.scan && state.scan.id === id) ? state.scan : null, {id: id});
       state.pane = "investigate";
+      state.invScanId = id;
       state.investigate = null;
       state.invFilter = (opts && opts.filter) || "needs_work";
       state.invHistoryOpen = new Set();
@@ -4592,6 +4816,11 @@
       else if (opts && opts.projectKey) showOnlyProject(opts.projectKey);
       state.view = "scans";
       setView("scans");
+      // Keep the deep-link URL on this scan so tick() cannot restore a prior /scans/<other>.
+      const path = executionPath(id);
+      if (path && location.pathname !== path) {
+        history.replaceState({scanId: id, pane: "investigate"}, "", path);
+      }
       scansMenuOpen = true;
       reportStamp = null;
       histStamp = null;
@@ -4627,9 +4856,15 @@
           box.innerHTML = '<div class="note">' + esc(body.error || "Could not load investigate.") + "</div>";
           if (adhoc) {
             // Fall back to Findings for ad-hoc instead of a stuck Investigate tab.
+            // Never steal an in-progress triage investigate for a different scan.
+            const pinned = String(state.invScanId || "").trim();
+            if (pinned && pinned !== wanted) {
+              return;
+            }
             state.pane = "report";
             state.investigate = null;
             state.invFromTriage = false;
+            state.invScanId = "";
             showPanes();
             scanStamp = null;
             syncScan();
@@ -6057,7 +6292,9 @@
           if (SETTINGS_VIEWS.includes(next)) settingsMenuOpen = true;
           if (next === "triage") {
             state.invFromTriage = false;
+            state.invScanId = "";
             reportStamp = null;
+            if (urlScanId()) history.replaceState(null, "", "/");
           }
           setView(next);
           if (next === "scans") {
@@ -6151,6 +6388,12 @@
             state.overviewKey = "";
             state.target = group.image ? "image" : "repo";
             state.scan = group.items[0];
+            state.invScanId = "";
+            state.invFromTriage = false;
+            const path = executionPath(state.scan.id);
+            if (path && location.pathname !== path) {
+              history.replaceState({scanId: state.scan.id, pane: "report"}, "", path);
+            }
             scanStamp = null;
           }
           histStamp = null;
@@ -6337,6 +6580,7 @@
       if (action === "pane-summary") {
         if (!state.scan) return;
         state.invFromTriage = false;
+        state.invScanId = "";
         goExecution(state.scan.id, {replace: true});
         scanStamp = null;
         reportStamp = null;
@@ -6348,8 +6592,9 @@
       if (action === "pane-findings" || action === "execution-report") {
         if (!state.scan) return;
         state.invFromTriage = false;
+        state.invScanId = "";
         state.pane = "report";
-        history.pushState({scanId: state.scan.id, pane: "report"}, "", "/");
+        history.pushState({scanId: state.scan.id, pane: "report"}, "", "/scans/" + encodeURIComponent(state.scan.id));
         scanStamp = null;
         reportStamp = null;
         showPanes();
@@ -6964,16 +7209,100 @@
       select.innerHTML = rows.map((item) => '<option value="' + esc(item.url) + '">' + esc(item.path) + "</option>").join("");
     }
 
-    async function fillPicker(kind, select, wrap) {
+    function pickDropSummary(panel, emptyLabel) {
+      const summary = panel && panel.closest("details")
+        ? panel.closest("details").querySelector("summary")
+        : null;
+      if (!summary) return;
+      if (panel.id === "project-repo-pick" || panel.id === "project-image-pick") {
+        summary.textContent = emptyLabel;
+        return;
+      }
+      const count = panel.querySelectorAll('input[type="checkbox"]:checked').length;
+      summary.textContent = count
+        ? (count === 1 ? "1 selected" : count + " selected")
+        : emptyLabel;
+    }
+
+    function selectedPickValues(panel) {
+      if (!panel) return [];
+      return [...panel.querySelectorAll('input[type="checkbox"]:checked')]
+        .map((input) => input.value)
+        .filter(Boolean);
+    }
+
+    function targetChipKind(kind) {
+      return kind === "image" ? "image" : "repo";
+    }
+
+    function targetChipEls(kind) {
+      const key = targetChipKind(kind);
+      return {
+        chips: document.querySelector(key === "image" ? "#project-image-chips" : "#project-repo-chips"),
+        panel: document.querySelector(key === "image" ? "#project-image-pick" : "#project-repo-pick"),
+        input: document.querySelector(key === "image" ? "#project-image-ref" : "#project-repo-url"),
+        emptyLabel: key === "image" ? "Or pick from registry…" : "Or pick from GitLab…"
+      };
+    }
+
+    function projectTargetValues(kind) {
+      const {chips} = targetChipEls(kind);
+      if (!chips) return [];
+      return [...chips.querySelectorAll(".target-chip")].map((chip) => chip.dataset.value || "").filter(Boolean);
+    }
+
+    function renderProjectTargetChips(kind, values) {
+      const {chips, panel, emptyLabel} = targetChipEls(kind);
+      if (!chips) return;
+      const rows = uniqueLines(values || []);
+      chips.innerHTML = rows.map((value) =>
+        '<span class="target-chip" data-value="' + esc(value) + '"><code>'
+        + esc(value) + '</code><button type="button" data-action="target-chip-remove" data-kind="'
+        + esc(targetChipKind(kind)) + '" aria-label="Remove">×</button></span>'
+      ).join("");
+      if (panel) {
+        const chosen = new Set(rows);
+        panel.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+          input.checked = chosen.has(input.value);
+        });
+        pickDropSummary(panel, emptyLabel);
+      }
+    }
+
+    function addProjectTarget(kind, value) {
+      const text = String(value || "").trim();
+      if (!text) return;
+      renderProjectTargetChips(kind, projectTargetValues(kind).concat([text]));
+    }
+
+    function removeProjectTarget(kind, value) {
+      renderProjectTargetChips(
+        kind,
+        projectTargetValues(kind).filter((item) => item !== value)
+      );
+    }
+
+    async function fillPicker(kind, panel, drop) {
       const sources = connections.filter((item) => item.kind === kind);
-      wrap.hidden = sources.length === 0;
-      select.innerHTML = "";
+      const emptyLabel = kind === "gitlab" ? "Or pick from GitLab…" : "Or pick from registry…";
+      drop.hidden = sources.length === 0;
+      drop.open = false;
+      panel.innerHTML = "";
       for (const source of sources) {
         const response = await api("/api/integrations/" + source.id + "/projects?purpose=edit");
         const body = await response.json().catch(() => ({}));
         const rows = Array.isArray(body) ? body : [];
-        select.insertAdjacentHTML("beforeend", rows.map((item) => '<option value="' + esc(item.url) + '">' + esc(source.name + " / " + item.path) + "</option>").join(""));
+        panel.insertAdjacentHTML(
+          "beforeend",
+          rows.map((item) =>
+            '<label class="pick-drop-option"><input type="checkbox" value="'
+            + esc(item.url) + '"><span>'
+            + esc(source.name + " / " + item.path)
+            + "</span></label>"
+          ).join("")
+        );
       }
+      pickDropSummary(panel, emptyLabel);
     }
 
     function fillGroupProjectOptions(selected) {
@@ -7304,36 +7633,27 @@
       return rows;
     }
 
-    function selectedOptionValues(select) {
-      if (!select) return [];
-      return [...select.selectedOptions].map((option) => option.value).filter(Boolean);
-    }
-
     async function fillProjectPickers(project) {
       if (!connections.length) await loadConnections();
       const repoPick = document.querySelector("#project-repo-pick");
       const imagePick = document.querySelector("#project-image-pick");
-      const repoWrap = document.querySelector("#project-repo-pick-wrap");
-      const imageWrap = document.querySelector("#project-image-pick-wrap");
-      if (!repoPick || !imagePick || !repoWrap || !imageWrap) return;
-      await fillPicker("gitlab", repoPick, repoWrap);
-      await fillPicker("registry", imagePick, imageWrap);
-      const repos = new Set(
-        (project && project.targets || [])
-          .filter((item) => item.kind === "repo")
-          .map((item) => item.target)
-      );
-      const images = new Set(
-        (project && project.targets || [])
-          .filter((item) => item.kind === "image")
-          .map((item) => item.target)
-      );
-      [...repoPick.options].forEach((option) => {
-        option.selected = repos.has(option.value);
-      });
-      [...imagePick.options].forEach((option) => {
-        option.selected = images.has(option.value);
-      });
+      const repoDrop = document.querySelector("#project-repo-pick-drop");
+      const imageDrop = document.querySelector("#project-image-pick-drop");
+      if (!repoPick || !imagePick || !repoDrop || !imageDrop) return;
+      await fillPicker("gitlab", repoPick, repoDrop);
+      await fillPicker("registry", imagePick, imageDrop);
+      const repos = (project && project.targets || [])
+        .filter((item) => item.kind === "repo")
+        .map((item) => item.target);
+      const images = (project && project.targets || [])
+        .filter((item) => item.kind === "image")
+        .map((item) => item.target);
+      renderProjectTargetChips("repo", repos);
+      renderProjectTargetChips("image", images);
+      const repoInput = document.querySelector("#project-repo-url");
+      const imageInput = document.querySelector("#project-image-ref");
+      if (repoInput) repoInput.value = "";
+      if (imageInput) imageInput.value = "";
     }
 
     function selectedGroup() {
@@ -7385,18 +7705,24 @@
 
     function syncProjectGroupsWarn() {
       const warn = document.querySelector("#project-groups-warn");
-      const select = document.querySelector("#project-groups");
-      if (!warn || !select) return;
-      warn.hidden = select.selectedOptions.length > 0;
+      const panel = document.querySelector("#project-groups");
+      if (!warn || !panel) return;
+      warn.hidden = selectedPickValues(panel).length > 0;
+      pickDropSummary(panel, "Choose groups…");
     }
 
     function fillProjectGroupOptions(selectedIds) {
-      const select = document.querySelector("#project-groups");
-      if (!select) return;
+      const panel = document.querySelector("#project-groups");
+      const drop = document.querySelector("#project-groups-drop");
+      if (!panel) return;
       const chosen = new Set((selectedIds || []).map(Number));
-      select.innerHTML = (state.groups || []).map((group) =>
-        '<option value="' + group.id + '"' + (chosen.has(group.id) ? " selected" : "") + ">" + esc(group.name) + "</option>"
+      if (drop) drop.open = false;
+      panel.innerHTML = (state.groups || []).map((group) =>
+        '<label class="pick-drop-option"><input type="checkbox" value="'
+        + group.id + '"' + (chosen.has(group.id) ? " checked" : "") + "><span>"
+        + esc(group.name) + "</span></label>"
       ).join("");
+      syncProjectGroupsWarn();
     }
 
     async function showProjectForm(project) {
@@ -7410,26 +7736,7 @@
       document.querySelector("#project-slug").value = project ? project.slug : "";
       document.querySelector("#project-description").value = project ? (project.description || "") : "";
       fillProjectGroupOptions(project ? (project.group_ids || []) : []);
-      syncProjectGroupsWarn();
       await fillProjectPickers(project);
-      const pickRepos = new Set(
-        [...document.querySelector("#project-repo-pick").options].map((option) => option.value)
-      );
-      const pickImages = new Set(
-        [...document.querySelector("#project-image-pick").options].map((option) => option.value)
-      );
-      document.querySelector("#project-repos").value = project
-        ? (project.targets || [])
-            .filter((item) => item.kind === "repo" && !pickRepos.has(item.target))
-            .map((item) => item.target)
-            .join("\n")
-        : "";
-      document.querySelector("#project-images").value = project
-        ? (project.targets || [])
-            .filter((item) => item.kind === "image" && !pickImages.has(item.target))
-            .map((item) => item.target)
-            .join("\n")
-        : "";
       if (box) box.hidden = true;
     }
 
@@ -7437,12 +7744,55 @@
     document.querySelector("#project-cancel").addEventListener("click", () => {
       document.querySelector("#project-form").hidden = true;
     });
-    document.querySelector("#project-groups").addEventListener("change", syncProjectGroupsWarn);
+    function addTargetFromInput(kind) {
+      const {input} = targetChipEls(kind);
+      if (!input) return;
+      addProjectTarget(kind, input.value);
+      input.value = "";
+      input.focus();
+    }
+    document.querySelector("#project-repo-add").addEventListener("click", () => addTargetFromInput("repo"));
+    document.querySelector("#project-image-add").addEventListener("click", () => addTargetFromInput("image"));
+    document.querySelector("#project-repo-url").addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        addTargetFromInput("repo");
+      }
+    });
+    document.querySelector("#project-image-ref").addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        addTargetFromInput("image");
+      }
+    });
+    document.querySelector("#project-form").addEventListener("click", (event) => {
+      const remove = event.target.closest('[data-action="target-chip-remove"]');
+      if (!remove) return;
+      event.preventDefault();
+      removeProjectTarget(remove.dataset.kind || "repo", remove.closest(".target-chip")?.dataset?.value || "");
+    });
+    document.querySelector("#project-form").addEventListener("change", (event) => {
+      const input = event.target.closest(
+        '#project-repo-pick input, #project-image-pick input, #project-groups input'
+      );
+      if (!input) return;
+      const panel = input.closest(".pick-drop-panel");
+      if (!panel) return;
+      if (panel.id === "project-groups") {
+        syncProjectGroupsWarn();
+        return;
+      }
+      const kind = panel.id === "project-image-pick" ? "image" : "repo";
+      if (input.checked) addProjectTarget(kind, input.value);
+      else removeProjectTarget(kind, input.value);
+    });
     document.querySelector("#project-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       const box = document.querySelector("#project-error");
       const slug = document.querySelector("#project-form").dataset.slug;
-      const groupIds = [...document.querySelector("#project-groups").selectedOptions].map((option) => Number(option.value));
+      const groupIds = selectedPickValues(document.querySelector("#project-groups"))
+        .map((value) => Number(value))
+        .filter((value) => Number.isFinite(value) && value > 0);
       if (!groupIds.length) {
         const ok = window.confirm(
           "No groups selected. Only admins will see scans for this project. Save anyway?"
@@ -7453,14 +7803,8 @@
         name: document.querySelector("#project-name").value,
         slug: document.querySelector("#project-slug").value,
         description: document.querySelector("#project-description").value,
-        repos: uniqueLines(
-          groupLines(document.querySelector("#project-repos").value)
-            .concat(selectedOptionValues(document.querySelector("#project-repo-pick")))
-        ),
-        images: uniqueLines(
-          groupLines(document.querySelector("#project-images").value)
-            .concat(selectedOptionValues(document.querySelector("#project-image-pick")))
-        ),
+        repos: projectTargetValues("repo"),
+        images: projectTargetValues("image"),
         group_ids: groupIds
       };
       const response = await api(slug ? "/api/projects/" + encodeURIComponent(slug) : "/api/projects", {
@@ -7688,7 +8032,24 @@
         }
         const scans = await scanResponse.json();
         state.scans = Array.isArray(scans) ? scans : [];
-        const wanted = urlScanId() || (state.pane === "execution" && state.scan && state.scan.id) || "";
+        // While Investigate is open, pin that scan — a stale /scans/<other> URL
+        // must not replace it (Triage → Investigate was jumping back to Findings).
+        const selectedId = (state.scan && state.scan.id) || "";
+        const urlId = urlScanId() || "";
+        // Investigate pins its scan. Report/overview keep the user's selection even
+        // when a prior Investigate left a stale /scans/<other> deep-link in the URL.
+        const invPin = (state.pane === "investigate" && (state.invScanId || selectedId)) || "";
+        const reportPin = ((state.pane === "report" || state.pane === "overview") && selectedId) || "";
+        const wanted = invPin
+          || reportPin
+          || urlId
+          || (state.pane === "execution" && selectedId)
+          || "";
+        // Heal a stale deep-link left by Investigate so the next poll cannot yank the view.
+        if (reportPin && urlId && reportPin !== urlId) {
+          const path = executionPath(reportPin);
+          if (path) history.replaceState({scanId: reportPin, pane: state.pane}, "", path);
+        }
         // URL / execution id wins over defaulting to the first list row.
         if (wanted) {
           let fresh = state.scans.find((item) => item.id === wanted);
@@ -8144,11 +8505,62 @@
       await loadAccounts();
     });
 
+    let passwordDialogDone = false;
+
+    function setPasswordDialogResult(kind, message) {
+      passwordDialogDone = true;
+      const fields = document.querySelector("#pw-fields");
+      const hint = document.querySelector("#password-hint");
+      const error = document.querySelector("#pw-error");
+      const ok = document.querySelector("#pw-ok");
+      const save = document.querySelector("#pw-save");
+      const cancel = document.querySelector("#password-cancel");
+      if (fields) fields.hidden = true;
+      if (hint) hint.hidden = true;
+      if (save) {
+        save.hidden = true;
+        save.disabled = true;
+      }
+      if (cancel) {
+        cancel.textContent = "Close";
+        cancel.classList.remove("ghost");
+      }
+      if (kind === "ok") {
+        if (error) error.hidden = true;
+        if (ok) {
+          ok.hidden = false;
+          ok.textContent = message || "Password updated.";
+        }
+      } else {
+        if (ok) ok.hidden = true;
+        if (error) {
+          error.hidden = false;
+          error.textContent = message || "Could not change the password.";
+        }
+      }
+    }
+
     function openPasswordDialog() {
+      passwordDialogDone = false;
       document.querySelector("#password-form").reset();
       document.querySelector("#pw-error").hidden = true;
       document.querySelector("#pw-ok").hidden = true;
+      document.querySelector("#pw-ok").textContent = "Password updated.";
       document.querySelector("#pw-match").hidden = true;
+      const fields = document.querySelector("#pw-fields");
+      const hint = document.querySelector("#password-hint");
+      const save = document.querySelector("#pw-save");
+      const cancel = document.querySelector("#password-cancel");
+      if (fields) fields.hidden = false;
+      if (hint) hint.hidden = false;
+      if (save) {
+        save.hidden = false;
+        save.textContent = "Save";
+      }
+      if (cancel) {
+        cancel.textContent = "Cancel";
+        cancel.classList.add("ghost");
+      }
       syncPasswordSubmit();
       document.querySelector("#password-dialog").hidden = false;
       document.querySelector("#pw-current").focus();
@@ -8156,9 +8568,11 @@
 
     function closePasswordDialog() {
       document.querySelector("#password-dialog").hidden = true;
+      passwordDialogDone = false;
     }
 
     function syncPasswordSubmit() {
+      if (passwordDialogDone) return;
       const next = document.querySelector("#pw-new").value;
       const again = document.querySelector("#pw-again").value;
       const current = document.querySelector("#pw-current").value;
@@ -8173,6 +8587,7 @@
 
     document.querySelector("#password-form").addEventListener("submit", async (event) => {
       event.preventDefault();
+      if (passwordDialogDone) return;
       const next = document.querySelector("#pw-new").value;
       const again = document.querySelector("#pw-again").value;
       const error = document.querySelector("#pw-error");
@@ -8180,8 +8595,7 @@
       error.hidden = true;
       ok.hidden = true;
       if (next !== again) {
-        error.hidden = false;
-        error.textContent = "The new password and the repeat do not match.";
+        setPasswordDialogResult("error", "The new password and the repeat do not match.");
         return;
       }
       const button = document.querySelector("#pw-save");
@@ -8198,17 +8612,18 @@
         });
         const body = await response.json().catch(() => ({}));
         if (!response.ok) {
-          error.hidden = false;
-          error.textContent = body.error || "Could not change the password.";
+          setPasswordDialogResult("error", body.error || "Could not change the password.");
           return;
         }
         document.querySelector("#password-form").reset();
-        ok.hidden = false;
+        setPasswordDialogResult("ok", "Password updated.");
         const me = await api("/api/auth/me");
         if (me.ok) applyIdleClock(await me.json());
       } finally {
-        button.textContent = "Save";
-        syncPasswordSubmit();
+        if (!passwordDialogDone) {
+          button.textContent = "Save";
+          syncPasswordSubmit();
+        }
       }
     });
 

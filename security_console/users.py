@@ -24,6 +24,7 @@ from security_console.authz import (
     is_super_admin,
     would_remove_last_super_admin,
 )
+from security_console.rbac_migrate import CONTINUITY_CAPABILITIES
 
 Reply = Response | tuple[Response, int]
 _EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -254,7 +255,8 @@ def _account_body(
     # Workspace is super_admin-only; ignore client checkbox for everyone else.
     sonar_ui = role == "super_admin"
     # Preserve stored capabilities on update when the client omits them.
-    # Creating without an explicit map stores {}. Admin does not get implicit caps.
+    # The Users UI does not edit capability maps; a new org admin with an empty
+    # map gets the continuity pack so Projects/Groups work without a DB patch.
     if "capabilities" in body:
         raw_caps = body.get("capabilities")
         if isinstance(raw_caps, dict):
@@ -270,6 +272,8 @@ def _account_body(
         capabilities = {}
     if role == "super_admin":
         capabilities = {}
+    elif role == "admin" and not capabilities:
+        capabilities = dict(CONTINUITY_CAPABILITIES)
     return {
         "username": username.strip(),
         "first_name": first_name,

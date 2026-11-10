@@ -75,6 +75,8 @@ app.jinja_env.auto_reload = True
 DATA = Path(os.environ.get("DATA_DIR", "/data"))
 RESTART_ERROR = "The console restarted during the scan."
 WORKER_GONE_ERROR = "The scanner no longer has this scan."
+# Bump when the console shell HTML/JS must replace an open tab (SPA).
+SHELL_BUILD = "2026-11-10-target-mix"
 
 lock = threading.Lock()
 scans: dict[str, dict[str, Any]] = {}
@@ -409,10 +411,25 @@ def health() -> Response:
     return jsonify({"ok": True})
 
 
+@app.after_request
+def _shell_build_header(response: Response) -> Response:
+    """Let open SPA tabs detect a newer shell and reload once."""
+
+    response.headers["X-Console-Shell-Build"] = SHELL_BUILD
+    return response
+
+
 def _console_shell() -> Response:
-    response = make_response(render_template("index.html", sonar_url="/sonar/"))
+    response = make_response(
+        render_template(
+            "index.html",
+            sonar_url="/sonar/",
+            shell_build=SHELL_BUILD,
+        )
+    )
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
     return response
 
 

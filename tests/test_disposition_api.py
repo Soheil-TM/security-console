@@ -220,3 +220,91 @@ def test_disposition_rejects_assignee_outside_project_group(
     assert response.status_code == 400
     assert "project group" in response.get_json()["error"]
     assert FINDING_KEY not in db.list_dispositions("triage-demo")
+
+
+@pytest.fixture()
+def solo_admin_disposition_client() -> FlaskClient:
+    """Admin project with no group members (Assign to me edge case)."""
+
+    prepare_database()
+    prepare_auth()
+    reset_auth_tables()
+    reset_scan_table()
+
+    admin_id = insert_user(
+        "boss",
+        _HASHER.hash("boss-password"),
+        "admin",
+        capabilities={"projects.manage_all": True},
+        allow_semgrep=True,
+    )
+    project = insert_project(
+        slug="solo-admin",
+        name="Solo Admin",
+        description="",
+        created_by=admin_id,
+        targets=[
+            {
+                "kind": "repo",
+                "target": "https://example.com/solo-admin.git",
+                "key": "repo:https://example.com/solo-admin.git",
+            }
+        ],
+        group_ids=[],
+    )
+    upsert_scan(
+        {
+            "id": "scan-solo-1",
+            "target": "repo",
+            "repo": "https://example.com/solo-admin.git",
+            "project_id": int(project["id"]),
+            "tools": ["semgrep"],
+            "status": "done",
+            "owner": "boss",
+            "findings": [FINDING],
+            "tool_results": [{"tool": "semgrep", "status": "ok"}],
+        }
+    )
+
+    app = Flask(__name__)
+    app.config["TESTING"] = True
+    install_auth(app)
+    client = app.test_client()
+    yield client
+    reset_scan_table()
+    reset_auth_tables()
+
+
+def test_admin_can_assign_self_on_project_without_group_members(
+    solo_admin_disposition_client: FlaskClient,
+) -> None:
+    assert db.list_project_assignees("solo-admin")
+    assert all(
+        item["role"] in ("admin", "super_admin")
+        for item in db.list_project_assignees("solo-admin")
+    )
+
+    login = _login(solo_admin_disposition_client, "boss", "boss-password")
+    assert login.status_code == 200
+    csrf = _csrf(login)
+
+    response = solo_admin_disposition_client.put(
+        "/api/security/dispositions",
+        headers={"X-CSRF-Token": csrf, "Content-Type": "application/json"},
+        json={
+            "scan_id": "scan-solo-1",
+            "finding_key": FINDING_KEY,
+            "status": "needs_review",
+            "reason": NOTE,
+            "assignee_username": "boss",
+        },
+    )
+
+    assert response.status_code == 200
+    disposition = response.get_json()["disposition"]
+    assert disposition["status"] == "needs_review"
+    assert disposition["assignee_username"] == "boss"
+    stored = db.list_dispositions("solo-admin")[FINDING_KEY]
+    assert stored["assignee_username"] == "boss"
+    mine = db.list_my_assignments(int(disposition["assignee_user_id"]))
+    assert any(row["finding_key"] == FINDING_KEY for row in mine)

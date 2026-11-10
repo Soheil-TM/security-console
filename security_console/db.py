@@ -768,6 +768,10 @@ MIGRATIONS = (
         ON ci_api_tokens (id)
         WHERE revoked_at IS NULL
     """,
+    """
+    UPDATE users
+    SET allow_sonar_ui = (role = 'super_admin')
+    """,
 )
 
 
@@ -3411,17 +3415,29 @@ def upsert_disposition(
 
 
 def list_project_assignees(project_key: str) -> list[dict[str, Any]]:
-    """Return distinct members of groups that own this project slug."""
+    """Return group members for this project plus org admins.
+
+    Group members stay the primary triage pool. Org ``admin`` /
+    ``super_admin`` accounts are always included so Assign to me works
+    even when a project has no group yet.
+    """
 
     with connect() as conn:
         rows = conn.execute(
             """
             SELECT DISTINCT u.id, u.username, u.first_name, u.last_name, u.role
-            FROM projects AS pr
-            JOIN group_projects AS gp ON gp.project_id = pr.id
-            JOIN group_members AS m ON m.group_id = gp.group_id
-            JOIN users AS u ON u.id = m.user_id
-            WHERE pr.slug = %s AND u.disabled = false
+            FROM users AS u
+            WHERE u.disabled = false
+              AND (
+                u.role IN ('admin', 'super_admin')
+                OR u.id IN (
+                    SELECT m.user_id
+                    FROM projects AS pr
+                    JOIN group_projects AS gp ON gp.project_id = pr.id
+                    JOIN group_members AS m ON m.group_id = gp.group_id
+                    WHERE pr.slug = %s
+                )
+              )
             ORDER BY u.username
             """,
             (project_key,),

@@ -249,10 +249,10 @@ def _account_body(
         tool: bool(access.get(tool))
         for tool in TOOLS
     }
-    sonar_ui = bool(access.get("sonar_ui"))
     if role in {"admin", "super_admin"}:
         flags = {tool: True for tool in TOOLS}
-        sonar_ui = True
+    # Workspace is super_admin-only; ignore client checkbox for everyone else.
+    sonar_ui = role == "super_admin"
     # Preserve stored capabilities on update when the client omits them.
     # Creating without an explicit map stores {}. Admin does not get implicit caps.
     if "capabilities" in body:

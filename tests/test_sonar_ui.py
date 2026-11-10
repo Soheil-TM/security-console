@@ -23,12 +23,17 @@ def test_workspace_is_not_a_scanner() -> None:
     assert can_start_scan(developer, ["sonar"]) is True
 
 
-def test_admin_and_granted_user_can_open_the_site() -> None:
+def test_only_super_admin_can_open_the_site() -> None:
+    super_admin = {"role": "super_admin"}
     admin = {"role": "admin"}
     granted = {"role": "viewer", "allow_sonar_ui": True}
-    assert can_open_sonar_ui(admin) is True
-    assert access_map(admin)["sonar_ui"] is True
-    assert can_open_sonar_ui(granted) is True
+    developer = {"role": "developer", "allow_sonar_ui": True}
+    assert can_open_sonar_ui(super_admin) is True
+    assert access_map(super_admin)["sonar_ui"] is True
+    assert can_open_sonar_ui(admin) is False
+    assert access_map(admin)["sonar_ui"] is False
+    assert can_open_sonar_ui(granted) is False
+    assert can_open_sonar_ui(developer) is False
 
 
 def test_gzip_body_is_unwrapped_for_the_browser() -> None:

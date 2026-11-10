@@ -307,9 +307,19 @@ def _put_disposition() -> Reply:
             item["username"]: item for item in db.list_project_assignees(project)
         }
         person = candidates.get(assignee_name)
-        if person is None:
-            return jsonify({"error": "Assigned user must belong to the project group."}), 400
-        assignee_id = int(person["id"])
+        if person is not None:
+            assignee_id = int(person["id"])
+        elif (
+            assignee_name == str(user.get("username") or "")
+            and can_write_triage_by_role(user)
+        ):
+            # Self-assign for triage writers (e.g. admin on a project with
+            # no group membership yet).
+            assignee_id = int(user["id"])
+        else:
+            return jsonify(
+                {"error": "Assigned user must belong to the project group."}
+            ), 400
 
     row = db.upsert_disposition(
         project_key=project,

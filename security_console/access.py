@@ -32,11 +32,13 @@ def access_map(user: dict[str, Any]) -> dict[str, bool]:
 
 
 def can_open_sonar_ui(user: dict[str, Any]) -> bool:
-    """Return whether this account may open the SonarQube site."""
+    """Return whether this account may open the SonarQube site.
 
-    if user.get("role") in _TOOL_ADMIN_ROLES:
-        return True
-    return bool(user.get("allow_sonar_ui"))
+    Only ``super_admin`` may browse ``/sonar/``. Org admins and the
+    ``allow_sonar_ui`` flag do not grant workspace access.
+    """
+
+    return user.get("role") == "super_admin"
 
 
 def can_start_scan(user: dict[str, Any], tools: list[str]) -> bool:

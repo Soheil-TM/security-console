@@ -69,6 +69,9 @@ View = Response | tuple[Response, int]
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 256 * 1024
+# Pick up docker-cp / bind-mount template edits without a full image rebuild.
+app.config["TEMPLATES_AUTO_RELOAD"] = True
+app.jinja_env.auto_reload = True
 DATA = Path(os.environ.get("DATA_DIR", "/data"))
 RESTART_ERROR = "The console restarted during the scan."
 WORKER_GONE_ERROR = "The scanner no longer has this scan."

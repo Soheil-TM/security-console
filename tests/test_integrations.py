@@ -1,11 +1,13 @@
-"""Connection forms and how a scan finds the saved GitLab or registry."""
+"""Connection forms and how a scan finds the saved GitLab, GitHub, or registry."""
 
 from __future__ import annotations
 
 import pytest
 
 from security_console.integrations import (
+    credentials_for,
     join_registry_image,
+    matching_github,
     matching_gitlab,
     matching_registry,
     parse_integration,
@@ -30,6 +32,39 @@ def test_parse_integration_keeps_a_gitlab_address() -> None:
     assert parsed["name"] == "Internal"
     assert parsed["base_url"] == "https://gitlab.example.com"
     assert parsed["username"] == ""
+
+
+def test_parse_integration_keeps_a_github_address() -> None:
+    parsed, error = parse_integration(
+        {
+            "kind": "github",
+            "name": "Public GitHub",
+            "base_url": "https://github.com/",
+            "secret": "ghp_secret_token_12",
+        },
+        secret_required=True,
+    )
+
+    assert error == ""
+    assert parsed is not None
+    assert parsed["kind"] == "github"
+    assert parsed["base_url"] == "https://github.com"
+    assert parsed["username"] == ""
+
+
+def test_parse_integration_rejects_unknown_kind() -> None:
+    parsed, error = parse_integration(
+        {
+            "kind": "bitbucket",
+            "name": "Other",
+            "base_url": "https://bitbucket.example.com",
+            "secret": "bb-secret-token",
+        },
+        secret_required=True,
+    )
+
+    assert parsed is None
+    assert error == "Connection type is invalid."
 
 
 def test_parse_integration_rejects_a_registry_without_a_user() -> None:
@@ -62,6 +97,74 @@ def test_a_repository_uses_the_longest_gitlab_match() -> None:
     assert match is not None
     assert match["secret"] == "b"
     assert matching_gitlab("https://github.com/org/app.git", rows) is None
+
+
+def test_a_repository_uses_the_longest_github_match() -> None:
+    rows = [
+        {"kind": "github", "base_url": "https://github.com", "secret": "gh-a"},
+        {
+            "kind": "github",
+            "base_url": "https://github.com/org",
+            "secret": "gh-b",
+        },
+        {"kind": "gitlab", "base_url": "https://github.com", "secret": "gl"},
+    ]
+
+    match = matching_github("https://github.com/org/app.git", rows)
+
+    assert match is not None
+    assert match["secret"] == "gh-b"
+    assert matching_github("https://gitlab.example.com/team/app.git", rows) is None
+
+
+def test_credentials_for_github_sets_basic_clone_style(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "security_console.integrations.db.integration_secrets",
+        lambda: [
+            {
+                "kind": "github",
+                "base_url": "https://github.com",
+                "secret": "ghp_secret_token_12",
+                "ca_cert": "",
+            }
+        ],
+    )
+
+    found = credentials_for(
+        {"target": "repo", "repo": "https://github.com/org/app.git", "image": ""}
+    )
+
+    assert found["clone_token"] == "ghp_secret_token_12"
+    assert found["clone_style"] == "basic"
+
+
+def test_credentials_for_gitlab_omits_basic_clone_style(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "security_console.integrations.db.integration_secrets",
+        lambda: [
+            {
+                "kind": "gitlab",
+                "base_url": "https://gitlab.example.com",
+                "secret": "glpat-secret-token",
+                "ca_cert": "",
+            }
+        ],
+    )
+
+    found = credentials_for(
+        {
+            "target": "repo",
+            "repo": "https://gitlab.example.com/team/app.git",
+            "image": "",
+        }
+    )
+
+    assert found["clone_token"] == "glpat-secret-token"
+    assert "clone_style" not in found
 
 
 def test_an_image_name_is_prefixed_with_the_registry() -> None:

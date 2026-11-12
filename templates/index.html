@@ -1531,7 +1531,7 @@
     .scanner:has(input:focus-visible) { outline: 2px solid var(--teal); outline-offset: 2px; }
     .scanner b { display: block; font-size: 14px; }
     .scanner small { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; line-height: 1.45; }
-    #go, #user-new, #ci-token-new, #user-save, #connection-save, #schedule-save, #project-save, #group-save, #pw-save, #idle-stay, #adhoc-project-open, .ghost {
+    #go, #user-new, #ci-token-new, #user-save, #connection-save, #schedule-save, #project-save, #group-save, #project-group-create-save, #pw-save, #idle-stay, #adhoc-project-open, #scan-reuse-open, .ghost {
       height: 42px;
       border-radius: 8px;
       padding: 0 16px;
@@ -1541,21 +1541,21 @@
       justify-content: center;
       white-space: nowrap;
     }
-    #go, #user-new, #ci-token-new, #user-save, #connection-save, #schedule-save, #project-save, #group-save, #pw-save, #idle-stay, #adhoc-project-open {
+    #go, #user-new, #ci-token-new, #user-save, #connection-save, #schedule-save, #project-save, #group-save, #project-group-create-save, #pw-save, #idle-stay, #adhoc-project-open, #scan-reuse-open {
       background: var(--teal);
       color: #042f2e;
       border: 0;
     }
-    #go:hover, #user-new:hover, #ci-token-new:hover, #user-save:hover, #connection-save:hover, #schedule-save:hover, #project-save:hover, #group-save:hover, #pw-save:hover, #idle-stay:hover, #adhoc-project-open:hover {
+    #go:hover, #user-new:hover, #ci-token-new:hover, #user-save:hover, #connection-save:hover, #schedule-save:hover, #project-save:hover, #group-save:hover, #project-group-create-save:hover, #pw-save:hover, #idle-stay:hover, #adhoc-project-open:hover, #scan-reuse-open:hover {
       background: var(--teal-2);
       color: #042f2e;
     }
-    #go:disabled, #user-save:disabled, #project-save:disabled, #pw-save:disabled, #idle-stay:disabled {
+    #go:disabled, #user-save:disabled, #project-save:disabled, #pw-save:disabled, #idle-stay:disabled, #scan-reuse-open:disabled, #scan-reuse-again:disabled {
       background: #94a3b8;
       color: #fff;
     }
     #go:disabled { cursor: progress; }
-    #user-save:disabled, #project-save:disabled, #pw-save:disabled { cursor: not-allowed; }
+    #user-save:disabled, #project-save:disabled, #pw-save:disabled, #scan-reuse-open:disabled, #scan-reuse-again:disabled { cursor: not-allowed; }
     html.dark #go,
     html.dark #user-new,
     html.dark #ci-token-new,
@@ -1564,9 +1564,11 @@
     html.dark #schedule-save,
     html.dark #project-save,
     html.dark #group-save,
+    html.dark #project-group-create-save,
     html.dark #pw-save,
     html.dark #idle-stay,
-    html.dark #adhoc-project-open {
+    html.dark #adhoc-project-open,
+    html.dark #scan-reuse-open {
       background: #2dd4bf;
       color: #042f2e;
     }
@@ -1578,11 +1580,44 @@
     html.dark #schedule-save:hover,
     html.dark #project-save:hover,
     html.dark #group-save:hover,
+    html.dark #project-group-create-save:hover,
     html.dark #pw-save:hover,
     html.dark #idle-stay:hover,
-    html.dark #adhoc-project-open:hover {
+    html.dark #adhoc-project-open:hover,
+    html.dark #scan-reuse-open:hover {
       background: #5eead4;
       color: #042f2e;
+    }
+    #scan-reuse-dialog .idle-card { width: min(460px, 100%); }
+    html.dark #scan-reuse-dialog .idle-card p { color: #c5d5e4; }
+    html.dark #scan-reuse-again.ghost {
+      background: #123043;
+      border-color: #2a4a5e;
+      color: var(--ink);
+    }
+    #project-group-create {
+      margin-top: 10px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #f8fafc;
+    }
+    html.dark #project-group-create {
+      background: #123043;
+      border-color: #2a4a5e;
+      color: var(--ink);
+    }
+    html.dark #project-group-create .field-label,
+    html.dark #project-group-create .hint { color: #c5d5e4; }
+    html.dark #project-group-create .member-row {
+      border-bottom-color: #2a4a5e;
+    }
+    html.dark #project-group-create .member-list {
+      background: #0f2433;
+      border-color: #2a4a5e;
+    }
+    #project-group-create-open {
+      margin-top: 8px;
     }
     .ghost {
       border: 1px solid #c5d1de;
@@ -2837,7 +2872,7 @@
               <input id="repo" type="url" dir="ltr" placeholder="https://github.com/org/repo.git">
             </label>
             <label class="grow" id="repo-project-field" hidden>
-              <span class="field-label">GitLab project</span>
+              <span class="field-label">Repository</span>
               <select id="repo-project" class="field"></select>
             </label>
             <label class="grow" id="image-source-field" hidden>
@@ -3034,7 +3069,7 @@
           <div class="page-head">
             <div>
               <h1>Connections</h1>
-              <p class="meta">Save the internal GitLab and the private registry once. A token stays on the server. Scans then offer those projects, and a lead can attach them to a group.</p>
+              <p class="meta">Save GitLab, GitHub, and the private registry once. A token stays on the server. Scans then offer those projects, and a lead can attach them to a group.</p>
             </div>
             <button type="button" class="ghost" id="connection-new">New connection</button>
           </div>
@@ -3047,6 +3082,7 @@
               <label><span class="field-label">Type</span>
                 <select id="connection-kind" class="field">
                   <option value="gitlab">GitLab</option>
+                  <option value="github">GitHub</option>
                   <option value="registry">Private registry</option>
                 </select>
               </label>
@@ -3155,7 +3191,7 @@
                   <button type="button" class="ghost" id="project-repo-add">Add</button>
                 </div>
                 <details class="pick-drop" id="project-repo-pick-drop" hidden>
-                  <summary id="project-repo-pick-summary">Or pick from GitLab…</summary>
+                  <summary id="project-repo-pick-summary">Or pick from GitLab / GitHub…</summary>
                   <div id="project-repo-pick" class="pick-drop-panel" dir="ltr"></div>
                 </details>
               </div>
@@ -3182,6 +3218,26 @@
                 <summary id="project-groups-summary">Choose groups…</summary>
                 <div id="project-groups" class="pick-drop-panel"></div>
               </details>
+              <button type="button" class="ghost" id="project-group-create-open">Create new group</button>
+              <div id="project-group-create" hidden>
+                <h3 style="margin:0 0 10px;font-size:15px">New group</h3>
+                <div id="project-group-create-error" class="login-error" hidden></div>
+                <div class="account-grid">
+                  <label><span class="field-label">Group name</span><input id="project-group-create-name" maxlength="80" autocomplete="off"></label>
+                  <label><span class="field-label">Description</span><input id="project-group-create-description" maxlength="500" autocomplete="off"></label>
+                </div>
+                <span class="field-label">Members</span>
+                <div class="member-pick" id="project-group-create-member-pick">
+                  <input id="project-group-create-member-q" type="search" placeholder="Search name or username" autocomplete="off">
+                  <div id="project-group-create-member-list" class="member-list" hidden></div>
+                </div>
+                <div id="project-group-create-member-chosen"></div>
+                <p class="hint">You stay lead of this group. Attach the project after you save it.</p>
+                <div style="display:flex;gap:8px;margin-top:12px">
+                  <button type="button" id="project-group-create-save">Create</button>
+                  <button type="button" class="ghost" id="project-group-create-cancel">Cancel</button>
+                </div>
+              </div>
             </div>
             <p class="hint">Leads of the selected groups can edit this project. Members can scan it. With no group selected, only admins see the project's scans.</p>
             <p class="note" id="project-groups-warn" hidden>No groups selected. Only admins will see scans for this project.</p>
@@ -3241,6 +3297,16 @@
       <div class="idle-actions">
         <button type="button" class="ghost" id="adhoc-project-close">Close</button>
         <button type="button" id="adhoc-project-open">Open Projects</button>
+      </div>
+    </div>
+  </div>
+  <div class="idle-warn" id="scan-reuse-dialog" hidden>
+    <div class="idle-card" role="dialog" aria-modal="true" aria-labelledby="scan-reuse-title">
+      <h2 id="scan-reuse-title">Recent report already covers this</h2>
+      <p id="scan-reuse-body">A scan in the last 24 hours is in history. Open that report, or scan again.</p>
+      <div class="idle-actions">
+        <button type="button" class="ghost" id="scan-reuse-again">Scan again</button>
+        <button type="button" id="scan-reuse-open">Open existing report</button>
       </div>
     </div>
   </div>
@@ -3665,6 +3731,8 @@
       document.querySelector("#nav-schedules").hidden = !hasCap(user, "projects.manage_all");
       document.querySelector("#group-new").hidden = user.role === "viewer";
       document.querySelector("#project-new").hidden = user.role === "viewer";
+      const projectGroupCreateOpen = document.querySelector("#project-group-create-open");
+      if (projectGroupCreateOpen) projectGroupCreateOpen.hidden = user.role === "viewer";
       const sonarLink = document.querySelector("#sonar-link");
       if (sonarLink) sonarLink.hidden = !(user.access && user.access.sonar_ui);
       if (!hasCap(user, "users.manage") && state.view === "users") setView("scans");
@@ -3682,8 +3750,33 @@
     }
 
     function displayName(user) {
+      if (!user) return "";
       const name = [user.first_name, user.last_name].filter(Boolean).join(" ").trim();
       return name || user.username || "";
+    }
+
+    function investigateAssigneePeople() {
+      const data = state.investigate || {};
+      const people = (data.assignees || []).slice();
+      const me = currentUser && currentUser.username ? currentUser.username : "";
+      if (me && !people.some((person) => person.username === me)) {
+        people.push({
+          username: me,
+          first_name: currentUser.first_name || "",
+          last_name: currentUser.last_name || ""
+        });
+      }
+      return people;
+    }
+
+    function assigneeDisplayName(username) {
+      const want = String(username || "").trim();
+      if (!want) return "";
+      const people = investigateAssigneePeople();
+      const known = people.find((person) => person.username === want);
+      if (known) return displayName(known) || want;
+      if (currentUser && currentUser.username === want) return displayName(currentUser) || want;
+      return want;
     }
 
     function paintProfile(user) {
@@ -3869,6 +3962,7 @@
     let editingUser = null;
     let groupPeople = [];
     let chosenMembers = [];
+    let projectGroupDraftMembers = [];
 
     function paintSettings() {
       document.querySelector("#settings-wrap").hidden = !settingsMenuOpen;
@@ -3980,20 +4074,21 @@
       document.querySelector("#scan-project-field").hidden = adhoc;
       document.querySelector("#scan-target-field").hidden = adhoc || !projectSlug;
       fillScanTargetOptions();
-      const gitlabSource = adhoc && !showingImage && document.querySelector("#repo-source").value;
+      const repoSource = adhoc && !showingImage && document.querySelector("#repo-source").value;
       const registrySource = adhoc && showingImage && document.querySelector("#image-source").value;
-      document.querySelector("#repo-source-field").hidden = !adhoc || showingImage || !connections.some((item) => item.kind === "gitlab");
-      document.querySelector("#repo-field").hidden = !adhoc || showingImage || Boolean(gitlabSource);
-      document.querySelector("#repo-project-field").hidden = !adhoc || !gitlabSource;
+      const hasRepoConnection = connections.some((item) => item.kind === "gitlab" || item.kind === "github");
+      document.querySelector("#repo-source-field").hidden = !adhoc || showingImage || !hasRepoConnection;
+      document.querySelector("#repo-field").hidden = !adhoc || showingImage || Boolean(repoSource);
+      document.querySelector("#repo-project-field").hidden = !adhoc || !repoSource;
       document.querySelector("#image-source-field").hidden = !adhoc || !showingImage || !connections.some((item) => item.kind === "registry");
       document.querySelector("#image-field").hidden = !adhoc || !showingImage;
       document.querySelector("#image-list").hidden = !adhoc || !showingImage || Boolean(registrySource);
-      document.querySelector("#repo").required = adhoc && !showingImage && !gitlabSource && state.pane === "scan";
+      document.querySelector("#repo").required = adhoc && !showingImage && !repoSource && state.pane === "scan";
       document.querySelector("#image-ref").placeholder = registrySource ? "team/app:1.0" : "nginx:1.27";
       document.querySelector("#target-hint").textContent = adhoc
         ? (showingImage
           ? (registrySource ? "Trivy scans an image pulled from the private registry." : "Image scans use Trivy. Pick an image on work-01, or type a name to pull it.")
-          : (gitlabSource ? "Choose a GitLab project from your groups." : "Repository scans use Semgrep, Checkov, and SonarQube."))
+          : (repoSource ? "Choose a repository from the selected connection." : "Repository scans use Semgrep, Checkov, and SonarQube."))
         : "Choose a project and one of its targets, then start the scan.";
       document.querySelectorAll("input[name=tool]").forEach((input) => {
         const allowed = !currentUser || (currentUser.access && currentUser.access[input.value]);
@@ -4981,7 +5076,7 @@
       if (key === "finding") return String(row.check || "") + " " + String(row.path || "");
       if (key === "tool") return TOOL_LABEL[row.tool] || row.tool || "";
       if (key === "status") return disp.status || "";
-      if (key === "assigned") return disp.assignee_username || "";
+      if (key === "assigned") return assigneeDisplayName(disp.assignee_username || "");
       if (key === "notes") return latest ? String(latest.created_at || "") + " " + String(latest.reason || "") : "";
       return "";
     }
@@ -5009,6 +5104,7 @@
       const when = formatStamp(note.created_at || note.updated_at || "");
       const status = note.status || "";
       const assignee = note.assignee_username || "";
+      const assigneeShown = assignee ? assigneeDisplayName(assignee) : "";
       const reason = String(note.reason || "").trim();
       return '<div class="inv-note' + (locked ? " locked" : "") + '">'
         + '<div class="inv-note-head">'
@@ -5016,7 +5112,7 @@
         + (when ? '<span class="meta">' + esc(when) + "</span>" : "")
         + (status ? '<span class="disp-badge ' + esc(status) + '">' + esc(DISP_LABEL[status] || status) + "</span>" : "")
         + "</div>"
-        + (assignee ? '<div class="inv-note-assignee">Assigned to: ' + esc(assignee) + "</div>" : "")
+        + (assigneeShown ? '<div class="inv-note-assignee">Assigned to: ' + esc(assigneeShown) + "</div>" : "")
         + '<div class="inv-note-body">' + esc(reason || "—") + "</div>"
         + "</div>";
     }
@@ -5129,6 +5225,7 @@
         const assignee = status === "accepted_risk" && me
           ? (disp.assignee_username || me)
           : (disp.assignee_username || "");
+        const assigneeShown = assignee ? assigneeDisplayName(assignee) : "";
         const notes = Array.isArray(disp.notes) ? disp.notes : [];
         const level = bucket(row.severity);
         const sev = SEV.find((item) => item[0] === level);
@@ -5137,7 +5234,7 @@
         const statusBadge = status
           ? '<span class="disp-badge ' + esc(status) + '">' + esc(DISP_LABEL[status] || status) + "</span>"
           : '<span class="disp-badge undecided">Undecided</span>';
-        const assigneeCell = '<span class="inv-assignee-cell">' + esc(assignee || "Unassigned") + "</span>";
+        const assigneeCell = '<span class="inv-assignee-cell">' + esc(assigneeShown || "Unassigned") + "</span>";
         return '<tr data-finding-key="' + esc(key) + '" data-index="' + fullIndex + '">'
           + '<td class="inv-check"><input type="checkbox" class="inv-row-check" data-key="' + esc(key) + '"' + checked + (canTriage ? "" : " disabled") + '></td>'
           + '<td><span class="pill ' + level + '">' + (sev ? sev[2] : level) + "</span></td>"
@@ -5243,10 +5340,9 @@
       const findings = data.findings || [];
       const dispositions = data.dispositions || {};
       const me = currentUser && currentUser.username ? currentUser.username : "";
-      const assignees = (data.assignees || []).slice();
-      if (me && !assignees.some((person) => person.username === me)) {
-        assignees.push({username: me});
-      }
+      const assignees = investigateAssigneePeople().slice().sort((left, right) =>
+        displayName(left).localeCompare(displayName(right), undefined, {sensitivity: "base"})
+      );
       const title = document.querySelector("#inv-edit-title");
       const nameBox = document.querySelector("#inv-edit-name");
       const statusEl = document.querySelector("#inv-edit-status");
@@ -5263,9 +5359,10 @@
       }
       if (assigneeEl) {
         assigneeEl.innerHTML = ['<option value="">Unassigned</option>'].concat(
-          assignees.map((person) =>
-            '<option value="' + esc(person.username) + '">' + esc(person.username) + "</option>"
-          )
+          assignees.map((person) => {
+            const label = displayName(person) || person.username;
+            return '<option value="' + esc(person.username) + '">' + esc(label) + "</option>";
+          })
         ).join("");
       }
       let status = "";
@@ -6315,6 +6412,18 @@
         const person = chosenMembers.find((item) => item.username === el.dataset.user);
         if (person && person.role !== "viewer" && !person.locked) person.lead = el.checked;
       }
+      if (action === "pg-member-add") {
+        addProjectGroupDraftMember(el.dataset.user || "");
+      }
+      if (action === "pg-member-remove") {
+        projectGroupDraftMembers = projectGroupDraftMembers.filter((item) => item.username !== el.dataset.user);
+        renderProjectGroupDraftMembers();
+        if (!document.querySelector("#project-group-create-member-list").hidden) renderProjectGroupDraftChoices();
+      }
+      if (action === "pg-member-lead") {
+        const person = projectGroupDraftMembers.find((item) => item.username === el.dataset.user);
+        if (person && person.role !== "viewer" && !person.locked) person.lead = el.checked;
+      }
       if (action === "group-open") {
         state.groupId = Number(el.dataset.id);
         renderGroups();
@@ -6695,13 +6804,16 @@
     }
 
     function renderConnectionChoices() {
-      const gitlab = connections.filter((item) => item.kind === "gitlab");
+      const repoHosts = connections.filter((item) => item.kind === "gitlab" || item.kind === "github");
       const registries = connections.filter((item) => item.kind === "registry");
       const repo = document.querySelector("#repo-source");
       const image = document.querySelector("#image-source");
       const repoValue = repo.value;
       const imageValue = image.value;
-      repo.innerHTML = '<option value="">Public address</option>' + gitlab.map((item) => '<option value="' + item.id + '">' + esc(item.name) + "</option>").join("");
+      repo.innerHTML = '<option value="">Public address</option>' + repoHosts.map((item) => {
+        const kind = item.kind === "github" ? "GitHub" : "GitLab";
+        return '<option value="' + item.id + '">' + esc(item.name) + " (" + kind + ")</option>";
+      }).join("");
       image.innerHTML = '<option value="">This server</option>' + registries.map((item) => '<option value="' + item.id + '">' + esc(item.name) + "</option>").join("");
       if ([...repo.options].some((option) => option.value === repoValue)) repo.value = repoValue;
       if ([...image.options].some((option) => option.value === imageValue)) image.value = imageValue;
@@ -7135,16 +7247,20 @@
     function renderConnections() {
       const box = document.querySelector("#connection-list");
       if (!box) return;
+      const kindLabel = {gitlab: "GitLab", github: "GitHub", registry: "Registry"};
       box.innerHTML = connections.map((item) => {
-        const kind = item.kind === "gitlab" ? "GitLab" : "Registry";
+        const kind = kindLabel[item.kind] || item.kind || "Connection";
         return '<div class="card" style="padding:12px;margin-bottom:8px"><strong>' + esc(item.name) + '</strong><div class="meta">' + kind + " · " + esc(item.base_url) + '</div><div class="row-actions" style="margin-top:8px"><button type="button" class="ghost" data-action="test-connection" data-id="' + item.id + '">Test</button><button type="button" class="ghost" data-action="edit-connection" data-id="' + item.id + '">Edit</button><button type="button" class="ghost" data-action="delete-connection" data-id="' + item.id + '">Delete</button></div></div>';
       }).join("") || '<p class="meta">No connections yet.</p>';
     }
 
     function syncConnectionKind() {
-      const registry = document.querySelector("#connection-kind").value === "registry";
+      const kind = document.querySelector("#connection-kind").value;
+      const registry = kind === "registry";
       document.querySelector("#connection-user-field").hidden = !registry;
-      document.querySelector("#connection-url").placeholder = registry ? "192.168.1.20:5000" : "https://gitlab.example.com";
+      document.querySelector("#connection-url").placeholder = registry
+        ? "192.168.1.20:5000"
+        : (kind === "github" ? "https://github.com" : "https://gitlab.example.com");
       document.querySelector("#connection-user").required = registry;
       document.querySelector("#connection-secret").required = !editingConnection;
     }
@@ -7241,7 +7357,7 @@
         chips: document.querySelector(key === "image" ? "#project-image-chips" : "#project-repo-chips"),
         panel: document.querySelector(key === "image" ? "#project-image-pick" : "#project-repo-pick"),
         input: document.querySelector(key === "image" ? "#project-image-ref" : "#project-repo-url"),
-        emptyLabel: key === "image" ? "Or pick from registry…" : "Or pick from GitLab…"
+        emptyLabel: key === "image" ? "Or pick from registry…" : "Or pick from GitLab / GitHub…"
       };
     }
 
@@ -7282,9 +7398,9 @@
       );
     }
 
-    async function fillPicker(kind, panel, drop) {
-      const sources = connections.filter((item) => item.kind === kind);
-      const emptyLabel = kind === "gitlab" ? "Or pick from GitLab…" : "Or pick from registry…";
+    async function fillPicker(kinds, panel, drop, emptyLabel) {
+      const wanted = Array.isArray(kinds) ? kinds : [kinds];
+      const sources = connections.filter((item) => wanted.indexOf(item.kind) >= 0);
       drop.hidden = sources.length === 0;
       drop.open = false;
       panel.innerHTML = "";
@@ -7434,6 +7550,91 @@
       }
     }
 
+    let scanReusePending = null;
+    let scanReuseBusy = false;
+
+    function reuseReportWhen(scan) {
+      const stamp = formatStamp(scan && (scan.finished_at || scan.created_at) || "");
+      return stamp || "the last 24 hours";
+    }
+
+    function setScanReuseBusy(busy) {
+      scanReuseBusy = Boolean(busy);
+      const openBtn = document.querySelector("#scan-reuse-open");
+      const againBtn = document.querySelector("#scan-reuse-again");
+      const go = document.querySelector("#go");
+      if (openBtn) openBtn.disabled = scanReuseBusy;
+      if (againBtn) againBtn.disabled = scanReuseBusy;
+      if (go) go.disabled = scanReuseBusy;
+    }
+
+    function closeScanReuseDialog() {
+      const dialog = document.querySelector("#scan-reuse-dialog");
+      if (dialog) dialog.hidden = true;
+      setScanReuseBusy(false);
+    }
+
+    function showScanReuseDialog(pending) {
+      scanReusePending = pending;
+      const dialog = document.querySelector("#scan-reuse-dialog");
+      const bodyEl = document.querySelector("#scan-reuse-body");
+      if (!dialog || !bodyEl || !pending || !pending.body) return;
+      const when = reuseReportWhen(pending.body);
+      bodyEl.textContent = "A scan finished at " + when + " is already in history (last 24 hours). Open that report, or scan again.";
+      dialog.hidden = false;
+      setScanReuseBusy(false);
+      const openBtn = document.querySelector("#scan-reuse-open");
+      if (openBtn) openBtn.focus();
+    }
+
+    function acceptScanReuseOpen() {
+      if (!scanReusePending || scanReuseBusy) return;
+      const pending = scanReusePending;
+      scanReusePending = null;
+      closeScanReuseDialog();
+      if (pending.guest) {
+        applyGuestScanResult(pending.body, false);
+      } else {
+        showQueuedScan(pending.body);
+      }
+    }
+
+    async function acceptScanReuseAgain() {
+      if (!scanReusePending || scanReuseBusy) return;
+      const pending = scanReusePending;
+      setScanReuseBusy(true);
+      try {
+        if (pending.guest) {
+          scanReusePending = null;
+          closeScanReuseDialog();
+          await startGuestScan(true);
+          return;
+        }
+        const payload = Object.assign({}, pending.payload || {}, {force: true});
+        const response = await api("/api/scans", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(payload)
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const msg = document.querySelector("#form-msg");
+          if (msg) {
+            msg.className = "bad";
+            msg.textContent = body.error || "Could not start.";
+          }
+          scanReusePending = null;
+          closeScanReuseDialog();
+          return;
+        }
+        scanReusePending = null;
+        closeScanReuseDialog();
+        showQueuedScan(body);
+      } finally {
+        setScanReuseBusy(false);
+      }
+    }
+
     let retryBusy = false;
 
     async function retryScan(scan, button) {
@@ -7510,29 +7711,40 @@
           const prefix = registryPrefix(source ? source.base_url : "");
           if (prefix && !imageName.startsWith(prefix + "/")) imageName = prefix + "/" + imageName.replace(/^\/+/, "");
         }
-        const gitlabId = document.querySelector("#repo-source").value;
-        const repoUrl = gitlabId ? document.querySelector("#repo-project").value : document.querySelector("#repo").value;
-        if (!imageMode && gitlabId && !repoUrl) {
+        const repoSourceId = document.querySelector("#repo-source").value;
+        const repoUrl = repoSourceId ? document.querySelector("#repo-project").value : document.querySelector("#repo").value;
+        if (!imageMode && repoSourceId && !repoUrl) {
           msg.className = "bad";
-          msg.textContent = "Choose a GitLab project.";
+          msg.textContent = "Choose a repository.";
           return;
         }
         payload = imageMode
           ? {target: "image", image: imageName, tools}
           : {target: "repo", repo: repoUrl, tools};
       }
-      const response = await api("/api/scans", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify(payload)
-      });
-      const body = await response.json();
-      if (!response.ok) {
-        msg.className = "bad";
-        msg.textContent = body.error || "Could not start.";
-        return;
+      if (scanReuseBusy) return;
+      setScanReuseBusy(true);
+      try {
+        const response = await api("/api/scans", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(payload)
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          msg.className = "bad";
+          msg.textContent = body.error || "Could not start.";
+          return;
+        }
+        if (body.reused && body.reuse_reason === "recent") {
+          msg.textContent = "";
+          showScanReuseDialog({payload, body, guest: false});
+          return;
+        }
+        showQueuedScan(body);
+      } finally {
+        setScanReuseBusy(false);
       }
-      showQueuedScan(body);
     });
 
     document.querySelector("#scan-project").addEventListener("change", () => {
@@ -7640,8 +7852,8 @@
       const repoDrop = document.querySelector("#project-repo-pick-drop");
       const imageDrop = document.querySelector("#project-image-pick-drop");
       if (!repoPick || !imagePick || !repoDrop || !imageDrop) return;
-      await fillPicker("gitlab", repoPick, repoDrop);
-      await fillPicker("registry", imagePick, imageDrop);
+      await fillPicker(["gitlab", "github"], repoPick, repoDrop, "Or pick from GitLab / GitHub…");
+      await fillPicker("registry", imagePick, imageDrop, "Or pick from registry…");
       const repos = (project && project.targets || [])
         .filter((item) => item.kind === "repo")
         .map((item) => item.target);
@@ -7736,14 +7948,166 @@
       document.querySelector("#project-slug").value = project ? project.slug : "";
       document.querySelector("#project-description").value = project ? (project.description || "") : "";
       fillProjectGroupOptions(project ? (project.group_ids || []) : []);
+      hideProjectGroupCreate();
       await fillProjectPickers(project);
       if (box) box.hidden = true;
     }
 
+    function hideProjectGroupCreate() {
+      const panel = document.querySelector("#project-group-create");
+      const err = document.querySelector("#project-group-create-error");
+      if (panel) panel.hidden = true;
+      if (err) {
+        err.hidden = true;
+        err.textContent = "";
+      }
+      projectGroupDraftMembers = [];
+      const list = document.querySelector("#project-group-create-member-list");
+      if (list) list.hidden = true;
+    }
+
+    function renderProjectGroupDraftMembers() {
+      const box = document.querySelector("#project-group-create-member-chosen");
+      if (!box) return;
+      if (!projectGroupDraftMembers.length) {
+        box.innerHTML = '<p class="hint">No one selected yet.</p>';
+        return;
+      }
+      box.innerHTML = projectGroupDraftMembers.map((person) => {
+        const viewer = person.role === "viewer";
+        const lead = '<label class="member-lead"><input type="checkbox" data-action="pg-member-lead" data-user="' + esc(person.username) + '"' + (person.lead ? " checked" : "") + (viewer || person.locked ? " disabled" : "") + "> Lead</label>";
+        const remove = person.locked ? "" : '<button type="button" class="ghost" data-action="pg-member-remove" data-user="' + esc(person.username) + '">Remove</button>';
+        return '<div class="member-row"><div><b>' + esc(displayName(person)) + '</b><div class="meta">' + esc(person.username) + " · " + esc(ROLE_LABEL[person.role] || person.role) + "</div></div><div class=\"row-actions\">" + lead + remove + "</div></div>";
+      }).join("");
+    }
+
+    function renderProjectGroupDraftChoices() {
+      const list = document.querySelector("#project-group-create-member-list");
+      const input = document.querySelector("#project-group-create-member-q");
+      if (!list || !input) return;
+      const query = input.value.trim().toLowerCase();
+      const taken = new Set(projectGroupDraftMembers.map((item) => item.username));
+      const matches = groupPeople.filter((person) => {
+        if (taken.has(person.username)) return false;
+        const text = (displayName(person) + " " + person.username + " " + (ROLE_LABEL[person.role] || "")).toLowerCase();
+        return !query || text.includes(query);
+      }).slice(0, 8);
+      list.hidden = false;
+      if (!matches.length) {
+        list.innerHTML = '<p class="hint">No matching people.</p>';
+        return;
+      }
+      list.innerHTML = matches.map((person) => '<button type="button" class="member-option" data-action="pg-member-add" data-user="' + esc(person.username) + '"><b>' + esc(displayName(person)) + "</b><span>" + esc(person.username) + " · " + esc(ROLE_LABEL[person.role] || person.role) + "</span></button>").join("");
+    }
+
+    function addProjectGroupDraftMember(username) {
+      if (!username || projectGroupDraftMembers.some((item) => item.username === username)) return;
+      const known = groupPeople.find((item) => item.username === username);
+      if (!known) return;
+      projectGroupDraftMembers.push(groupPerson(username, false, false, known.role));
+      document.querySelector("#project-group-create-member-q").value = "";
+      document.querySelector("#project-group-create-member-list").hidden = true;
+      renderProjectGroupDraftMembers();
+    }
+
+    async function showProjectGroupCreate() {
+      const panel = document.querySelector("#project-group-create");
+      const err = document.querySelector("#project-group-create-error");
+      if (!panel || !currentUser || currentUser.role === "viewer") return;
+      panel.hidden = false;
+      if (err) {
+        err.hidden = true;
+        err.textContent = "";
+      }
+      document.querySelector("#project-group-create-name").value = "";
+      document.querySelector("#project-group-create-description").value = "";
+      document.querySelector("#project-group-create-member-q").value = "";
+      document.querySelector("#project-group-create-member-list").hidden = true;
+      const loaded = await loadGroupPeople();
+      if (!loaded && err) {
+        err.hidden = false;
+        err.textContent = "Could not load people.";
+      }
+      projectGroupDraftMembers = [
+        groupPerson(currentUser.username, true, true, currentUser.role)
+      ];
+      renderProjectGroupDraftMembers();
+      document.querySelector("#project-group-create-name").focus();
+    }
+
+    async function submitProjectGroupCreate() {
+      const err = document.querySelector("#project-group-create-error");
+      const name = document.querySelector("#project-group-create-name").value;
+      const description = document.querySelector("#project-group-create-description").value;
+      if (!name.trim()) {
+        if (err) {
+          err.hidden = false;
+          err.textContent = "Group name is required.";
+        }
+        return;
+      }
+      if (!projectGroupDraftMembers.some((item) => item.lead)) {
+        if (err) {
+          err.hidden = false;
+          err.textContent = "A group needs a lead.";
+        }
+        return;
+      }
+      const response = await api("/api/groups", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          name,
+          description,
+          project_slugs: [],
+          members: projectGroupDraftMembers.map((item) => ({username: item.username, lead: item.lead}))
+        })
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (err) {
+          err.hidden = false;
+          err.textContent = body.error || "Could not create the group.";
+        }
+        return;
+      }
+      if (err) {
+        err.hidden = true;
+        err.textContent = "";
+      }
+      const panel = document.querySelector("#project-groups");
+      const selected = selectedPickValues(panel).map(Number);
+      if (body.id != null && !selected.includes(Number(body.id))) selected.push(Number(body.id));
+      await loadGroups();
+      fillProjectGroupOptions(selected);
+      const drop = document.querySelector("#project-groups-drop");
+      if (drop) drop.open = true;
+      hideProjectGroupCreate();
+    }
+
     document.querySelector("#project-new").addEventListener("click", () => showProjectForm(null));
     document.querySelector("#project-cancel").addEventListener("click", () => {
+      hideProjectGroupCreate();
       document.querySelector("#project-form").hidden = true;
     });
+    document.querySelector("#project-group-create-open").addEventListener("click", () => {
+      showProjectGroupCreate();
+    });
+    document.querySelector("#project-group-create-cancel").addEventListener("click", () => {
+      hideProjectGroupCreate();
+    });
+    document.querySelector("#project-group-create-save").addEventListener("click", () => {
+      submitProjectGroupCreate();
+    });
+    document.querySelector("#project-group-create").addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      if (event.target && event.target.tagName === "TEXTAREA") return;
+      event.preventDefault();
+      if (event.target && event.target.id === "project-group-create-member-q") return;
+      submitProjectGroupCreate();
+    });
+    document.querySelector("#project-group-create-member-q").addEventListener("focus", renderProjectGroupDraftChoices);
+    document.querySelector("#project-group-create-member-q").addEventListener("input", renderProjectGroupDraftChoices);
     function addTargetFromInput(kind) {
       const {input} = targetChipEls(kind);
       if (!input) return;
@@ -7982,7 +8346,14 @@
     document.querySelector("#group-member-q").addEventListener("focus", renderMemberChoices);
     document.querySelector("#group-member-q").addEventListener("input", renderMemberChoices);
     document.addEventListener("click", (event) => {
-      if (!event.target.closest(".member-pick")) document.querySelector("#group-member-list").hidden = true;
+      if (!event.target.closest("#group-form .member-pick")) {
+        const groupList = document.querySelector("#group-member-list");
+        if (groupList) groupList.hidden = true;
+      }
+      if (!event.target.closest("#project-group-create-member-pick")) {
+        const projectList = document.querySelector("#project-group-create-member-list");
+        if (projectList) projectList.hidden = true;
+      }
     });
     document.querySelector("#group-cancel").addEventListener("click", () => {
       document.querySelector("#group-form").hidden = true;
@@ -8184,12 +8555,18 @@
       noteInput();
       if (event.key === "Escape") {
         if (document.body.classList.contains("login-open")) closeLoginDialog();
+        else if (!document.querySelector("#scan-reuse-dialog").hidden) acceptScanReuseOpen();
         else if (!document.querySelector("#adhoc-project-dialog").hidden) closeAdhocProjectDialog();
         else if (!document.querySelector("#inv-edit-dialog").hidden) closeInvestigateEditDialog();
         else if (!document.querySelector("#password-dialog").hidden) closePasswordDialog();
         else if (!document.querySelector("#ci-token-dialog").hidden) closeCiTokenDialog();
         else closeProfileMenu();
       }
+    });
+    document.querySelector("#scan-reuse-open").addEventListener("click", () => acceptScanReuseOpen());
+    document.querySelector("#scan-reuse-again").addEventListener("click", () => acceptScanReuseAgain());
+    document.querySelector("#scan-reuse-dialog").addEventListener("click", (event) => {
+      if (event.target.id === "scan-reuse-dialog") acceptScanReuseOpen();
     });
     document.querySelector("#adhoc-project-close").addEventListener("click", closeAdhocProjectDialog);
     document.querySelector("#adhoc-project-open").addEventListener("click", () => {
@@ -8933,8 +9310,32 @@
       return body;
     }
 
+    async function applyGuestScanResult(body, fromForce) {
+      document.querySelector("#guest-token").value = "";
+      document.querySelector("#guest-reg-pass").value = "";
+      if (body.reused) {
+        guestMessage(
+          body.reuse_reason === "queued"
+            ? "That scan is already in the queue. Opening it."
+            : (body.reuse_reason === "running"
+              ? "That scan is already running. Opening it."
+              : "A report from the last 24 hours already covers this. Opening it.")
+        );
+      } else if (body.status === "queued") {
+        guestMessage(queueLabel(body) || "Scan queued.");
+      } else {
+        guestMessage(fromForce ? "Scan started." : "Scan started.");
+      }
+      guest.scan = body;
+      guest.historyOpen = true;
+      await loadGuestScans();
+      renderGuestList();
+      scrollOpenGuestRow();
+    }
+
     async function startGuestScan(force) {
       const button = document.querySelector("#guest-go");
+      if (scanReuseBusy && !force) return;
       button.disabled = true;
       guestMessage("Starting the scan...");
       try {
@@ -8949,26 +9350,12 @@
           guestMessage(body.error || "Could not start the scan.", true);
           return;
         }
-        document.querySelector("#guest-token").value = "";
-        document.querySelector("#guest-reg-pass").value = "";
-        if (body.reused) {
-          guestMessage(
-            body.reuse_reason === "queued"
-              ? "That scan is already in the queue. Opening it."
-              : (body.reuse_reason === "running"
-                ? "That scan is already running. Opening it."
-                : "You scanned this in the last 24 hours. Opening that report.")
-          );
-        } else if (body.status === "queued") {
-          guestMessage(queueLabel(body) || "Scan queued.");
-        } else {
-          guestMessage("Scan started.");
+        if (!force && body.reused && body.reuse_reason === "recent") {
+          guestMessage("A recent report already covers this.");
+          showScanReuseDialog({payload: null, body, guest: true});
+          return;
         }
-        guest.scan = body;
-        guest.historyOpen = true;
-        await loadGuestScans();
-        renderGuestList();
-        scrollOpenGuestRow();
+        await applyGuestScanResult(body, Boolean(force));
       } catch (err) {
         guestMessage("Lost contact with the console.", true);
       } finally {

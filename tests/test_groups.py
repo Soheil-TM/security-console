@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import pytest
+
 from security_console.access import can_scan_project, can_view_scan
-from security_console.groups import parse_group
+from security_console.groups import _resolve_members, parse_group
 
 
 def test_members_see_the_group_project_and_not_a_private_one() -> None:
@@ -99,3 +101,42 @@ def test_parse_group_accepts_a_group_without_a_project() -> None:
     assert error == ""
     assert parsed is not None
     assert parsed["project_ids"] == []
+
+
+def test_resolve_members_requires_a_lead(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "security_console.groups.db.users_by_username",
+        lambda names: [{"id": 1, "username": "ada", "role": "admin", "disabled": False}],
+    )
+    resolved, error = _resolve_members(
+        [{"username": "ada", "lead": False}],
+        force_lead="",
+    )
+    assert resolved == []
+    assert error == "A group needs a lead."
+
+
+def test_resolve_members_accepts_empty_projects_payload_with_lead(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Inline project-form create posts empty project_slugs and a lead."""
+    monkeypatch.setattr(
+        "security_console.groups.db.users_by_username",
+        lambda names: [
+            {"id": 7, "username": "soheil", "role": "admin", "disabled": False}
+        ],
+    )
+    parsed, parse_error = parse_group(
+        {
+            "name": "Inline",
+            "description": "",
+            "project_slugs": [],
+            "members": [{"username": "soheil", "lead": True}],
+        }
+    )
+    assert parse_error == ""
+    assert parsed is not None
+    assert parsed["project_ids"] == []
+    resolved, member_error = _resolve_members(parsed["members"], force_lead="")
+    assert member_error == ""
+    assert resolved == [(7, True)]

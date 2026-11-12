@@ -143,7 +143,7 @@ SCHEMA = (
     """
     CREATE TABLE IF NOT EXISTS integrations (
         id bigserial PRIMARY KEY,
-        kind text NOT NULL CHECK (kind IN ('gitlab', 'registry')),
+        kind text NOT NULL CHECK (kind IN ('gitlab', 'github', 'registry')),
         name text NOT NULL UNIQUE,
         base_url text NOT NULL,
         username text NOT NULL DEFAULT '',
@@ -771,6 +771,29 @@ MIGRATIONS = (
     """
     UPDATE users
     SET allow_sonar_ui = (role = 'super_admin')
+    """,
+    """
+    DO $$
+    DECLARE constraint_name text;
+    BEGIN
+        FOR constraint_name IN
+            SELECT conname
+            FROM pg_constraint
+            WHERE conrelid = 'integrations'::regclass
+              AND contype = 'c'
+              AND pg_get_constraintdef(oid) ILIKE '%kind%'
+        LOOP
+            EXECUTE format(
+                'ALTER TABLE integrations DROP CONSTRAINT %I',
+                constraint_name
+            );
+        END LOOP;
+    END $$
+    """,
+    """
+    ALTER TABLE integrations
+        ADD CONSTRAINT integrations_kind_check
+        CHECK (kind IN ('gitlab', 'github', 'registry'))
     """,
 )
 

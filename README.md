@@ -96,6 +96,10 @@ Persist the rules with the host's firewall tool (`iptables-persistent`, `nftable
 
 Command-line `-D` properties outrank `sonar-project.properties`. The scanner command pins `sonar.host.url`, clears `sonar.scanner.proxyHost`, `proxyPort`, `proxyUser`, and `proxyPassword`, and sets `sonar.scanner.javaOpts` to the memory limit only. `truststorePath` is the image CA bundle copied to `/tmp/sonar-truststore`, and `keystorePath` is an empty keystore created in the same directory. A blank path is not used: the scanner treats it as the working directory and Java then fails with `Is a directory`. `sonar.working.directory` is `/tmp/.scannerwork`, and the repository mount is read-only. The scanner image user cannot create `.scannerwork` inside a root-owned clone. A repository file cannot replace those with another server, an HTTP proxy, a JVM proxy flag, or a private trust store. Other unpinned properties can still change. The token is not passed as `sonar.token` on the command line.
 
+## Connections
+
+Under **Settings → Connections**, an account with `connections.manage` can save GitLab (`kind=gitlab`), GitHub (`kind=github`, including GitHub Enterprise Server), and a private registry (`kind=registry`). The token stays on the server. Project and ad-hoc repo pickers list repositories from those git hosts; private GitHub clones use the stored PAT with `clone_style=basic`. CI auto-provision (below) still requires a GitLab integration only — there is no GitHub Actions auto-provision path.
+
 ## CI scan API (async poll)
 
 GitLab (or other CI) can enqueue a scan with a machine token. The console runs the existing scanner pipeline; open `/scans/<id>` in the UI for the Execution Center. Do not put a GitLab Runner on this host unless you accept the security and resource trade-offs.

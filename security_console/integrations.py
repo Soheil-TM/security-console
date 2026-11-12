@@ -1,4 +1,4 @@
-"""Admin-configured GitLab and private-registry connections.
+"""Admin-configured GitLab, GitHub, and private-registry connections.
 
 The browser receives the address and whether a token is saved. The token
 and CA certificate stay in the database and are sent only to the scanner.
@@ -27,7 +27,8 @@ from security_console.images import valid_image_ref
 from security_console.repos import clone_pins, valid_repo
 
 Reply = Response | tuple[Response, int]
-_KINDS = {"gitlab", "registry"}
+_KINDS = {"gitlab", "github", "registry"}
+_REPO_KINDS = frozenset({"gitlab", "github"})
 _MAX_NAME = 80
 _MAX_SECRET = 256
 _MAX_CA = 12000
@@ -142,10 +143,13 @@ def credentials_for(scan: dict[str, Any]) -> dict[str, str]:
             "registry_password": str(match["secret"]),
         }
     else:
-        match = matching_gitlab(str(scan.get("repo") or ""), rows)
+        repo = str(scan.get("repo") or "")
+        match = matching_github(repo, rows) or matching_gitlab(repo, rows)
         if match is None or not match.get("secret"):
             return {}
         found = {"clone_token": str(match["secret"])}
+        if match.get("kind") == "github":
+            found["clone_style"] = "basic"
     ca_cert = str(match.get("ca_cert") or "")
     if ca_cert:
         found["ca_cert"] = ca_cert
@@ -155,10 +159,24 @@ def credentials_for(scan: dict[str, Any]) -> dict[str, str]:
 def matching_gitlab(repo: str, rows: list[dict[str, Any]]) -> dict[str, Any] | None:
     """Return the GitLab connection whose address contains this repository."""
 
+    return _matching_repo_kind(repo, rows, "gitlab")
+
+
+def matching_github(repo: str, rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Return the GitHub connection whose address contains this repository."""
+
+    return _matching_repo_kind(repo, rows, "github")
+
+
+def _matching_repo_kind(
+    repo: str,
+    rows: list[dict[str, Any]],
+    kind: str,
+) -> dict[str, Any] | None:
     found = None
     best = -1
     for row in rows:
-        if row.get("kind") != "gitlab":
+        if row.get("kind") != kind:
             continue
         base = str(row.get("base_url") or "").rstrip("/")
         if repo == base or repo.startswith(base + "/"):
@@ -341,6 +359,8 @@ def _list_projects(integration_id: int) -> Reply:
     try:
         if current["kind"] == "gitlab":
             projects = _gitlab_projects(current)
+        elif current["kind"] == "github":
+            projects = _github_projects(current)
         else:
             projects = _registry_names(current)
     except RuntimeError as exc:
@@ -365,6 +385,15 @@ def _probe(current: dict[str, Any]) -> str:
         if status != 200:
             raise RuntimeError("GitLab rejected the token.")
         return "GitLab accepted the token."
+    if current["kind"] == "github":
+        status, _body = _http(
+            _github_api_root(str(current["base_url"])) + "/user",
+            headers={"Authorization": "Bearer " + str(current["secret"])},
+            ca_pem=str(current.get("ca_cert") or ""),
+        )
+        if status != 200:
+            raise RuntimeError("GitHub rejected the token.")
+        return "GitHub accepted the token."
     return _probe_registry(current)
 
 
@@ -461,6 +490,59 @@ def _gitlab_projects(current: dict[str, Any]) -> list[dict[str, str]]:
             url = str(item.get("http_url_to_repo") or "")
             path = str(item.get("path_with_namespace") or "")
             if not url.startswith(base + "/") or not path:
+                continue
+            found.append({"path": path, "url": url})
+        if len(body) < 100:
+            break
+    return found
+
+
+def _github_api_root(base_url: str) -> str:
+    """Return the REST API root for github.com or GitHub Enterprise Server."""
+
+    base = base_url.rstrip("/")
+    host = (urlparse(base).hostname or "").lower()
+    if host in {"github.com", "www.github.com"}:
+        return "https://api.github.com"
+    return base + "/api/v3"
+
+
+def _github_clone_allowed(base: str, clone_url: str) -> bool:
+    """Accept clone URLs that belong to the configured GitHub host."""
+
+    origin = _origin(base if base.endswith("/") else base + "/")
+    if not origin:
+        return False
+    return clone_url == origin.rstrip("/") or clone_url.startswith(origin)
+
+
+def _github_projects(current: dict[str, Any]) -> list[dict[str, str]]:
+    found: list[dict[str, str]] = []
+    base = str(current["base_url"]).rstrip("/")
+    api = _github_api_root(base)
+    headers = {
+        "Authorization": "Bearer " + str(current["secret"]),
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    for page in range(1, 6):
+        status, body = _http(
+            api
+            + "/user/repos?per_page=100&affiliation=owner,collaborator,organization_member&page="
+            + str(page),
+            headers=headers,
+            ca_pem=str(current.get("ca_cert") or ""),
+        )
+        if status != 200 or not isinstance(body, list):
+            raise RuntimeError("GitHub rejected the token.")
+        if not body:
+            break
+        for item in body:
+            if not isinstance(item, dict):
+                continue
+            url = str(item.get("clone_url") or "")
+            path = str(item.get("full_name") or "")
+            if not path or not _github_clone_allowed(base, url):
                 continue
             found.append({"path": path, "url": url})
         if len(body) < 100:
@@ -580,7 +662,7 @@ def _address(kind: str, value: str) -> str | None:
     text = value.strip().rstrip("/")
     if not text or len(text) > 300 or _has_control(text):
         return None
-    if kind == "gitlab":
+    if kind in _REPO_KINDS:
         if not valid_repo(text + "/group/project.git"):
             return None
         return text
@@ -591,7 +673,7 @@ def _address(kind: str, value: str) -> str | None:
 
 
 def _reachable(base: str, kind: str) -> bool:
-    if kind == "gitlab":
+    if kind in _REPO_KINDS:
         return clone_pins(base + "/group/project.git") is not None
     probe = _registry_url(base)
     return clone_pins(_origin(probe)) is not None

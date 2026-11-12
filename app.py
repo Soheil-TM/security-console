@@ -76,7 +76,7 @@ DATA = Path(os.environ.get("DATA_DIR", "/data"))
 RESTART_ERROR = "The console restarted during the scan."
 WORKER_GONE_ERROR = "The scanner no longer has this scan."
 # Bump when the console shell HTML/JS must replace an open tab (SPA).
-SHELL_BUILD = "2026-11-10-target-mix"
+SHELL_BUILD = "2026-11-12-assignee-name"
 
 lock = threading.Lock()
 scans: dict[str, dict[str, Any]] = {}

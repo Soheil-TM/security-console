@@ -121,6 +121,34 @@ def test_gate_blocked_for_true_positive_or_missing() -> None:
     assert len(ready["blockers"]) == 2
 
 
+def test_gate_blocked_when_risk_is_only_proposed() -> None:
+    findings = [{"tool": "semgrep", "check": "a", "path": "a.py", "line": 1}]
+    key = finding_key(findings[0])
+    proposed = gate_readiness(
+        findings,
+        {
+            key: {
+                "status": "risk_proposed",
+                "reason": "Exploit needs a route we do not expose.",
+            }
+        },
+    )
+    assert proposed["ready_for_gate"] is False
+    assert proposed["counts"]["risk_proposed"] == 1
+    assert "project lead" in proposed["blockers"][0]["reason"]
+    accepted = gate_readiness(
+        findings,
+        {
+            key: {
+                "status": "accepted_risk",
+                "reason": "Project lead accepts the residual risk.",
+            }
+        },
+    )
+    assert accepted["ready_for_gate"] is True
+    assert accepted["counts"]["accepted_risk"] == 1
+
+
 def test_gate_blocked_when_accepted_risk_lacks_reason() -> None:
     findings = [{"tool": "semgrep", "check": "a", "path": "a.py", "line": 1}]
     key = finding_key(findings[0])

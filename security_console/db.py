@@ -221,6 +221,7 @@ SCHEMA = (
             CHECK (status IN (
                 'true_positive',
                 'false_positive',
+                'risk_proposed',
                 'accepted_risk',
                 'needs_review',
                 'resolved'
@@ -253,6 +254,7 @@ SCHEMA = (
             CHECK (status IN (
                 'true_positive',
                 'false_positive',
+                'risk_proposed',
                 'accepted_risk',
                 'needs_review',
                 'resolved'
@@ -710,6 +712,7 @@ MIGRATIONS = (
         CHECK (status IN (
             'true_positive',
             'false_positive',
+            'risk_proposed',
             'accepted_risk',
             'needs_review',
             'resolved'
@@ -724,6 +727,7 @@ MIGRATIONS = (
             CHECK (status IN (
                 'true_positive',
                 'false_positive',
+                'risk_proposed',
                 'accepted_risk',
                 'needs_review',
                 'resolved'
@@ -832,6 +836,36 @@ MIGRATIONS = (
     ALTER TABLE integrations
         ADD CONSTRAINT integrations_kind_check
         CHECK (kind IN ('gitlab', 'github', 'registry'))
+    """,
+    """
+    DO $$
+    DECLARE constraint_name text;
+    BEGIN
+        FOR constraint_name IN
+            SELECT conname
+            FROM pg_constraint
+            WHERE conrelid = 'finding_disposition_notes'::regclass
+              AND contype = 'c'
+              AND pg_get_constraintdef(oid) ILIKE '%status%'
+        LOOP
+            EXECUTE format(
+                'ALTER TABLE finding_disposition_notes DROP CONSTRAINT %I',
+                constraint_name
+            );
+        END LOOP;
+    END $$
+    """,
+    """
+    ALTER TABLE finding_disposition_notes
+        ADD CONSTRAINT finding_disposition_notes_status_check
+        CHECK (status IN (
+            'true_positive',
+            'false_positive',
+            'risk_proposed',
+            'accepted_risk',
+            'needs_review',
+            'resolved'
+        ))
     """,
 )
 
@@ -3814,11 +3848,11 @@ def upsert_disposition(
 
 
 def list_project_assignees(project_key: str) -> list[dict[str, Any]]:
-    """Return group members for this project plus org admins.
+    """Return members of groups that own this project.
 
-    Group members stay the primary triage pool. Org ``admin`` /
-    ``super_admin`` accounts are always included so Assign to me works
-    even when a project has no group yet.
+    Org admins who are not in one of those groups stay out of the
+    assignee list. A triage writer can still assign a row to themselves
+    when the project has no group yet.
     """
 
     with connect() as conn:
@@ -3826,17 +3860,11 @@ def list_project_assignees(project_key: str) -> list[dict[str, Any]]:
             """
             SELECT DISTINCT u.id, u.username, u.first_name, u.last_name, u.role
             FROM users AS u
+            JOIN group_members AS m ON m.user_id = u.id
+            JOIN group_projects AS gp ON gp.group_id = m.group_id
+            JOIN projects AS pr ON pr.id = gp.project_id
             WHERE u.disabled = false
-              AND (
-                u.role IN ('admin', 'super_admin')
-                OR u.id IN (
-                    SELECT m.user_id
-                    FROM projects AS pr
-                    JOIN group_projects AS gp ON gp.project_id = pr.id
-                    JOIN group_members AS m ON m.group_id = gp.group_id
-                    WHERE pr.slug = %s
-                )
-              )
+              AND pr.slug = %s
             ORDER BY u.username
             """,
             (project_key,),
@@ -3855,7 +3883,7 @@ def list_project_assignees(project_key: str) -> list[dict[str, Any]]:
 
 
 def list_my_assignments(user_id: int) -> list[dict[str, Any]]:
-    """Return open TP / Needs Review dispositions assigned to this user."""
+    """Return open triage rows assigned to this user."""
 
     with connect() as conn:
         rows = conn.execute(
@@ -3867,7 +3895,9 @@ def list_my_assignments(user_id: int) -> list[dict[str, Any]]:
             FROM finding_dispositions AS d
             LEFT JOIN users AS u ON u.id = d.assignee_user_id
             WHERE d.assignee_user_id = %s
-              AND d.status IN ('true_positive', 'needs_review')
+              AND d.status IN (
+                    'true_positive', 'needs_review', 'risk_proposed'
+              )
             ORDER BY d.updated_at DESC
             LIMIT 100
             """,

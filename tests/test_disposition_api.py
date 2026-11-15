@@ -158,6 +158,52 @@ def _put_disposition(
     )
 
 
+def test_developer_can_propose_risk_but_not_accept(
+    disposition_client: FlaskClient,
+) -> None:
+    login = _login(disposition_client, "sadmin", "reviewer-password")
+    assert login.status_code == 200
+    csrf = _csrf(login)
+
+    proposed = _put_disposition(
+        disposition_client,
+        csrf,
+        status="risk_proposed",
+        reason="The vulnerable path is not reachable in this deploy.",
+        assignee="sadmin",
+    )
+    assert proposed.status_code == 200
+    assert proposed.get_json()["disposition"]["status"] == "risk_proposed"
+    assert proposed.get_json()["readiness"]["ready_for_gate"] is False
+
+    denied = _put_disposition(
+        disposition_client,
+        csrf,
+        status="accepted_risk",
+        reason="Trying to close the gate without the project lead.",
+        assignee="sadmin",
+    )
+    assert denied.status_code == 403
+    assert "project lead" in denied.get_json()["error"]
+    assert db.list_dispositions("triage-demo")[FINDING_KEY]["status"] == "risk_proposed"
+
+    owner = _login(disposition_client, "boss", "boss-password")
+    assert owner.status_code == 200
+    owner_csrf = _csrf(owner)
+    accepted = _put_disposition(
+        disposition_client,
+        owner_csrf,
+        status="accepted_risk",
+        reason="Project lead accepts the residual risk.",
+        assignee="boss",
+    )
+    assert accepted.status_code == 200
+    body = accepted.get_json()
+    assert body["disposition"]["status"] == "accepted_risk"
+    assert body["disposition"]["assignee_username"] == "boss"
+    assert body["readiness"]["ready_for_gate"] is True
+
+
 def test_disposition_rejects_short_reason(disposition_client: FlaskClient) -> None:
     login = _login(disposition_client, "boss", "boss-password")
     assert login.status_code == 200
@@ -278,11 +324,7 @@ def solo_admin_disposition_client() -> FlaskClient:
 def test_admin_can_assign_self_on_project_without_group_members(
     solo_admin_disposition_client: FlaskClient,
 ) -> None:
-    assert db.list_project_assignees("solo-admin")
-    assert all(
-        item["role"] in ("admin", "super_admin")
-        for item in db.list_project_assignees("solo-admin")
-    )
+    assert db.list_project_assignees("solo-admin") == []
 
     login = _login(solo_admin_disposition_client, "boss", "boss-password")
     assert login.status_code == 200

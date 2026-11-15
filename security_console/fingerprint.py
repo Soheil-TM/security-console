@@ -14,6 +14,7 @@ def finding_disposition_parts(
     status = str((disposition or {}).get("status") or "")
     reason = str((disposition or {}).get("reason") or "")
     reason_hash = ""
+    # A developer proposal is not a closed disposition.
     if status in {"false_positive", "accepted_risk", "resolved"} and reason:
         reason_hash = hashlib.sha256(reason.encode("utf-8")).hexdigest()[:16]
     return {

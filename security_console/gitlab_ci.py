@@ -260,8 +260,10 @@ def _ssl_context(ca_pem: str) -> Any:
     if not ca_pem.strip():
         return ssl.create_default_context()
     context = ssl.create_default_context()
-    with tempfile.NamedTemporaryFile("w", delete=False, suffix=".pem") as handle:
+    # load_verify_locations reads the path immediately. The file is removed
+    # when this block exits, including when the PEM is rejected.
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8") as handle:
         handle.write(ca_pem)
-        path = handle.name
-    context.load_verify_locations(cafile=path)
+        handle.flush()
+        context.load_verify_locations(cafile=handle.name)
     return context

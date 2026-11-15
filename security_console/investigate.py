@@ -31,14 +31,19 @@ Reply = Response | tuple[Response, int]
 DISPOSITION_STATUSES = (
     "true_positive",
     "false_positive",
+    "risk_proposed",
     "accepted_risk",
     "needs_review",
     "resolved",
 )
 GATE_OK_STATUSES = frozenset({"false_positive", "accepted_risk", "resolved"})
 GATE_CLASSES = frozenset({"security", "operational"})
-REASON_STATUSES = frozenset({"false_positive", "accepted_risk", "resolved"})
-ASSIGNABLE_STATUSES = frozenset({"true_positive", "needs_review", "resolved"})
+REASON_STATUSES = frozenset(
+    {"false_positive", "risk_proposed", "accepted_risk", "resolved"}
+)
+ASSIGNABLE_STATUSES = frozenset(
+    {"true_positive", "needs_review", "resolved", "risk_proposed"}
+)
 
 
 def gate_scoped_findings(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -154,6 +159,7 @@ def gate_readiness(
     counts = {
         "true_positive": 0,
         "false_positive": 0,
+        "risk_proposed": 0,
         "accepted_risk": 0,
         "needs_review": 0,
         "resolved": 0,
@@ -175,6 +181,17 @@ def gate_readiness(
             counts[status] += 1
         else:
             counts["undecided"] += 1
+        if status == "risk_proposed":
+            blockers.append(
+                {
+                    "finding_key": key,
+                    "reason": (
+                        "Risk proposed by triage still needs the project "
+                        "lead to accept it."
+                    ),
+                }
+            )
+            continue
         if status not in GATE_OK_STATUSES:
             blockers.append(
                 {
@@ -651,6 +668,7 @@ def build_triage_inbox(
             int(readiness["counts"].get("undecided") or 0)
             + int(readiness["counts"].get("true_positive") or 0)
             + int(readiness["counts"].get("needs_review") or 0)
+            + int(readiness["counts"].get("risk_proposed") or 0)
         )
         entry = {
             "project_key": project_key,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from security_console.fingerprint import (
     compute_risk_fingerprint,
+    finding_disposition_parts,
     fingerprints_match,
 )
 
@@ -39,6 +40,34 @@ def test_fingerprint_stable_and_sensitive_to_disposition() -> None:
         dispositions=changed,
     )
     assert not fingerprints_match(left, other)
+
+
+def test_proposed_risk_reason_is_not_a_closed_disposition() -> None:
+    key = "semgrep|proposal|a.py|1"
+    parts = finding_disposition_parts(
+        key,
+        {
+            "status": "risk_proposed",
+            "reason": "Developer wants the lead to accept this.",
+        },
+    )
+    assert parts["status"] == "risk_proposed"
+    assert parts["reason_hash"] == ""
+    left = compute_risk_fingerprint(
+        project_key="payments",
+        commit_sha="abc",
+        finding_keys=[key],
+        dispositions={key: {"status": "risk_proposed", "reason": "First rationale."}},
+    )
+    right = compute_risk_fingerprint(
+        project_key="payments",
+        commit_sha="abc",
+        finding_keys=[key],
+        dispositions={
+            key: {"status": "risk_proposed", "reason": "Rewritten rationale."}
+        },
+    )
+    assert fingerprints_match(left, right)
 
 
 def test_fingerprint_sensitive_to_resolved_reason_change() -> None:

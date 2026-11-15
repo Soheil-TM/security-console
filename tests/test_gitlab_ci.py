@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 import os
+import ssl
+import subprocess
+import tempfile
 import threading
 import uuid
+from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -23,6 +28,7 @@ from security_console.db import (
 )
 from security_console.gitlab_ci import (
     UNAVAILABLE,
+    _ssl_context,
     clear_resolve_cache,
     normalize_gitlab_base_url,
     resolve_gitlab_project,
@@ -55,6 +61,48 @@ def test_normalize_gitlab_base_url() -> None:
     assert normalize_gitlab_base_url("https://gitlab.example.com") == _BASE
     assert normalize_gitlab_base_url("http://127.0.0.1") is None
     assert normalize_gitlab_base_url("not a url") is None
+
+
+def test_ssl_context_removes_custom_ca_file(tmp_path: Path) -> None:
+    cert = tmp_path / "ca.pem"
+    subprocess.run(
+        [
+            "openssl",
+            "req",
+            "-x509",
+            "-newkey",
+            "rsa:2048",
+            "-keyout",
+            str(tmp_path / "ca.key"),
+            "-out",
+            str(cert),
+            "-days",
+            "1",
+            "-nodes",
+            "-subj",
+            "/CN=console-test-ca",
+        ],
+        check=True,
+        capture_output=True,
+    )
+    pem = cert.read_text(encoding="utf-8")
+    paths: list[str] = []
+    original = tempfile.NamedTemporaryFile
+
+    def spy(*args: Any, **kwargs: Any) -> Any:
+        assert kwargs.get("delete", True) is True
+        handle = original(*args, **kwargs)
+        paths.append(str(handle.name))
+        return handle
+
+    baseline = ssl.create_default_context().cert_store_stats()["x509_ca"]
+    with patch("tempfile.NamedTemporaryFile", spy):
+        context = _ssl_context(pem)
+        blank = _ssl_context("  ")
+    assert len(paths) == 1
+    assert not os.path.exists(paths[0])
+    assert context.cert_store_stats()["x509_ca"] >= baseline
+    assert isinstance(blank, ssl.SSLContext)
 
 
 def test_slug_for_gitlab_stable() -> None:

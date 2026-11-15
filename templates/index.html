@@ -402,6 +402,91 @@
       min-width: 10px;
     }
     .inv-table thead button.sort:hover { color: var(--teal); }
+    .inv-table th.inv-filter-col { white-space: nowrap; }
+    .inv-table thead button.sort.filtered .mark { color: var(--teal); }
+    .inv-col-menu {
+      position: fixed;
+      z-index: 40;
+      visibility: hidden;
+      min-width: 188px;
+      max-width: 260px;
+      max-height: 320px;
+      overflow: auto;
+      padding: 6px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      color: #152232;
+      box-shadow: var(--shadow);
+    }
+    html.dark .inv-col-menu {
+      background: #1a2838;
+      color: #e7eef6;
+      border-color: #3d5166;
+    }
+    .inv-col-menu-label {
+      margin: 6px 8px 4px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      color: #5d6d80;
+    }
+    html.dark .inv-col-menu-label { color: #9aafc3; }
+    .inv-col-menu-item {
+      display: block;
+      width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-align: left;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: inherit;
+      padding: 7px 8px;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .inv-col-menu-item:hover { background: #e7edf3; }
+    html.dark .inv-col-menu-item:hover { background: #243648; color: #e7eef6; }
+    .inv-col-menu-item.on { background: var(--navy); color: #fff; }
+    html.dark .inv-col-menu-item.on { background: #12343a; color: #ccfbf1; }
+    html.dark .inv-col-menu-item.on:hover { background: #164850; color: #ccfbf1; }
+    .inv-col-menu-item.inv-col-check {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .inv-col-menu-item.inv-col-check.on,
+    html.dark .inv-col-menu-item.inv-col-check.on,
+    html.dark .inv-col-menu-item.inv-col-check.on:hover {
+      background: transparent;
+      color: inherit;
+    }
+    html.dark .inv-col-menu-item.inv-col-check.on { color: #e7eef6; }
+    .inv-col-check .box {
+      width: 16px;
+      height: 16px;
+      flex: 0 0 auto;
+      border: 2px solid #64748b;
+      border-radius: 3px;
+      background: #fff;
+    }
+    html.dark .inv-col-check .box {
+      border-color: #94a3b8;
+      background: #152232;
+    }
+    .inv-col-check.on .box {
+      border-color: #0f766e;
+      background: #0f766e url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23ffffff' stroke-width='2.4' d='M3.5 8.5 6.5 11.5 12.5 4.5'/%3E%3C/svg%3E") center / 14px 14px no-repeat;
+    }
+    html.dark .inv-col-check.on .box {
+      border-color: #2dd4bf;
+      background-color: #2dd4bf;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23042f2e' stroke-width='2.4' d='M3.5 8.5 6.5 11.5 12.5 4.5'/%3E%3C/svg%3E");
+    }
     .inv-table select, .inv-table input, .inv-table textarea {
       width: 100%;
       border: 1px solid var(--line);
@@ -706,12 +791,14 @@
       padding: 2px 8px;
       margin-left: 6px;
     }
+    .disp-badge.risk_proposed { background: #e0f2fe; color: #075985; }
     .disp-badge.accepted_risk { background: #fff3cd; color: #856404; }
     .disp-badge.false_positive { background: #e8f6ef; color: #146c43; }
     .disp-badge.true_positive { background: #fde8e8; color: #9f1239; }
     .disp-badge.needs_review { background: #e8edf2; color: #475569; }
     .disp-badge.resolved { background: #dbeafe; color: #1d4ed8; }
     .disp-badge.undecided { background: #e8edf2; color: #475569; margin-left: 0; }
+    html.dark .disp-badge.risk_proposed { background: #0c4a6e; color: #bae6fd; }
     html.dark .disp-badge.accepted_risk { background: #422006; color: #fde68a; }
     html.dark .disp-badge.false_positive { background: #12382c; color: #86efac; }
     html.dark .disp-badge.true_positive { background: #3f1d28; color: #fda4af; }
@@ -2243,10 +2330,19 @@
     html.dark .donut text:first-of-type { fill: var(--ink); }
 
     .toolbar {
-      display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+      display: flex; flex-direction: column; align-items: stretch; gap: 10px;
       background: white; border: 1px solid var(--line); border-radius: 12px;
       box-shadow: var(--shadow); padding: 10px 12px; margin-bottom: 12px;
     }
+    .toolbar .report-tool-row { width: 100%; }
+    .toolbar .filter-label { min-width: 5.5rem; }
+    .toolbar #report-severity-filters,
+    .toolbar #report-class-filters {
+      border-top: 1px solid var(--line);
+      padding-top: 10px;
+    }
+    .toolbar #report-severity-filters .filter-seg,
+    .toolbar #report-class-filters .filter-seg { flex: 0 1 auto; }
     .toolbar input { max-width: 280px; height: 36px; margin-left: auto; }
     .seg { display: flex; background: #f8fafc; border: 1px solid var(--line); border-radius: 10px; padding: 3px; gap: 2px; }
     .seg button {
@@ -3017,17 +3113,21 @@
               <div id="scan-error"></div>
               <div id="summary"></div>
               <div class="toolbar">
-                <div class="seg" id="tool-seg">
-                  <button type="button" data-action="tool" data-tool="all" class="on">All <em id="n-all">0</em></button>
-                  <button type="button" data-action="tool" data-tool="semgrep">Semgrep <em id="n-semgrep">0</em></button>
-                  <button type="button" data-action="tool" data-tool="checkov">Checkov <em id="n-checkov">0</em></button>
-                  <button type="button" data-action="tool" data-tool="sonar">SonarQube <em id="n-sonar">0</em></button>
-                  <button type="button" data-action="tool" data-tool="trivy">Trivy <em id="n-trivy">0</em></button>
+                <div class="filter-row report-tool-row">
+                  <span class="filter-label">Tool</span>
+                  <div class="seg" id="tool-seg">
+                    <button type="button" data-action="tool" data-tool="all" class="on">All <em id="n-all">0</em></button>
+                    <button type="button" data-action="tool" data-tool="semgrep">Semgrep <em id="n-semgrep">0</em></button>
+                    <button type="button" data-action="tool" data-tool="checkov">Checkov <em id="n-checkov">0</em></button>
+                    <button type="button" data-action="tool" data-tool="sonar">SonarQube <em id="n-sonar">0</em></button>
+                    <button type="button" data-action="tool" data-tool="trivy">Trivy <em id="n-trivy">0</em></button>
+                  </div>
+                  <input id="q" type="search" placeholder="Search rule, file, or message" dir="ltr">
+                  <span class="shown" id="shown"></span>
                 </div>
-                <input id="q" type="search" placeholder="Search rule, file, or message" dir="ltr">
-                <span class="shown" id="shown"></span>
+                <div class="filter-row" id="report-severity-filters" hidden></div>
+                <div class="filter-row" id="report-class-filters" hidden></div>
               </div>
-              <div class="filter-panel" id="report-class-filters" hidden></div>
               <div id="sonar-card"></div>
               <div class="card" id="findings"></div>
               <div id="investigate-panel" class="investigate-panel" hidden></div>
@@ -3453,6 +3553,7 @@
             <option value="">Select…</option>
             <option value="true_positive">True Positive</option>
             <option value="false_positive">False Positive</option>
+            <option value="risk_proposed">Risk proposed</option>
             <option value="accepted_risk">Accepted Risk</option>
             <option value="needs_review">Needs Review</option>
             <option value="resolved">Resolved</option>
@@ -3645,7 +3746,15 @@
       securityHistory: null,
       investigate: null,
       invFilter: "needs_work",
+      invSeverityFilter: [],
+      invFindingFilter: [],
+      invToolFilter: [],
       invClassFilter: "all",
+      invClassPicks: [],
+      invStatusFilter: [],
+      invAssigneeFilter: [],
+      invNotesFilter: [],
+      invColMenu: "",
       invHistoryOpen: new Set(),
       invNoteIndex: {},
       invComposeOpen: new Set(),
@@ -3865,16 +3974,7 @@
 
     function investigateAssigneePeople() {
       const data = state.investigate || {};
-      const people = (data.assignees || []).slice();
-      const me = currentUser && currentUser.username ? currentUser.username : "";
-      if (me && !people.some((person) => person.username === me)) {
-        people.push({
-          username: me,
-          first_name: currentUser.first_name || "",
-          last_name: currentUser.last_name || ""
-        });
-      }
-      return people;
+      return (data.assignees || []).slice();
     }
 
     function assigneeDisplayName(username) {
@@ -4815,12 +4915,14 @@
       const execPanel = document.querySelector("#execution-panel");
       if (execPanel) execPanel.hidden = !executing;
       const toolbar = document.querySelector("#scan-panel .toolbar");
+      const reportSeverityFilters = document.querySelector("#report-severity-filters");
       const reportClassFilters = document.querySelector("#report-class-filters");
       const sonar = document.querySelector("#sonar-card");
       const findings = document.querySelector("#findings");
       const summary = document.querySelector("#summary");
       const inv = document.querySelector("#investigate-panel");
       if (toolbar) toolbar.hidden = investigating;
+      if (reportSeverityFilters) reportSeverityFilters.hidden = investigating;
       if (reportClassFilters) reportClassFilters.hidden = investigating;
       if (sonar) sonar.hidden = investigating;
       if (findings) findings.hidden = investigating;
@@ -5036,6 +5138,7 @@
     const DISP_LABEL = {
       true_positive: "True Positive",
       false_positive: "False Positive",
+      risk_proposed: "Risk proposed",
       accepted_risk: "Accepted Risk",
       needs_review: "Needs Review",
       resolved: "Resolved"
@@ -5103,7 +5206,15 @@
       state.invScanId = id;
       state.investigate = null;
       state.invFilter = (opts && opts.filter) || "needs_work";
+      state.invSeverityFilter = [];
+      state.invFindingFilter = [];
+      state.invToolFilter = [];
       state.invClassFilter = (opts && opts.classFilter) || "all";
+      state.invClassPicks = [];
+      state.invStatusFilter = [];
+      state.invAssigneeFilter = [];
+      state.invNotesFilter = [];
+      state.invColMenu = "";
       state.invHistoryOpen = new Set();
       state.invNoteIndex = {};
       state.invComposeOpen = new Set();
@@ -5213,7 +5324,7 @@
     }
 
     function needsWorkStatus(status) {
-      return !status || status === "true_positive" || status === "needs_review";
+      return !status || status === "true_positive" || status === "needs_review" || status === "risk_proposed";
     }
 
     function isAssignedToMe(disp) {
@@ -5233,13 +5344,35 @@
       return CLASS_LABEL[value] ? value : "security";
     }
 
+    function columnPickAllows(list, value) {
+      if (!Array.isArray(list) || !list.length) return true;
+      return list.indexOf(value) !== -1;
+    }
+
     function filteredInvestigateFindings(data) {
       const dispositions = data.dispositions || {};
       const classFilter = state.invClassFilter || "all";
+      const severityFilter = state.invSeverityFilter || [];
+      const toolFilter = state.invToolFilter || [];
+      const findingFilter = state.invFindingFilter || [];
+      const classPicks = state.invClassPicks || [];
+      const statusColumn = state.invStatusFilter || [];
+      const assigneeFilter = state.invAssigneeFilter || [];
+      const notesFilter = state.invNotesFilter || [];
       return (data.findings || []).filter((row) => {
-        if (classFilter !== "all" && findingClassOf(row) !== classFilter) return false;
+        if (!columnPickAllows(severityFilter, bucket(row.severity))) return false;
+        if (!columnPickAllows(toolFilter, String(row.tool || ""))) return false;
+        if (!columnPickAllows(findingFilter, String(row.check || ""))) return false;
+        const cls = findingClassOf(row);
+        if (classFilter !== "all" && cls !== classFilter) return false;
+        if (!columnPickAllows(classPicks, cls)) return false;
         const status = invFindingStatus(row, dispositions);
         const disp = dispositions[row.finding_key || ""] || {};
+        if (!columnPickAllows(statusColumn, status || "undecided")) return false;
+        const assignee = String(disp.assignee_username || "").trim();
+        if (!columnPickAllows(assigneeFilter, assignee || "__unassigned__")) return false;
+        const notes = Array.isArray(disp.notes) ? disp.notes : [];
+        if (!columnPickAllows(notesFilter, notes.length ? "has" : "none")) return false;
         const filter = state.invFilter || "needs_work";
         if (filter === "all") return true;
         if (filter === "needs_work") return needsWorkStatus(status);
@@ -5247,6 +5380,164 @@
         if (filter === "mine") return isAssignedToMe(disp);
         return status === filter;
       });
+    }
+
+    function columnMenuOptions(key) {
+      if (key === "severity") {
+        return [["", "All severities"]].concat(SEV.map((item) => [item[0], item[2]]));
+      }
+      if (key === "finding") {
+        const seen = new Set();
+        const checks = [];
+        ((state.investigate && state.investigate.findings) || []).forEach((row) => {
+          const check = String(row.check || "").trim();
+          if (!check || seen.has(check)) return;
+          seen.add(check);
+          checks.push(check);
+        });
+        checks.sort((left, right) => left.localeCompare(right, undefined, {sensitivity: "base"}));
+        return [["", "All findings"]].concat(checks.map((check) => [check, check]));
+      }
+      if (key === "tool") {
+        const known = ["semgrep", "checkov", "sonar", "trivy"];
+        const present = new Set();
+        ((state.investigate && state.investigate.findings) || []).forEach((row) => {
+          const tool = String(row.tool || "").trim();
+          if (tool) present.add(tool);
+        });
+        const tools = known.filter((tool) => present.has(tool));
+        present.forEach((tool) => {
+          if (!tools.includes(tool)) tools.push(tool);
+        });
+        return [["", "All tools"]].concat(tools.map((tool) => [tool, TOOL_LABEL[tool] || tool]));
+      }
+      if (key === "class") {
+        return [["all", "All classes"]].concat(
+          ["security", "quality", "operational"].map((name) => [name, CLASS_LABEL[name] || name])
+        );
+      }
+      if (key === "status") {
+        return [["", "All statuses"], ["undecided", "Undecided"]].concat(
+          ["true_positive", "false_positive", "risk_proposed", "accepted_risk", "needs_review", "resolved"]
+            .map((name) => [name, DISP_LABEL[name] || name])
+        );
+      }
+      if (key === "notes") {
+        return [["", "All notes"], ["has", "Has a note"], ["none", "No note"]];
+      }
+      const people = investigateAssigneePeople().slice().sort((left, right) => {
+        const byName = displayName(left).localeCompare(
+          displayName(right),
+          undefined,
+          {sensitivity: "base"}
+        );
+        if (byName) return byName;
+        return String(left.username || "").localeCompare(String(right.username || ""));
+      });
+      return [["", "All people"], ["__unassigned__", "Unassigned"]].concat(
+        people.map((person) => [person.username, displayName(person) || person.username])
+      );
+    }
+
+    function columnFilterList(key) {
+      const raw = key === "severity" ? state.invSeverityFilter
+        : key === "finding" ? state.invFindingFilter
+        : key === "tool" ? state.invToolFilter
+        : key === "class" ? state.invClassPicks
+        : key === "status" ? state.invStatusFilter
+        : key === "notes" ? state.invNotesFilter
+        : state.invAssigneeFilter;
+      return Array.isArray(raw) ? raw : [];
+    }
+
+    function columnFilterActive(key) {
+      return columnFilterList(key).length > 0;
+    }
+
+    function toggleInvColumnShow(key, value) {
+      const fields = {
+        severity: "invSeverityFilter",
+        finding: "invFindingFilter",
+        tool: "invToolFilter",
+        class: "invClassPicks",
+        status: "invStatusFilter",
+        assigned: "invAssigneeFilter",
+        notes: "invNotesFilter"
+      };
+      const field = fields[key];
+      if (!field) return;
+      const allValue = key === "class" ? "all" : "";
+      if (value === allValue) {
+        state[field] = [];
+      } else {
+        const list = columnFilterList(key).slice();
+        const index = list.indexOf(value);
+        if (index >= 0) list.splice(index, 1);
+        else list.push(value);
+        state[field] = list;
+      }
+      state.invSelected = new Set();
+    }
+
+    function invColumnTitle(key, label) {
+      const sort = state.invSort || {key: "severity", dir: "asc"};
+      const sorting = sort.key === key;
+      const open = state.invColMenu === key;
+      const aria = sorting ? (sort.dir === "asc" ? "ascending" : "descending") : "none";
+      const mark = sorting ? (sort.dir === "asc" ? "▲" : "▼") : "▾";
+      const filtered = columnFilterActive(key) ? " filtered" : "";
+      return '<th class="inv-filter-col" aria-sort="' + aria + '"><button type="button" class="sort' + filtered
+        + (open ? " open" : "") + '" data-action="inv-col-menu" data-key="' + esc(key)
+        + '" aria-expanded="' + (open ? "true" : "false") + '" aria-haspopup="menu"><span>' + label
+        + '</span><span class="mark" aria-hidden="true">' + mark + "</span></button></th>";
+    }
+
+    function invColumnMenu() {
+      const key = state.invColMenu || "";
+      if (!key) return "";
+      const sort = state.invSort || {key: "severity", dir: "asc"};
+      const selected = columnFilterList(key);
+      const allValue = key === "class" ? "all" : "";
+      const sortItems = [
+        ["asc", "Sort ascending"],
+        ["desc", "Sort descending"]
+      ].map((item) => {
+        const on = sort.key === key && sort.dir === item[0] ? " on" : "";
+        return '<button type="button" class="inv-col-menu-item' + on + '" data-action="inv-col-sort" data-key="'
+          + esc(key) + '" data-dir="' + item[0] + '">' + item[1] + "</button>";
+      }).join("");
+      const showItems = columnMenuOptions(key).map((item) => {
+        const checked = String(item[0]) === allValue
+          ? selected.length === 0
+          : selected.indexOf(item[0]) !== -1;
+        return '<button type="button" role="menuitemcheckbox" aria-checked="' + (checked ? "true" : "false")
+          + '" class="inv-col-menu-item inv-col-check' + (checked ? " on" : "")
+          + '" data-action="inv-col-show" data-key="' + esc(key) + '" data-value="' + esc(item[0])
+          + '" title="' + esc(item[1]) + '"><span class="box" aria-hidden="true"></span><span>'
+          + esc(item[1]) + "</span></button>";
+      }).join("");
+      return '<div id="inv-col-menu" class="inv-col-menu" role="menu">'
+        + '<p class="inv-col-menu-label">Sort</p>' + sortItems
+        + '<p class="inv-col-menu-label">Show</p>' + showItems
+        + "</div>";
+    }
+
+    function placeInvColMenu() {
+      const menu = document.querySelector("#inv-col-menu");
+      const button = document.querySelector('#investigate-panel [data-action="inv-col-menu"][aria-expanded="true"]');
+      if (!menu || !button) return;
+      const rect = button.getBoundingClientRect();
+      const width = menu.offsetWidth || 200;
+      const height = menu.offsetHeight || 220;
+      let left = rect.left;
+      if (left + width > window.innerWidth - 8) left = window.innerWidth - width - 8;
+      if (left < 8) left = 8;
+      let top = rect.bottom + 4;
+      if (top + height > window.innerHeight - 8) top = Math.max(8, rect.top - height - 4);
+      menu.style.left = left + "px";
+      menu.style.top = top + "px";
+      menu.style.visibility = "visible";
+      menu.scrollTop = Number(state.invColMenuScroll || 0);
     }
 
     function carryBanner(data) {
@@ -5259,7 +5550,7 @@
       if (carried) {
         const by = carry.by_status || {};
         const detail = [];
-        ["false_positive", "accepted_risk", "resolved", "true_positive", "needs_review"].forEach((key) => {
+        ["false_positive", "risk_proposed", "accepted_risk", "resolved", "true_positive", "needs_review"].forEach((key) => {
           const n = Number(by[key] || 0);
           if (n) detail.push(n + " " + (DISP_LABEL[key] || key));
         });
@@ -5396,6 +5687,7 @@
         ["undecided", "Undecided"],
         ["true_positive", "True Positive"],
         ["false_positive", "False Positive"],
+        ["risk_proposed", "Risk proposed"],
         ["accepted_risk", "Accepted Risk"],
         ["needs_review", "Needs Review"],
         ["resolved", "Resolved"]
@@ -5435,6 +5727,7 @@
         ["undecided", "Undecided"],
         ["true_positive", "True Positive"],
         ["false_positive", "False Positive"],
+        ["risk_proposed", "Risk proposed"],
         ["accepted_risk", "Accepted Risk"],
         ["needs_review", "Needs Review"],
         ["resolved", "Resolved"]
@@ -5504,13 +5797,13 @@
         : "";
       const head = '<tr>'
         + '<th class="inv-check"><input type="checkbox" id="inv-select-all"' + (allVisibleSelected ? " checked" : "") + (canTriage && visible.length ? "" : " disabled") + '></th>'
-        + invSortHeader("severity", "Severity")
-        + invSortHeader("finding", "Finding")
-        + invSortHeader("tool", "Tool")
-        + invSortHeader("class", "Class")
-        + invSortHeader("status", "Status")
-        + invSortHeader("assigned", "Assigned to")
-        + invSortHeader("notes", "Notes")
+        + invColumnTitle("severity", "Severity")
+        + invColumnTitle("finding", "Finding")
+        + invColumnTitle("tool", "Tool")
+        + invColumnTitle("class", "Class")
+        + invColumnTitle("status", "Status")
+        + invColumnTitle("assigned", "Assigned to")
+        + invColumnTitle("notes", "Notes")
         + "</tr>";
       const acceptEnabled = ready && state.invAck && canAccept;
       const excludedQuality = Number((data.readiness && data.readiness.excluded_quality) || 0);
@@ -5536,9 +5829,14 @@
             + '<button type="button" data-action="inv-accept"' + (acceptEnabled ? "" : " disabled") + ">Accept risk for push</button>"
           : '<p class="meta">Only an admin or project lead can accept risk for push.</p>')
         + "</div>";
-      const emptyCopy = activeFilter === "mine"
-        ? '<div class="empty"><strong>Nothing assigned to you</strong>Assign a finding to yourself, or switch to Needs work / All.</div>'
-        : '<div class="empty"><strong>Nothing in this filter</strong>Choose another chip or clear the filter.</div>';
+      const columnFiltered = ["severity", "finding", "tool", "class", "status", "assigned", "notes"]
+        .some(columnFilterActive)
+        || (state.invClassFilter && state.invClassFilter !== "all");
+      const emptyCopy = columnFiltered
+        ? '<div class="empty"><strong>Nothing in this column filter</strong>Choose All on that column to see the other rows.</div>'
+        : (activeFilter === "mine"
+          ? '<div class="empty"><strong>Nothing assigned to you</strong>Assign a finding to yourself, or switch to Needs work / All.</div>'
+          : '<div class="empty"><strong>Nothing in this filter</strong>Choose another chip or clear the filter.</div>');
       box.innerHTML = "<h2>Investigate</h2>"
         + '<p class="meta">Select findings, then Edit or Assign to me. Status, assignee, and notes stay visible on each row.</p>'
         + classOverridesNote(state.scan)
@@ -5549,11 +5847,14 @@
         + "</div>"
         + mineBanner
         + bulkBar
+        + '<table class="inv-table"><thead>' + head + "</thead><tbody>"
         + (visible.length
-          ? '<table class="inv-table"><thead>' + head + "</thead><tbody>"
-            + rows + "</tbody></table>"
-          : emptyCopy)
-        + sticky;
+          ? rows
+          : '<tr><td colspan="8">' + emptyCopy + "</td></tr>")
+        + "</tbody></table>"
+        + sticky
+        + invColumnMenu();
+      placeInvColMenu();
     }
 
     function investigateNoteHint(len) {
@@ -5576,6 +5877,17 @@
       const n = state.invSelected ? state.invSelected.size : 0;
       if (bulk) bulk.hidden = n === 0;
       if (count) count.textContent = String(n);
+    }
+
+    function applyInvestigateStatusChoices(currentStatus) {
+      const statusEl = document.querySelector("#inv-edit-status");
+      const canAccept = !!(state.investigate && state.investigate.can_accept_risk);
+      if (!statusEl) return;
+      [...statusEl.options].forEach((option) => {
+        if (option.value !== "accepted_risk") return;
+        option.hidden = !(canAccept || currentStatus === "accepted_risk");
+        option.disabled = !canAccept;
+      });
     }
 
     function syncInvestigateEditValidity() {
@@ -5725,6 +6037,7 @@
         assignee = disp.assignee_username || "";
       }
       if (statusEl) statusEl.value = status;
+      applyInvestigateStatusChoices(status);
       if (assigneeEl) {
         if (status === "accepted_risk" && me) {
           assigneeEl.value = me;
@@ -5858,8 +6171,8 @@
       });
       if (saveBtn) saveBtn.textContent = "Save";
       if (result.failed) {
-        setInvInlineError(err, result.lastError || "Could not save disposition.");
         syncInvestigateEditValidity();
+        setInvInlineError(err, result.lastError || "Could not save disposition.");
         refreshInvestigatePanel("Updated with " + result.failed + " error(s).");
         loadTriageInbox();
         return;
@@ -5996,6 +6309,7 @@
       const order = [
         ["false_positive", "False Positive"],
         ["resolved", "Resolved"],
+        ["risk_proposed", "Risk proposed"],
         ["accepted_risk", "Accepted Risk"],
         ["true_positive", "True Positive"],
         ["needs_review", "Needs Review"],
@@ -6619,6 +6933,22 @@
       findings.forEach((row) => {
         classCounts[findingClassOf(row)] += 1;
       });
+      const severityBox = document.querySelector("#report-severity-filters");
+      if (severityBox) {
+        const tally = counts(findings, (row) => row.severity);
+        const activeSev = state.sev || "";
+        const sevButtons = [["", "All severities", findings.length]].concat(
+          SEV.map((item) => [item[0], item[2], tally[item[0]] || 0])
+        ).map((item) => {
+          const selected = item[0] ? activeSev === item[0] : !activeSev;
+          return '<button type="button" data-action="report-sev-filter" data-sev="' + item[0] + '"'
+            + (selected ? ' class="on"' : "") + ">" + item[1]
+            + " <em>" + item[2] + "</em></button>";
+        }).join("");
+        severityBox.hidden = false;
+        severityBox.innerHTML = '<span class="filter-label">Severity</span>'
+          + '<div class="seg filter-seg">' + sevButtons + "</div>";
+      }
       const activeClass = state.reportClassFilter || "all";
       const classBox = document.querySelector("#report-class-filters");
       if (classBox) {
@@ -6633,8 +6963,8 @@
             + " <em>" + item[2] + "</em></button>";
         }).join("");
         classBox.hidden = false;
-        classBox.innerHTML = '<div class="filter-row"><span class="filter-label">Class</span>'
-          + '<div class="seg filter-seg">' + buttons + "</div></div>";
+        classBox.innerHTML = '<span class="filter-label">Class</span>'
+          + '<div class="seg filter-seg">' + buttons + "</div>";
       }
       document.querySelector("#q").hidden = false;
     }
@@ -6777,6 +7107,13 @@
     }
 
     document.addEventListener("click", (event) => {
+      if (state.invColMenu && !event.target.closest(".inv-col-menu, [data-action='inv-col-menu']")) {
+        state.invColMenu = "";
+        const menu = document.querySelector("#inv-col-menu");
+        if (menu) menu.remove();
+        const openBtn = document.querySelector('#investigate-panel [data-action="inv-col-menu"][aria-expanded="true"]');
+        if (openBtn) openBtn.setAttribute("aria-expanded", "false");
+      }
       const el = event.target.closest("[data-action]");
       if (!el) return;
       const action = el.dataset.action;
@@ -7003,6 +7340,28 @@
         renderInvestigate();
         return;
       }
+      if (action === "inv-col-menu") {
+        const key = el.dataset.key || "";
+        state.invColMenu = state.invColMenu === key ? "" : key;
+        state.invColMenuScroll = 0;
+        renderInvestigate();
+        return;
+      }
+      if (action === "inv-col-sort") {
+        const key = el.dataset.key || "severity";
+        const dir = el.dataset.dir === "desc" ? "desc" : "asc";
+        state.invSort = {key: key, dir: dir};
+        state.invColMenu = "";
+        renderInvestigate();
+        return;
+      }
+      if (action === "inv-col-show") {
+        const openMenu = document.querySelector("#inv-col-menu");
+        state.invColMenuScroll = openMenu ? openMenu.scrollTop : 0;
+        toggleInvColumnShow(el.dataset.key || "", el.getAttribute("data-value") || "");
+        renderInvestigate();
+        return;
+      }
       if (action === "inv-sort") {
         const key = el.dataset.key || "severity";
         if (!state.invSort) state.invSort = {key: "severity", dir: "asc"};
@@ -7174,8 +7533,17 @@
       }
       if (action === "sev") {
         state.sev = state.sev === el.dataset.sev ? "" : el.dataset.sev;
+        paintFilters();
         renderSummary();
         renderFindings();
+      }
+      if (action === "report-sev-filter") {
+        const next = el.getAttribute("data-sev") || el.dataset.sev || "";
+        state.sev = next;
+        paintFilters();
+        renderSummary();
+        renderFindings();
+        return;
       }
       if (action === "report-class") {
         const next = el.dataset.class || "";
@@ -8238,6 +8606,20 @@
         return;
       }
     });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || !state.invColMenu) return;
+      state.invColMenu = "";
+      renderInvestigate();
+    });
+
+    document.addEventListener("scroll", (event) => {
+      if (!state.invColMenu) return;
+      if (event.target && event.target.closest && event.target.closest("#inv-col-menu")) return;
+      state.invColMenu = "";
+      const menu = document.querySelector("#inv-col-menu");
+      if (menu) menu.remove();
+    }, true);
 
     document.addEventListener("change", (event) => {
       if (!event.target.closest("#inv-edit-dialog")) return;

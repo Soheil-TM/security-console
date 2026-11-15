@@ -201,6 +201,9 @@ def ci_client(monkeypatch: pytest.MonkeyPatch) -> FlaskClient:
     monkeypatch.setenv("CONSOLE_ENV", "development")
     monkeypatch.setenv("COOKIE_SECURE", "0")
     monkeypatch.setenv("CONSOLE_JWT_KEY", "test-jwt-key-must-be-32-characters")
+    # Prefer env tokens in tests; Compose *_FILE secrets must not win.
+    monkeypatch.delenv("CI_SCAN_TOKEN_FILE", raising=False)
+    monkeypatch.delenv("GATE_TOKEN_FILE", raising=False)
     monkeypatch.setenv("CI_SCAN_TOKEN", _CI_TOKEN)
     monkeypatch.setenv("GATE_TOKEN", "gate-token-must-be-long-enough-xx")
     prepare_database()

@@ -16,6 +16,14 @@ from security_console.access import (
     scan_project_ref,
 )
 from security_console.authz import bypasses_project_scope, can_write_triage_by_role
+from security_console.classify import (
+    FINDING_CLASSES,
+    ClassOverrideConflict,
+    ClassOverridesUnavailable,
+    classify_finding,
+    enrich_findings,
+    load_class_overrides,
+)
 from security_console.risk import can_accept_risk, finding_key
 
 Reply = Response | tuple[Response, int]
@@ -28,8 +36,25 @@ DISPOSITION_STATUSES = (
     "resolved",
 )
 GATE_OK_STATUSES = frozenset({"false_positive", "accepted_risk", "resolved"})
+GATE_CLASSES = frozenset({"security", "operational"})
 REASON_STATUSES = frozenset({"false_positive", "accepted_risk", "resolved"})
 ASSIGNABLE_STATUSES = frozenset({"true_positive", "needs_review", "resolved"})
+
+
+def gate_scoped_findings(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return security/operational findings that participate in the push gate.
+
+    Callers must pass findings already enriched with auto classification and
+    any persisted manual overrides (for example via ``allowed_findings``).
+    Raw rows without overrides will use auto class only and can mis-scope the gate.
+    """
+
+    scoped: list[dict[str, Any]] = []
+    for row in findings or []:
+        classified = classify_finding(row)
+        if str(classified.get("finding_class") or "") in GATE_CLASSES:
+            scoped.append(classified)
+    return scoped
 
 
 def install_investigate(app: Flask) -> None:
@@ -43,6 +68,14 @@ def install_investigate(app: Flask) -> None:
     def security_disposition() -> Reply:
         return _call(app, _put_disposition)
 
+    @app.put("/api/security/finding-class")
+    def security_finding_class() -> Reply:
+        return _call(app, _put_finding_class)
+
+    @app.delete("/api/security/finding-class")
+    def security_finding_class_clear() -> Reply:
+        return _call(app, _delete_finding_class)
+
     @app.get("/api/security/assignments")
     def security_assignments() -> Reply:
         return _call(app, _assignments)
@@ -55,13 +88,31 @@ def install_investigate(app: Flask) -> None:
 def _call(app: Flask, action: Any) -> Reply:
     try:
         return action()
+    except ClassOverridesUnavailable:
+        app.logger.error("class overrides unavailable")
+        return jsonify({"error": "Sign-in is unavailable."}), 503
+    except ClassOverrideConflict:
+        return jsonify(
+            {
+                "error": (
+                    "This finding class was updated by someone else. "
+                    "Refresh and retry."
+                )
+            }
+        ), 409
     except psycopg.Error:
         app.logger.error("investigate database unavailable")
         return jsonify({"error": "Sign-in is unavailable."}), 503
 
 
-def allowed_findings(user: dict[str, Any], scan: dict[str, Any]) -> list[dict[str, Any]]:
-    """Return findings the user may see for this scan."""
+def allowed_findings(
+    user: dict[str, Any], scan: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Return findings the user may see for this scan.
+
+    For project scans, class overrides are required. Failure to load them raises
+    ``ClassOverridesUnavailable`` so gate and triage paths fail closed.
+    """
 
     allowed = access_map(user)
     findings = [
@@ -76,15 +127,29 @@ def allowed_findings(user: dict[str, Any], scan: dict[str, Any]) -> list[dict[st
         findings = findings + expand_sonar_findings(
             sonar if isinstance(sonar, dict) else None
         )
-    return findings
+    project = scan_project_ref(scan)
+    overrides: dict[str, dict[str, Any]] | None = None
+    if project:
+        overrides = load_class_overrides(project)
+    return enrich_findings(findings, overrides=overrides)
 
 
 def gate_readiness(
     findings: list[dict[str, Any]],
     dispositions: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
-    """Return whether every finding is FP, Accepted Risk, or Resolved with a reason."""
+    """Return whether every gate-scoped finding is ready for push.
 
+    Quality findings are excluded from the security push gate. Security and
+    operational findings still need False Positive, Accepted Risk, or Resolved
+    with a reason.
+    """
+
+    classified = [classify_finding(row) for row in (findings or [])]
+    scoped = gate_scoped_findings(classified)
+    excluded_quality = sum(
+        1 for row in classified if str(row.get("finding_class") or "") == "quality"
+    )
     blockers: list[dict[str, str]] = []
     counts = {
         "true_positive": 0,
@@ -94,7 +159,7 @@ def gate_readiness(
         "resolved": 0,
         "undecided": 0,
     }
-    for row in findings:
+    for row in scoped:
         key = finding_key(row)
         if not key:
             continue
@@ -129,9 +194,11 @@ def gate_readiness(
             )
     return {
         "ready_for_gate": len(blockers) == 0,
-        "empty_findings": not findings,
+        "empty_findings": not scoped,
         "blockers": blockers,
         "counts": counts,
+        "gate_finding_count": len(scoped),
+        "excluded_quality": excluded_quality,
     }
 
 
@@ -139,10 +206,10 @@ def triage_snapshot(
     findings: list[dict[str, Any]],
     dispositions: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
-    """Immutable snapshot of dispositions for the findings on one scan."""
+    """Immutable snapshot of dispositions for gate-scoped findings on one scan."""
 
     snapshot: dict[str, Any] = {}
-    for row in findings:
+    for row in gate_scoped_findings(findings):
         key = finding_key(row)
         if not key:
             continue
@@ -184,7 +251,6 @@ def _investigate() -> Reply:
     findings = allowed_findings(user, scan)
     dispositions = db.list_dispositions(project)
     readiness = gate_readiness(findings, dispositions)
-    can_triage = bypasses_project_scope(user) or project in (group_keys or set())
     # Viewers may view investigate but only triage-writer roles write.
     can_write = can_write_triage_by_role(user) and (
         bypasses_project_scope(user)
@@ -215,6 +281,13 @@ def _investigate() -> Reply:
                 "carried": carried,
             }
         )
+    finding_keys = [
+        str(row.get("finding_key") or "")
+        for row in annotated
+        if row.get("finding_key")
+    ]
+    class_overrides = load_class_overrides(project)
+    class_events = db.list_class_override_events(project, finding_keys)
     return jsonify(
         {
             "project_key": project,
@@ -223,6 +296,9 @@ def _investigate() -> Reply:
             ),
             "findings": annotated,
             "dispositions": dispositions,
+            "class_overrides": class_overrides,
+            "class_override_events": class_events,
+            "finding_classes": sorted(FINDING_CLASSES),
             "assignees": db.list_project_assignees(project),
             "readiness": readiness,
             "can_triage": bool(can_write),
@@ -334,6 +410,181 @@ def _put_disposition() -> Reply:
     dispositions = db.list_dispositions(project)
     readiness = gate_readiness(findings, dispositions)
     return jsonify({"disposition": row, "readiness": readiness})
+
+
+def _triage_write_context() -> Reply | tuple[
+    dict[str, Any], dict[str, Any], str, str
+]:
+    """Validate scan + triage write access.
+
+    Return (user, scan, project, key) or an error response.
+    """
+
+    user = g.user
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "Invalid request."}), 400
+    scan_id = str(body.get("scan_id") or "").strip()
+    key = str(body.get("finding_key") or "").strip()
+    if not scan_id or not key:
+        return jsonify({"error": "scan_id and finding_key are required."}), 400
+    scan = db.get_scan_row(scan_id)
+    if scan is None:
+        return jsonify({"error": "Scan not found."}), 404
+    if scan.get("guest"):
+        return jsonify({"error": "Guest scans cannot be investigated."}), 400
+    if not scan.get("project_id") and not scan.get("project_slug"):
+        return jsonify(
+            {"error": "Investigate is only available for project scans."}
+        ), 400
+    project = scan_project_ref(scan)
+    try:
+        group_keys = (
+            None
+            if bypasses_project_scope(user)
+            else db.group_project_keys(int(user["id"]))
+        )
+    except (TypeError, ValueError):
+        return jsonify({"error": "You do not have permission."}), 403
+    if not can_view_scan(user, scan, group_keys=group_keys):
+        return jsonify({"error": "You do not have permission."}), 403
+    if not can_write_triage_by_role(user):
+        return jsonify({"error": "You do not have permission."}), 403
+    if not bypasses_project_scope(user) and not (
+        db.user_in_project_groups(int(user["id"]), project)
+        or project in (group_keys or set())
+    ):
+        return jsonify({"error": "You do not have permission."}), 403
+    findings = allowed_findings(user, scan)
+    if key not in {finding_key(row) for row in findings}:
+        return jsonify({"error": "Finding not found on this scan."}), 404
+    return user, scan, project, key
+
+
+def _put_finding_class() -> Reply:
+    ctx = _triage_write_context()
+    if not isinstance(ctx, tuple) or len(ctx) != 4:
+        return ctx
+    user, scan, project, key = ctx
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "Invalid request."}), 400
+    reason = str(body.get("reason") or "").strip()
+    finding_class = str(body.get("finding_class") or "").strip().lower()
+    scan_id = str(scan.get("id") or "")
+    if_updated_at = str(body.get("if_updated_at") or "").strip() or None
+    if finding_class in {"", "auto"}:
+        return _clear_finding_class(
+            user=user,
+            project=project,
+            key=key,
+            reason=reason,
+            scan_id=scan_id,
+            scan=scan,
+            if_updated_at=if_updated_at,
+        )
+    if finding_class not in FINDING_CLASSES:
+        return jsonify({"error": "Finding class is invalid."}), 400
+    if len(reason) < 12:
+        return jsonify(
+            {"error": "Write a reason of at least 12 characters."}
+        ), 400
+    if len(reason) > 2000:
+        return jsonify({"error": "Reason is too long."}), 400
+
+    findings = allowed_findings(user, scan)
+    current = next((row for row in findings if finding_key(row) == key), {})
+    baseline_class = str(current.get("finding_class") or "")
+
+    override = db.upsert_class_override(
+        project_key=project,
+        finding_key=key,
+        finding_class=finding_class,
+        reason=reason,
+        updated_by=str(user.get("username") or ""),
+        updated_by_user_id=int(user["id"]),
+        scan_id=scan_id,
+        baseline_class=baseline_class,
+        if_updated_at=if_updated_at,
+        audit_action="finding_class.override",
+        audit_detail={
+            "project_key": project,
+            "finding_class": finding_class,
+            "scan_id": scan_id,
+        },
+    )
+    findings = allowed_findings(user, scan)
+    readiness = gate_readiness(findings, db.list_dispositions(project))
+    events = db.list_class_override_events(project, [key]).get(key) or []
+    return jsonify(
+        {
+            "override": override,
+            "events": events,
+            "readiness": readiness,
+        }
+    )
+
+
+def _delete_finding_class() -> Reply:
+    ctx = _triage_write_context()
+    if not isinstance(ctx, tuple) or len(ctx) != 4:
+        return ctx
+    user, scan, project, key = ctx
+    body = request.get_json(silent=True)
+    reason = ""
+    if_updated_at = None
+    if isinstance(body, dict):
+        reason = str(body.get("reason") or "").strip()
+        if_updated_at = str(body.get("if_updated_at") or "").strip() or None
+    return _clear_finding_class(
+        user=user,
+        project=project,
+        key=key,
+        reason=reason,
+        scan_id=str(scan.get("id") or ""),
+        scan=scan,
+        if_updated_at=if_updated_at,
+    )
+
+
+def _clear_finding_class(
+    *,
+    user: dict[str, Any],
+    project: str,
+    key: str,
+    reason: str,
+    scan_id: str,
+    scan: dict[str, Any],
+    if_updated_at: str | None = None,
+) -> Reply:
+    if len(reason) < 12:
+        return jsonify(
+            {"error": "Write a reason of at least 12 characters."}
+        ), 400
+    if len(reason) > 2000:
+        return jsonify({"error": "Reason is too long."}), 400
+    # Ensure overrides are readable before mutate (fail closed).
+    load_class_overrides(project)
+    removed = db.delete_class_override(
+        project_key=project,
+        finding_key=key,
+        reason=reason,
+        actor_username=str(user.get("username") or ""),
+        actor_user_id=int(user["id"]),
+        scan_id=scan_id,
+        if_updated_at=if_updated_at,
+        audit_action="finding_class.clear",
+        audit_detail={
+            "project_key": project,
+            "scan_id": scan_id,
+        },
+    )
+    if not removed:
+        return jsonify({"error": "No class override to clear."}), 404
+    findings = allowed_findings(user, scan)
+    readiness = gate_readiness(findings, db.list_dispositions(project))
+    events = db.list_class_override_events(project, [key]).get(key) or []
+    return jsonify({"override": None, "events": events, "readiness": readiness})
 
 
 def _assignments() -> Reply:

@@ -270,6 +270,44 @@ SCHEMA = (
         ON finding_disposition_notes (project_key, finding_key, id DESC)
     """,
     """
+    CREATE TABLE IF NOT EXISTS finding_class_overrides (
+        id bigserial PRIMARY KEY,
+        project_key text NOT NULL,
+        finding_key text NOT NULL,
+        finding_class text NOT NULL
+            CHECK (finding_class IN ('security', 'quality', 'operational')),
+        reason text NOT NULL DEFAULT '',
+        updated_by text NOT NULL DEFAULT '',
+        updated_by_user_id bigint REFERENCES users (id) ON DELETE SET NULL,
+        scan_id text NOT NULL DEFAULT '',
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now(),
+        UNIQUE (project_key, finding_key)
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS finding_class_overrides_project
+        ON finding_class_overrides (project_key)
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS finding_class_override_events (
+        id bigserial PRIMARY KEY,
+        project_key text NOT NULL,
+        finding_key text NOT NULL,
+        previous_class text NOT NULL DEFAULT '',
+        new_class text NOT NULL DEFAULT '',
+        reason text NOT NULL DEFAULT '',
+        actor_user_id bigint REFERENCES users (id) ON DELETE SET NULL,
+        actor_username text NOT NULL DEFAULT '',
+        scan_id text NOT NULL DEFAULT '',
+        created_at timestamptz NOT NULL DEFAULT now()
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS finding_class_override_events_finding
+        ON finding_class_override_events (project_key, finding_key, id DESC)
+    """,
+    """
     CREATE TABLE IF NOT EXISTS audit_events (
         id bigserial PRIMARY KEY,
         actor_user_id bigint,
@@ -3342,6 +3380,344 @@ def list_dispositions(project_key: str) -> dict[str, dict[str, Any]]:
         loaded["notes"] = notes.get(key) or []
         result[key] = _disposition_from_row(loaded)
     return result
+
+
+def _class_override_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": int(row["id"]),
+        "project_key": str(row.get("project_key") or ""),
+        "finding_key": str(row.get("finding_key") or ""),
+        "finding_class": str(row.get("finding_class") or ""),
+        "reason": str(row.get("reason") or ""),
+        "updated_by": str(row.get("updated_by") or ""),
+        "updated_by_user_id": (
+            int(row["updated_by_user_id"])
+            if row.get("updated_by_user_id") is not None
+            else None
+        ),
+        "scan_id": str(row.get("scan_id") or ""),
+        "created_at": _stamp(row.get("created_at")),
+        "updated_at": _stamp(row.get("updated_at")),
+    }
+
+
+def _class_override_event_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": int(row["id"]),
+        "project_key": str(row.get("project_key") or ""),
+        "finding_key": str(row.get("finding_key") or ""),
+        "previous_class": str(row.get("previous_class") or ""),
+        "new_class": str(row.get("new_class") or ""),
+        "reason": str(row.get("reason") or ""),
+        "actor_user_id": (
+            int(row["actor_user_id"]) if row.get("actor_user_id") is not None else None
+        ),
+        "actor_username": str(row.get("actor_username") or ""),
+        "scan_id": str(row.get("scan_id") or ""),
+        "created_at": _stamp(row.get("created_at")),
+    }
+
+
+def list_class_overrides(project_key: str) -> dict[str, dict[str, Any]]:
+    """Return current finding_class overrides keyed by finding_key."""
+
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, project_key, finding_key, finding_class, reason,
+                   updated_by, updated_by_user_id, scan_id, created_at, updated_at
+            FROM finding_class_overrides
+            WHERE project_key = %s
+            """,
+            (project_key,),
+        ).fetchall()
+        conn.commit()
+    return {
+        str(row["finding_key"]): _class_override_from_row(dict(row)) for row in rows
+    }
+
+
+def list_class_override_events(
+    project_key: str,
+    finding_keys: list[str] | None = None,
+    *,
+    limit_per_key: int = 20,
+) -> dict[str, list[dict[str, Any]]]:
+    """Return newest-first override events, optionally filtered to finding keys."""
+
+    keys = [str(item) for item in (finding_keys or []) if item]
+    with connect() as conn:
+        if keys:
+            rows = conn.execute(
+                """
+                SELECT id, project_key, finding_key, previous_class, new_class,
+                       reason, actor_user_id, actor_username, scan_id, created_at
+                FROM finding_class_override_events
+                WHERE project_key = %s AND finding_key = ANY(%s)
+                ORDER BY id DESC
+                """,
+                (project_key, keys),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT id, project_key, finding_key, previous_class, new_class,
+                       reason, actor_user_id, actor_username, scan_id, created_at
+                FROM finding_class_override_events
+                WHERE project_key = %s
+                ORDER BY id DESC
+                LIMIT 200
+                """,
+                (project_key,),
+            ).fetchall()
+        conn.commit()
+    result: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        key = str(row["finding_key"])
+        bucket = result.setdefault(key, [])
+        if len(bucket) >= limit_per_key:
+            continue
+        bucket.append(_class_override_event_from_row(dict(row)))
+    return result
+
+
+def _class_override_xact_lock(
+    conn: psycopg.Connection[dict[str, Any]],
+    project_key: str,
+    finding_key: str,
+) -> None:
+    """Serialize concurrent override writes for one finding within this transaction."""
+
+    conn.execute(
+        "SELECT pg_advisory_xact_lock(hashtext(%s), hashtext(%s))",
+        (project_key, finding_key),
+    )
+
+
+def _insert_audit_on_conn(
+    conn: psycopg.Connection[dict[str, Any]],
+    *,
+    actor_user_id: int | None,
+    actor_username: str,
+    action: str,
+    target_type: str,
+    target_id: str,
+    outcome: str,
+    detail: dict[str, Any] | None,
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO audit_events (
+            actor_user_id, actor_username, action, target_type, target_id,
+            outcome, detail
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """,
+        (
+            actor_user_id,
+            actor_username,
+            action,
+            target_type,
+            target_id,
+            outcome,
+            Jsonb(detail or {}),
+        ),
+    )
+
+
+def upsert_class_override(
+    *,
+    project_key: str,
+    finding_key: str,
+    finding_class: str,
+    reason: str,
+    updated_by: str,
+    updated_by_user_id: int,
+    scan_id: str,
+    baseline_class: str = "",
+    if_updated_at: str | None = None,
+    audit_action: str = "finding_class.override",
+    audit_detail: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Insert or replace one class override, event, and audit in one transaction.
+
+    ``previous_class`` comes from the locked DB row when present; otherwise from
+    ``baseline_class`` (effective class when no override row exists yet).
+    """
+
+    from security_console.classify import ClassOverrideConflict
+
+    with connect() as conn:
+        _class_override_xact_lock(conn, project_key, finding_key)
+        existing = conn.execute(
+            """
+            SELECT id, project_key, finding_key, finding_class, reason,
+                   updated_by, updated_by_user_id, scan_id, created_at, updated_at
+            FROM finding_class_overrides
+            WHERE project_key = %s AND finding_key = %s
+            FOR UPDATE
+            """,
+            (project_key, finding_key),
+        ).fetchone()
+        if existing is not None and if_updated_at:
+            current_stamp = _stamp(existing.get("updated_at"))
+            if current_stamp != if_updated_at:
+                conn.rollback()
+                raise ClassOverrideConflict("finding class override changed")
+        previous_class = (
+            str(existing.get("finding_class") or "")
+            if existing is not None
+            else str(baseline_class or "")
+        )
+        row = conn.execute(
+            """
+            INSERT INTO finding_class_overrides (
+                project_key, finding_key, finding_class, reason,
+                updated_by, updated_by_user_id, scan_id, updated_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, now())
+            ON CONFLICT (project_key, finding_key) DO UPDATE SET
+                finding_class = EXCLUDED.finding_class,
+                reason = EXCLUDED.reason,
+                updated_by = EXCLUDED.updated_by,
+                updated_by_user_id = EXCLUDED.updated_by_user_id,
+                scan_id = EXCLUDED.scan_id,
+                updated_at = now()
+            RETURNING id, project_key, finding_key, finding_class, reason,
+                      updated_by, updated_by_user_id, scan_id,
+                      created_at, updated_at
+            """,
+            (
+                project_key,
+                finding_key,
+                finding_class,
+                reason,
+                updated_by,
+                updated_by_user_id,
+                scan_id,
+            ),
+        ).fetchone()
+        conn.execute(
+            """
+            INSERT INTO finding_class_override_events (
+                project_key, finding_key, previous_class, new_class, reason,
+                actor_user_id, actor_username, scan_id
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                project_key,
+                finding_key,
+                previous_class,
+                finding_class,
+                reason,
+                updated_by_user_id,
+                updated_by,
+                scan_id,
+            ),
+        )
+        detail = dict(audit_detail or {})
+        detail.setdefault("previous_class", previous_class)
+        detail.setdefault("finding_class", finding_class)
+        _insert_audit_on_conn(
+            conn,
+            actor_user_id=updated_by_user_id,
+            actor_username=updated_by,
+            action=audit_action,
+            target_type="finding",
+            target_id=finding_key,
+            outcome="success",
+            detail=detail,
+        )
+        conn.commit()
+    if row is None:
+        raise RuntimeError("class override upsert did not return a row")
+    return _class_override_from_row(dict(row))
+
+
+def delete_class_override(
+    *,
+    project_key: str,
+    finding_key: str,
+    reason: str,
+    actor_username: str,
+    actor_user_id: int,
+    scan_id: str,
+    if_updated_at: str | None = None,
+    audit_action: str = "finding_class.clear",
+    audit_detail: dict[str, Any] | None = None,
+) -> bool:
+    """Remove one class override and append clear + audit events atomically.
+
+    ``previous_class`` always comes from ``DELETE … RETURNING``, never from the client.
+    """
+
+    from security_console.classify import ClassOverrideConflict
+
+    with connect() as conn:
+        _class_override_xact_lock(conn, project_key, finding_key)
+        existing = conn.execute(
+            """
+            SELECT finding_class, updated_at
+            FROM finding_class_overrides
+            WHERE project_key = %s AND finding_key = %s
+            FOR UPDATE
+            """,
+            (project_key, finding_key),
+        ).fetchone()
+        if existing is None:
+            conn.commit()
+            return False
+        if if_updated_at:
+            current_stamp = _stamp(existing.get("updated_at"))
+            if current_stamp != if_updated_at:
+                conn.rollback()
+                raise ClassOverrideConflict("finding class override changed")
+        row = conn.execute(
+            """
+            DELETE FROM finding_class_overrides
+            WHERE project_key = %s AND finding_key = %s
+            RETURNING finding_class
+            """,
+            (project_key, finding_key),
+        ).fetchone()
+        if row is None:
+            conn.commit()
+            return False
+        prior = str(row.get("finding_class") or "")
+        conn.execute(
+            """
+            INSERT INTO finding_class_override_events (
+                project_key, finding_key, previous_class, new_class, reason,
+                actor_user_id, actor_username, scan_id
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                project_key,
+                finding_key,
+                prior,
+                "",
+                reason,
+                actor_user_id,
+                actor_username,
+                scan_id,
+            ),
+        )
+        detail = dict(audit_detail or {})
+        detail.setdefault("previous_class", prior)
+        _insert_audit_on_conn(
+            conn,
+            actor_user_id=actor_user_id,
+            actor_username=actor_username,
+            action=audit_action,
+            target_type="finding",
+            target_id=finding_key,
+            outcome="success",
+            detail=detail,
+        )
+        conn.commit()
+    return True
 
 
 def upsert_disposition(

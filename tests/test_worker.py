@@ -12,6 +12,7 @@ from security_console import worker
 
 @pytest.fixture()
 def client(monkeypatch: pytest.MonkeyPatch) -> FlaskClient:
+    monkeypatch.delenv("SCANNER_TOKEN_FILE", raising=False)
     monkeypatch.setenv("SCANNER_TOKEN", "scanner-token-value-24")
     worker._jobs.clear()
     application = worker.create_app()

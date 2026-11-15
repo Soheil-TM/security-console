@@ -4,14 +4,13 @@ import os
 import sys
 import threading
 import uuid
-
-import psycopg
 from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
 from secrets import token_urlsafe
 from typing import Any
 
+import psycopg
 from flask import Flask, Response, g, jsonify, make_response, render_template, request
 
 from security_console import db
@@ -41,12 +40,24 @@ from security_console.dispatch import (
 )
 from security_console.guest import (
     COOKIE as GUEST_COOKIE,
+)
+from security_console.guest import (
     COOKIE_DAYS as GUEST_COOKIE_DAYS,
+)
+from security_console.guest import (
     HOURLY_LIMIT as GUEST_HOURLY_LIMIT,
+)
+from security_console.guest import (
     expired as guest_expired,
+)
+from security_console.guest import (
     parse_guest_scan,
     present_guest_scan,
+)
+from security_console.guest import (
     recent_count as guest_recent_count,
+)
+from security_console.guest import (
     session_key as guest_session_key,
 )
 from security_console.images import valid_image_ref
@@ -57,11 +68,11 @@ from security_console.queue import (
     bind_store,
     start_dispatcher,
 )
+from security_console.repos import normalize_commit_sha, valid_repo
 from security_console.schedules import (
     bind_schedule_store,
     start_schedule_ticker,
 )
-from security_console.repos import normalize_commit_sha, valid_repo
 from security_console.sonar_proxy import install_sonar_proxy
 from security_console.sonar_setup import read_public_status, run_setup
 
@@ -76,7 +87,7 @@ DATA = Path(os.environ.get("DATA_DIR", "/data"))
 RESTART_ERROR = "The console restarted during the scan."
 WORKER_GONE_ERROR = "The scanner no longer has this scan."
 # Bump when the console shell HTML/JS must replace an open tab (SPA).
-SHELL_BUILD = "2026-11-12-assignee-name"
+SHELL_BUILD = "2026-11-15-class-integrity"
 
 lock = threading.Lock()
 scans: dict[str, dict[str, Any]] = {}

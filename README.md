@@ -167,6 +167,10 @@ Response includes `approved_for_push` (boolean). When true, the matching risk ac
 
 Console and scanner expose unauthenticated `GET /health` returning `{"ok": true}` for Compose and load-balancer probes.
 
+## Finding class
+
+Investigate findings carry an auto `finding_class` of `security`, `quality`, or `operational` (classifier version 1). Classification is applied when findings are read. Project triage writers can **override** the class (or clear back to auto) from Investigate via `PUT` / `DELETE` `/api/security/finding-class` with a reason of at least 12 characters; overrides are stored per `project_key` + `finding_key`. Override row, history event, and generic audit write happen in one database transaction under an advisory lock. Override **events are append-only** in application paths (no update/delete API); a database administrator can still truncate tables outside the app. Manual classes are never overwritten by the auto classifier. Security and gate paths **fail closed** if class overrides cannot be loaded (HTTP 503 or denied push approval). Scan payloads expose `class_overrides_available` so the UI can distinguish override-unavailable from normal auto classification. The push gate and risk fingerprint require triage only for **security** and **operational** findings (False Positive, Accepted Risk, or Resolved with a reason). **Quality** findings stay visible but do not block `ready_for_gate` or invalidate the gate fingerprint — including when a finding is manually marked quality. Sonar hotspots are security only when expanded with `sonar_type=SECURITY_HOTSPOT` and `security_review=true`.
+
 ## Tests
 
 Pytest targets a disposable database (`security_console_test` by default on the same Postgres instance). It never wipes the live `security_console_db`. Set `CONSOLE_DB_PASSWORD` / `CONSOLE_DB_PASSWORD_FILE` (and `CONSOLE_DB_HOST` when needed); omit `CONSOLE_DB_NAME` or set it to `security_console_test`. Do not point `DATABASE_URL` or `CONSOLE_DB_NAME` at `security_console_db`.

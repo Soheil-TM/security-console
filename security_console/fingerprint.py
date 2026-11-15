@@ -14,7 +14,7 @@ def finding_disposition_parts(
     status = str((disposition or {}).get("status") or "")
     reason = str((disposition or {}).get("reason") or "")
     reason_hash = ""
-    if status in {"false_positive", "accepted_risk"} and reason:
+    if status in {"false_positive", "accepted_risk", "resolved"} and reason:
         reason_hash = hashlib.sha256(reason.encode("utf-8")).hexdigest()[:16]
     return {
         "key": finding_key,
@@ -59,3 +59,58 @@ def fingerprints_match(left: str, right: str) -> bool:
     a = str(left or "").strip().lower()
     b = str(right or "").strip().lower()
     return bool(a) and a == b
+
+
+def snapshot_scope_keys(snapshot: Any) -> set[str]:
+    """Return finding keys captured in a triage snapshot.
+
+    An empty snapshot yields an empty set.
+    """
+
+    if not isinstance(snapshot, dict):
+        return set()
+    return {str(key) for key in snapshot if str(key)}
+
+
+def current_gate_scope_keys(findings: list[dict[str, Any]]) -> set[str]:
+    """Gate-scoped finding keys using the same policy as gate_readiness."""
+
+    from security_console.investigate import gate_scoped_findings
+    from security_console.risk import finding_key
+
+    return {
+        finding_key(row)
+        for row in gate_scoped_findings(findings)
+        if finding_key(row)
+    }
+
+
+def risk_acceptance_still_valid(
+    *,
+    stored_fingerprint: str,
+    project_key: str,
+    commit_sha: str,
+    snapshot: Any,
+    current_findings: list[dict[str, Any]],
+    dispositions: dict[str, dict[str, Any]] | list[dict[str, Any]],
+) -> bool:
+    """True only when current gate scope matches the acceptance and fingerprint holds.
+
+    Scope is compared as sets (including empty). Missing fingerprints fail closed —
+    legacy rows cannot be trusted when disposition integrity is unverifiable.
+    """
+
+    accepted = snapshot_scope_keys(snapshot)
+    current = current_gate_scope_keys(current_findings)
+    if accepted != current:
+        return False
+    stored = str(stored_fingerprint or "").strip()
+    if not stored:
+        return False
+    current_fp = compute_risk_fingerprint(
+        project_key=project_key,
+        commit_sha=commit_sha,
+        finding_keys=sorted(current),
+        dispositions=dispositions,
+    )
+    return fingerprints_match(stored, current_fp)

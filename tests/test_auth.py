@@ -34,7 +34,12 @@ def client() -> FlaskClient:
     """Return a client against an empty auth database and one admin."""
 
     reset_auth_tables()
-    insert_user("admin", _HASHER.hash("correct-password"), "admin")
+    insert_user(
+        "admin",
+        _HASHER.hash("correct-password"),
+        "admin",
+        capabilities={"users.manage": True},
+    )
     insert_user("viewer", _HASHER.hash("viewer-password"), "viewer")
     app = Flask(__name__)
     app.config["TESTING"] = True

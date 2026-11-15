@@ -39,3 +39,22 @@ def test_fingerprint_stable_and_sensitive_to_disposition() -> None:
         dispositions=changed,
     )
     assert not fingerprints_match(left, other)
+
+
+def test_fingerprint_sensitive_to_resolved_reason_change() -> None:
+    key = "semgrep|a|a.py|1"
+    base = {key: {"status": "resolved", "reason": "Fixed in release train."}}
+    left = compute_risk_fingerprint(
+        project_key="payments",
+        commit_sha="abc",
+        finding_keys=[key],
+        dispositions=base,
+    )
+    changed = {key: {"status": "resolved", "reason": "Different fix rationale."}}
+    right = compute_risk_fingerprint(
+        project_key="payments",
+        commit_sha="abc",
+        finding_keys=[key],
+        dispositions=changed,
+    )
+    assert not fingerprints_match(left, right)

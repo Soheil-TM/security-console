@@ -115,9 +115,7 @@ def can_view_scan(
         keys = group_keys or set()
         slug = str(scan.get("project_slug") or "").strip().lower()
         legacy = project_key(scan)
-        if slug and slug in keys:
-            pass
-        elif legacy in keys:
+        if slug and slug in keys or legacy in keys:
             pass
         else:
             return False
@@ -195,6 +193,7 @@ def expand_sonar_findings(sonar: dict[str, Any] | None) -> list[dict[str, Any]]:
                 "path": str(item.get("file") or ""),
                 "line": item.get("line"),
                 "message": str(item.get("message") or ""),
+                "sonar_type": str(item.get("type") or ""),
             }
         )
     for item in sonar.get("hotspot_list") or []:
@@ -210,6 +209,8 @@ def expand_sonar_findings(sonar: dict[str, Any] | None) -> list[dict[str, Any]]:
                 "path": str(item.get("file") or ""),
                 "line": item.get("line"),
                 "message": str(item.get("message") or ""),
+                "sonar_type": "SECURITY_HOTSPOT",
+                "security_review": True,
             }
         )
     return rows
@@ -248,8 +249,28 @@ def present_scan(
         findings = findings + expand_sonar_findings(
             sonar if isinstance(sonar, dict) else None
         )
+    from security_console.classify import (
+        ClassOverridesUnavailable,
+        enrich_findings,
+        load_class_overrides,
+    )
     from security_console.tool_results import normalize_tool_results
 
+    overrides: dict[str, dict[str, Any]] | None = None
+    class_overrides_available = True
+    project = scan_project_ref(scan)
+    if project:
+        try:
+            overrides = load_class_overrides(project)
+        except ClassOverridesUnavailable:
+            import logging
+
+            logging.getLogger("security_console").error(
+                "class overrides unavailable for present_scan project=%s", project
+            )
+            class_overrides_available = False
+            overrides = None
+    findings = enrich_findings(findings, overrides=overrides)
     tools = [tool for tool in scan.get("tools") or [] if allowed.get(tool)]
     shown: dict[str, Any] = {
         "id": scan.get("id"),
@@ -282,6 +303,7 @@ def present_scan(
         ],
         "sonar": sonar,
         "project_ref": scan_project_ref(scan),
+        "class_overrides_available": class_overrides_available,
     }
     if scan.get("project_id") is not None:
         shown["project_id"] = int(scan["project_id"])

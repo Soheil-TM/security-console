@@ -90,6 +90,7 @@ def test_expand_sonar_findings_issues_and_hotspots() -> None:
                     "file": "src/app.py",
                     "line": 12,
                     "rule": "python:S2077",
+                    "type": "VULNERABILITY",
                     "severity": "MAJOR",
                     "message": "sql",
                 }
@@ -113,9 +114,12 @@ def test_expand_sonar_findings_issues_and_hotspots() -> None:
         "path": "src/app.py",
         "line": 12,
         "message": "sql",
+        "sonar_type": "VULNERABILITY",
     }
     assert rows[1]["tool"] == "sonar"
     assert rows[1]["severity"] == "HIGH"
+    assert rows[1]["sonar_type"] == "SECURITY_HOTSPOT"
+    assert rows[1]["security_review"] is True
     assert severity_bucket(rows[0]["severity"]) == "high"
     assert severity_bucket(rows[1]["severity"]) == "high"
 

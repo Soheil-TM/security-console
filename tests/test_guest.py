@@ -141,12 +141,19 @@ def test_guest_scans_stay_out_of_group_reports() -> None:
     scan = _scan(guest="g1")
 
     assert not can_view_scan(member, scan, group_keys=keys)
-    assert can_view_scan({"role": "admin"}, scan)
-    assert recent_per_project({"role": "admin"}, [scan], summary=True) == []
+    admin = {
+        "role": "admin",
+        "capabilities": {"projects.manage_all": True},
+    }
+    assert can_view_scan(admin, scan)
+    assert recent_per_project(admin, [scan], summary=True) == []
 
 
 def test_reuse_does_not_cross_between_guests_and_teams() -> None:
-    admin = {"role": "admin"}
+    admin = {
+        "role": "admin",
+        "capabilities": {"projects.manage_all": True},
+    }
     team = _scan(id="team00000000")
     mine = _scan(id="mine00000000", guest="g1")
     request = {

@@ -718,6 +718,71 @@
     html.dark .disp-badge.needs_review { background: #1e293b; color: #cbd5e1; }
     html.dark .disp-badge.resolved { background: #1e3a5f; color: #93c5fd; }
     html.dark .disp-badge.undecided { background: #1e293b; color: #cbd5e1; }
+    .class-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      border-radius: 999px;
+      padding: 2px 8px;
+      background: #e8edf2;
+      color: #334155;
+    }
+    .class-badge.security { background: #fde8e8; color: #9f1239; }
+    .class-badge.quality { background: #e0f2fe; color: #075985; }
+    .class-badge.operational { background: #ecfdf5; color: #065f46; }
+    html.dark .class-badge { background: #1e293b; color: #cbd5e1; }
+    html.dark .class-badge.security { background: #3f1d28; color: #fda4af; }
+    html.dark .class-badge.quality { background: #0c4a6e; color: #7dd3fc; }
+    html.dark .class-badge.operational { background: #12382c; color: #86efac; }
+    .class-badge.manual {
+      margin-left: 4px;
+      background: #f1f5f9;
+      color: #334155;
+    }
+    html.dark .class-badge.manual { background: #334155; color: #e2e8f0; }
+    .inv-class-cell { display: grid; gap: 4px; min-width: 120px; }
+    .inv-class-cell .inv-class-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+    .inv-class-cell .inv-class-history {
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+    html.dark .inv-class-cell .inv-class-history { color: #9aafc3; }
+    .filter-panel {
+      display: grid;
+      gap: 10px;
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      padding: 10px 12px;
+      margin: 0 0 12px;
+    }
+    html.dark .filter-panel {
+      background: var(--card);
+      border-color: var(--line);
+      color: var(--ink);
+    }
+    .filter-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+    }
+    .filter-label {
+      flex: 0 0 auto;
+      min-width: 3.75rem;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    html.dark .filter-label { color: #9aafc3; }
+    .filter-seg {
+      flex: 1 1 auto;
+      flex-wrap: wrap;
+    }
     .inv-table .inv-submit {
       white-space: nowrap;
       padding: 6px 12px;
@@ -932,20 +997,7 @@
       color: var(--muted);
     }
     html.dark .triage-complete-hint { color: #9aafc3; }
-    .inv-filters { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
-    .inv-filters button {
-      border: 1px solid var(--line);
-      background: transparent;
-      color: var(--ink);
-      border-radius: 999px;
-      padding: 4px 10px;
-      font: inherit;
-      font-size: 12px;
-      cursor: pointer;
-    }
-    .inv-filters button.on { background: var(--teal); color: #042f2e; border-color: var(--teal); }
-    html.dark .inv-filters button { color: #e8eef5; border-color: #334155; }
-    html.dark .inv-filters button.on { background: #2dd4bf; color: #042f2e; border-color: #2dd4bf; }
+    .investigate-panel > .filter-panel { margin-top: 8px; }
     .inv-mine-banner {
       margin: 0 0 12px;
       padding: 10px 12px;
@@ -2154,6 +2206,21 @@
     .stat.medium { --c: var(--medium); }
     .stat.low { --c: var(--low); }
     .stat.info { --c: var(--info); }
+    .stats.class-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .stat.security { --c: #9f1239; }
+    .stat.quality { --c: #075985; }
+    .stat.operational { --c: #065f46; }
+    .summary-stack { display: grid; gap: 10px; margin-bottom: 12px; }
+    .summary-stack > .summary { margin-bottom: 0; }
+    .summary-caption {
+      grid-column: 1 / -1;
+      margin: 0 0 2px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
     html.dark .summary {
       background: var(--card);
       border-color: var(--line);
@@ -2168,6 +2235,10 @@
     html.dark .stat.medium { --c: #fbbf24; }
     html.dark .stat.low { --c: #86efac; }
     html.dark .stat.info { --c: #7dd3fc; }
+    html.dark .stat.security { --c: #fda4af; }
+    html.dark .stat.quality { --c: #7dd3fc; }
+    html.dark .stat.operational { --c: #86efac; }
+    html.dark .summary-caption { color: #9aafc3; }
     html.dark .donut text { fill: #c5d5e4; }
     html.dark .donut text:first-of-type { fill: var(--ink); }
 
@@ -2956,6 +3027,7 @@
                 <input id="q" type="search" placeholder="Search rule, file, or message" dir="ltr">
                 <span class="shown" id="shown"></span>
               </div>
+              <div class="filter-panel" id="report-class-filters" hidden></div>
               <div id="sonar-card"></div>
               <div class="card" id="findings"></div>
               <div id="investigate-panel" class="investigate-panel" hidden></div>
@@ -3333,6 +3405,35 @@
       </form>
     </div>
   </div>
+  <div class="idle-warn" id="inv-class-dialog" hidden>
+    <div class="idle-card inv-edit-card" role="dialog" aria-modal="true" aria-labelledby="inv-class-title">
+      <h2 id="inv-class-title">Change finding class</h2>
+      <p class="meta">Override the auto class for this project finding. Quality overrides leave the push gate; security/operational stay in scope.</p>
+      <div class="inv-edit-section-label">Finding</div>
+      <div class="inv-edit-name" id="inv-class-name">—</div>
+      <div id="inv-class-error" class="login-error" hidden></div>
+      <div class="inv-edit-grid">
+        <div class="inv-edit-field">
+          <span class="field-label">Class</span>
+          <select id="inv-class-value">
+            <option value="security">Security</option>
+            <option value="quality">Quality</option>
+            <option value="operational">Operational</option>
+            <option value="auto">Clear override (auto)</option>
+          </select>
+        </div>
+      </div>
+      <label class="inv-edit-note">
+        <span class="field-label">Reason</span>
+        <textarea id="inv-class-reason" maxlength="2000" placeholder="Why this class?"></textarea>
+        <p class="inv-field-hint" id="inv-class-hint">Reason required (min 12 characters).</p>
+      </label>
+      <div class="idle-actions">
+        <button type="button" class="ghost" id="inv-class-cancel">Cancel</button>
+        <button type="button" id="inv-class-save" disabled>Save</button>
+      </div>
+    </div>
+  </div>
   <div class="idle-warn" id="inv-edit-dialog" hidden>
     <div class="idle-card inv-edit-card" role="dialog" aria-modal="true" aria-labelledby="inv-edit-title">
       <h2 id="inv-edit-title">Edit finding</h2>
@@ -3411,6 +3512,11 @@
       ["medium", "MEDIUM", "Medium", "#f9a825"],
       ["low", "LOW", "Low", "#689f38"],
       ["info", "INFO", "Info", "#0288d1"]
+    ];
+    const CLASS_CHART = [
+      ["security", "SECURITY", "Security", "#be123c"],
+      ["quality", "QUALITY", "Quality", "#0284c7"],
+      ["operational", "OPERATIONAL", "Operational", "#059669"]
     ];
     const STATUS = {queued: "Queued", running: "Running", done: "Done", failed: "Failed"};
 
@@ -3527,6 +3633,7 @@
       scan: null,
       sev: "",
       tool: "all",
+      reportClassFilter: "all",
       q: "",
       open: new Set(),
       sort: {key: "severity", dir: "asc"},
@@ -3538,6 +3645,7 @@
       securityHistory: null,
       investigate: null,
       invFilter: "needs_work",
+      invClassFilter: "all",
       invHistoryOpen: new Set(),
       invNoteIndex: {},
       invComposeOpen: new Set(),
@@ -3953,6 +4061,40 @@
       return '<div class="stats">' + SEV.map((item) => {
         const on = (action === "sev" ? state.sev : state.fsev) === item[0] ? " on" : "";
         return '<button type="button" class="stat ' + item[0] + on + '" data-action="' + action + '" data-sev="' + item[0] + '"><span class="en">' + item[1] + '</span><b>' + tally[item[0]] + '</b><span class="fa">' + item[2] + '</span></button>';
+      }).join("") + "</div>";
+    }
+
+    function classTally(rows) {
+      const tally = {security: 0, quality: 0, operational: 0};
+      (rows || []).forEach((row) => {
+        tally[findingClassOf(row)] += 1;
+      });
+      return tally;
+    }
+
+    function classDonut(tally) {
+      const total = CLASS_CHART.reduce((sum, item) => sum + (tally[item[0]] || 0), 0);
+      const radius = 46;
+      const circ = 2 * Math.PI * radius;
+      const active = CLASS_CHART.filter((item) => (tally[item[0]] || 0) > 0);
+      const gap = active.length > 1 ? 3 : 0;
+      let offset = 0;
+      const arcs = total === 0
+        ? '<circle cx="60" cy="60" r="46" fill="none" stroke="#e2e8f0" stroke-width="12"/>'
+        : active.map((item) => {
+            const len = Math.max(0, (tally[item[0]] / total) * circ - gap);
+            const node = '<circle cx="60" cy="60" r="' + radius + '" fill="none" stroke="' + item[3] + '" stroke-width="12" stroke-dasharray="' + len + ' ' + (circ - len) + '" stroke-dashoffset="' + (-offset) + '"/>';
+            offset += (tally[item[0]] / total) * circ;
+            return node;
+          }).join("");
+      return '<svg viewBox="0 0 120 120" class="donut" role="img" aria-label="' + total + ' by class"><g transform="rotate(-90 60 60)">' + arcs + '</g><text x="60" y="58" text-anchor="middle" font-size="22" font-weight="700" fill="#152232">' + total + '</text><text x="60" y="76" text-anchor="middle" font-size="11" fill="#5d6d80">by class</text></svg>';
+    }
+
+    function classStats(tally, action) {
+      const active = state.reportClassFilter || "all";
+      return '<div class="stats class-stats">' + CLASS_CHART.map((item) => {
+        const on = action === "report-class" && active === item[0] ? " on" : "";
+        return '<button type="button" class="stat ' + item[0] + on + '" data-action="' + action + '" data-class="' + item[0] + '"><span class="en">' + item[1] + '</span><b>' + (tally[item[0]] || 0) + '</b><span class="fa">' + item[2] + '</span></button>';
       }).join("") + "</div>";
     }
 
@@ -4673,11 +4815,13 @@
       const execPanel = document.querySelector("#execution-panel");
       if (execPanel) execPanel.hidden = !executing;
       const toolbar = document.querySelector("#scan-panel .toolbar");
+      const reportClassFilters = document.querySelector("#report-class-filters");
       const sonar = document.querySelector("#sonar-card");
       const findings = document.querySelector("#findings");
       const summary = document.querySelector("#summary");
       const inv = document.querySelector("#investigate-panel");
       if (toolbar) toolbar.hidden = investigating;
+      if (reportClassFilters) reportClassFilters.hidden = investigating;
       if (sonar) sonar.hidden = investigating;
       if (findings) findings.hidden = investigating;
       if (summary) summary.hidden = investigating;
@@ -4719,9 +4863,12 @@
         return;
       }
       const totals = {critical: 0, high: 0, medium: 0, low: 0, info: 0};
+      const classTotals = {security: 0, quality: 0, operational: 0};
       group.items.forEach((item) => {
         const tally = scanTally(item);
         SEV.forEach((sev) => { totals[sev[0]] += tally[sev[0]]; });
+        const byClass = classTally(reportFindings(item));
+        CLASS_CHART.forEach((cls) => { classTotals[cls[0]] += byClass[cls[0]]; });
       });
       const max = Math.max(1, ...group.items.map((item) => SEV.reduce((sum, sev) => sum + scanTally(item)[sev[0]], 0)));
       const bars = group.items.map((item) => {
@@ -4731,11 +4878,20 @@
         const when = formatStamp(item.created_at || "");
         return '<button type="button" class="scan-bar" data-action="open" data-id="' + esc(item.id) + '"><span><b>' + esc(STATUS[item.status] || item.status) + '</b><span class="sub">' + esc(when) + '</span></span><span class="stack">' + pieces + '</span><span class="num">' + total + '</span></button>';
       }).join("");
+      const classMeta = CLASS_CHART.map((cls) => cls[2] + " " + classTotals[cls[0]]).join(" · ");
       const hist = state.securityHistory && state.securityHistory.project_key === group.key
         ? state.securityHistory
         : null;
-      box.innerHTML = '<div class="scan-head"><div><h1>' + esc(group.name) + '</h1><div class="repo">Overview</div><div class="meta">' + group.items.length + " scans</div></div></div>"
-        + '<div class="summary">' + donut(totals) + stats(totals, "keep") + "</div>"
+      const overridesUnavailable = group.items.some((item) => isProjectScan(item) && !classOverridesAvailable(item));
+      const overridesNote = overridesUnavailable
+        ? '<p class="note" data-class-overrides="unavailable">Finding class overrides are temporarily unavailable for one or more scans. Class totals may omit manual overrides.</p>'
+        : "";
+      box.innerHTML = '<div class="scan-head"><div><h1>' + esc(group.name) + '</h1><div class="repo">Overview</div><div class="meta">' + group.items.length + " scans · " + esc(classMeta) + "</div></div></div>"
+        + overridesNote
+        + '<div class="summary-stack">'
+        + '<div class="summary"><p class="summary-caption">Severity</p>' + donut(totals) + stats(totals, "keep") + "</div>"
+        + '<div class="summary"><p class="summary-caption">Class</p>' + classDonut(classTotals) + classStats(classTotals, "keep") + "</div>"
+        + "</div>"
         + '<div class="scan-bars">' + bars + "</div>"
         + '<div id="security-history" class="security-history">' + (hist ? renderSecurityHistory(hist, group) : '<div class="empty"><strong>Loading security history…</strong></div>') + "</div>";
       if (!hist || hist.project_key !== group.key) loadSecurityHistory(group.key);
@@ -4884,6 +5040,56 @@
       needs_review: "Needs Review",
       resolved: "Resolved"
     };
+    const CLASS_LABEL = {
+      security: "Security",
+      quality: "Quality",
+      operational: "Operational"
+    };
+    const CLASSIFIER_VERSION = 1;
+
+    function isProjectScan(scan) {
+      return Boolean(scan && (scan.project_slug || scan.project_id || scan.project_ref));
+    }
+
+    function classOverridesAvailable(scan) {
+      if (!scan || scan.class_overrides_available === undefined || scan.class_overrides_available === null) {
+        return true;
+      }
+      return scan.class_overrides_available !== false;
+    }
+
+    function classOverridesNote(scan) {
+      if (!isProjectScan(scan) || classOverridesAvailable(scan)) return "";
+      return '<p class="note" data-class-overrides="unavailable">Finding class overrides are temporarily unavailable. Class badges may not reflect manual overrides.</p>';
+    }
+
+    function classifyFindingRow(row) {
+      const out = Object.assign({}, row || {});
+      const source = String(out.classification_source || "").trim().toLowerCase();
+      const existing = String(out.finding_class || "").trim().toLowerCase();
+      // Trust server enrichment (auto or manual) — do not re-derive a conflicting class.
+      if (CLASS_LABEL[existing] && (source === "manual" || source === "auto")) return out;
+      if (CLASS_LABEL[existing] && !source) return out;
+      const tool = String(out.tool || "").trim().toLowerCase();
+      let findingClass = "security";
+      if (tool === "sonar") {
+        const sonarType = String(out.sonar_type || "").trim().toUpperCase();
+        const securityReview = out.security_review === true;
+        if (sonarType === "VULNERABILITY") findingClass = "security";
+        else if (sonarType === "SECURITY_HOTSPOT" && securityReview) findingClass = "security";
+        else if (sonarType === "BUG" || sonarType === "CODE_SMELL" || sonarType) findingClass = "quality";
+        else findingClass = "security";
+      } else if (tool === "trivy") {
+        const kind = String(out.trivy_kind || "").trim().toLowerCase();
+        findingClass = kind === "misconfiguration" ? "operational" : "security";
+      } else if (tool === "semgrep" || tool === "checkov") {
+        findingClass = "security";
+      }
+      out.finding_class = findingClass;
+      out.classification_source = "auto";
+      out.classifier_version = CLASSIFIER_VERSION;
+      return out;
+    }
 
     async function openInvestigate(scanId, opts) {
       const id = String(scanId || (state.scan && state.scan.id) || "").trim();
@@ -4897,6 +5103,7 @@
       state.invScanId = id;
       state.investigate = null;
       state.invFilter = (opts && opts.filter) || "needs_work";
+      state.invClassFilter = (opts && opts.classFilter) || "all";
       state.invHistoryOpen = new Set();
       state.invNoteIndex = {};
       state.invComposeOpen = new Set();
@@ -5021,9 +5228,16 @@
       return false;
     }
 
+    function findingClassOf(row) {
+      const value = String((row && row.finding_class) || "").trim().toLowerCase();
+      return CLASS_LABEL[value] ? value : "security";
+    }
+
     function filteredInvestigateFindings(data) {
       const dispositions = data.dispositions || {};
+      const classFilter = state.invClassFilter || "all";
       return (data.findings || []).filter((row) => {
+        if (classFilter !== "all" && findingClassOf(row) !== classFilter) return false;
         const status = invFindingStatus(row, dispositions);
         const disp = dispositions[row.finding_key || ""] || {};
         const filter = state.invFilter || "needs_work";
@@ -5075,6 +5289,7 @@
       }
       if (key === "finding") return String(row.check || "") + " " + String(row.path || "");
       if (key === "tool") return TOOL_LABEL[row.tool] || row.tool || "";
+      if (key === "class") return findingClassOf(row);
       if (key === "status") return disp.status || "";
       if (key === "assigned") return assigneeDisplayName(disp.assignee_username || "");
       if (key === "notes") return latest ? String(latest.created_at || "") + " " + String(latest.reason || "") : "";
@@ -5187,13 +5402,29 @@
       ];
       const activeFilter = state.invFilter || "needs_work";
       const filters = filterDefs.map((item) => {
-        let countLabel = "";
-        if (item[0] === "needs_work") countLabel = " " + needsWorkCount;
-        else if (item[0] === "mine") countLabel = " " + mineCount;
-        else if (item[0] !== "all") countLabel = " " + (counts[item[0]] || 0);
+        let count = null;
+        if (item[0] === "needs_work") count = needsWorkCount;
+        else if (item[0] === "mine") count = mineCount;
+        else if (item[0] !== "all") count = counts[item[0]] || 0;
+        const badge = count == null ? "" : (" <em>" + count + "</em>");
         return '<button type="button" data-action="inv-filter" data-inv-filter="' + item[0] + '"'
           + (activeFilter === item[0] ? ' class="on"' : "") + ">" + item[1]
-          + countLabel + "</button>";
+          + badge + "</button>";
+      }).join("");
+      const classCounts = {security: 0, quality: 0, operational: 0};
+      (data.findings || []).forEach((row) => {
+        classCounts[findingClassOf(row)] += 1;
+      });
+      const activeClass = state.invClassFilter || "all";
+      const classFilters = [
+        ["all", "All classes", (data.findings || []).length],
+        ["security", "Security", classCounts.security],
+        ["quality", "Quality", classCounts.quality],
+        ["operational", "Operational", classCounts.operational]
+      ].map((item) => {
+        return '<button type="button" data-action="inv-class-filter" data-inv-class="' + item[0] + '"'
+          + (activeClass === item[0] ? ' class="on"' : "") + ">" + item[1]
+          + " <em>" + item[2] + "</em></button>";
       }).join("");
       const mineBanner = activeFilter === "mine"
         ? '<div class="inv-mine-banner"><b>Assigned to you only.</b> '
@@ -5234,12 +5465,29 @@
         const statusBadge = status
           ? '<span class="disp-badge ' + esc(status) + '">' + esc(DISP_LABEL[status] || status) + "</span>"
           : '<span class="disp-badge undecided">Undecided</span>';
+        const cls = findingClassOf(row);
+        const manual = String(row.classification_source || "") === "manual";
+        const classBadge = '<span class="class-badge ' + esc(cls) + '">' + esc(CLASS_LABEL[cls] || cls) + "</span>"
+          + (manual ? '<span class="class-badge manual">Manual</span>' : "");
+        const classEvents = ((data.class_override_events || {})[key] || []).slice(0, 2);
+        const classHistory = classEvents.length
+          ? '<div class="inv-class-history">' + classEvents.map((ev) => {
+              const from = ev.previous_class ? (CLASS_LABEL[ev.previous_class] || ev.previous_class) : "auto";
+              const to = ev.new_class ? (CLASS_LABEL[ev.new_class] || ev.new_class) : "auto";
+              return esc(from + " → " + to) + (ev.actor_username ? (" · " + esc(ev.actor_username)) : "");
+            }).join("<br>") + "</div>"
+          : "";
+        const classActions = canTriage
+          ? '<div class="inv-class-actions"><button type="button" class="ghost" data-action="inv-class-edit" data-key="' + esc(key) + '">Change class</button></div>'
+          : "";
+        const classCell = '<div class="inv-class-cell">' + classBadge + classActions + classHistory + "</div>";
         const assigneeCell = '<span class="inv-assignee-cell">' + esc(assigneeShown || "Unassigned") + "</span>";
         return '<tr data-finding-key="' + esc(key) + '" data-index="' + fullIndex + '">'
           + '<td class="inv-check"><input type="checkbox" class="inv-row-check" data-key="' + esc(key) + '"' + checked + (canTriage ? "" : " disabled") + '></td>'
           + '<td><span class="pill ' + level + '">' + (sev ? sev[2] : level) + "</span></td>"
           + '<td><div class="check">' + esc(row.check || "—") + '</div><div class="meta mono">' + esc(row.path || "") + (row.line ? ":" + esc(row.line) : "") + "</div></td>"
           + "<td>" + esc(TOOL_LABEL[row.tool] || row.tool) + "</td>"
+          + "<td>" + classCell + "</td>"
           + "<td>" + statusBadge + "</td>"
           + "<td>" + assigneeCell + "</td>"
           + "<td>" + thread + "</td>"
@@ -5259,14 +5507,28 @@
         + invSortHeader("severity", "Severity")
         + invSortHeader("finding", "Finding")
         + invSortHeader("tool", "Tool")
+        + invSortHeader("class", "Class")
         + invSortHeader("status", "Status")
         + invSortHeader("assigned", "Assigned to")
         + invSortHeader("notes", "Notes")
         + "</tr>";
       const acceptEnabled = ready && state.invAck && canAccept;
+      const excludedQuality = Number((data.readiness && data.readiness.excluded_quality) || 0);
+      const gateFindingCount = Number((data.readiness && data.readiness.gate_finding_count) || 0);
+      const gateMsg = ready
+        ? ("Ready for push gate" + (excludedQuality ? (" · " + excludedQuality + " quality excluded") : ""))
+        : (blockers.length + " open on security/operational");
+      const gatePolicyNote = '<p class="meta inv-gate-policy">Push gate covers security and operational findings'
+        + (gateFindingCount || excludedQuality
+          ? (" (" + gateFindingCount + " in scope"
+            + (excludedQuality ? (", " + excludedQuality + " quality excluded") : "")
+            + ").")
+          : ".")
+        + " Quality does not block push.</p>";
       const sticky = '<div class="inv-sticky">'
         + '<div class="inv-sticky-top"><div class="inv-chips">' + chips + "</div>"
-        + '<span id="inv-gate-msg" class="meta">' + (ready ? "Ready for push gate" : (blockers.length + " open")) + "</span></div>"
+        + '<span id="inv-gate-msg" class="meta">' + gateMsg + "</span></div>"
+        + gatePolicyNote
         + (canAccept
           ? '<label class="inv-ack"><input type="checkbox" id="inv-ack" data-action-change="inv-ack"' + (state.invAck ? " checked" : "") + ">"
             + "<span>I understand these Accepted Risk items are real issues the organization knowingly accepts.</span></label>"
@@ -5279,8 +5541,12 @@
         : '<div class="empty"><strong>Nothing in this filter</strong>Choose another chip or clear the filter.</div>';
       box.innerHTML = "<h2>Investigate</h2>"
         + '<p class="meta">Select findings, then Edit or Assign to me. Status, assignee, and notes stay visible on each row.</p>'
+        + classOverridesNote(state.scan)
         + carryBanner(data)
-        + '<div class="inv-filters">' + filters + "</div>"
+        + '<div class="filter-panel">'
+        + '<div class="filter-row"><span class="filter-label">Status</span><div class="seg filter-seg">' + filters + "</div></div>"
+        + '<div class="filter-row"><span class="filter-label">Class</span><div class="seg filter-seg">' + classFilters + "</div></div>"
+        + "</div>"
         + mineBanner
         + bulkBar
         + (visible.length
@@ -5330,6 +5596,92 @@
     function closeInvestigateEditDialog() {
       const dialog = document.querySelector("#inv-edit-dialog");
       if (dialog) dialog.hidden = true;
+    }
+
+    function closeInvestigateClassDialog() {
+      const dialog = document.querySelector("#inv-class-dialog");
+      if (dialog) dialog.hidden = true;
+      state.invClassEditKey = "";
+    }
+
+    function syncInvestigateClassValidity() {
+      const reasonEl = document.querySelector("#inv-class-reason");
+      const saveBtn = document.querySelector("#inv-class-save");
+      const hint = document.querySelector("#inv-class-hint");
+      const err = document.querySelector("#inv-class-error");
+      if (!saveBtn) return;
+      const reason = reasonEl ? String(reasonEl.value || "").trim() : "";
+      if (hint) hint.textContent = investigateNoteHint(reason.length);
+      const ok = reason.length >= 12;
+      if (saveBtn.textContent !== "Saving…") saveBtn.disabled = !ok;
+      if (ok) setInvInlineError(err, "");
+    }
+
+    function openInvestigateClassDialog(findingKey) {
+      const data = state.investigate;
+      const dialog = document.querySelector("#inv-class-dialog");
+      if (!data || !dialog || !findingKey) return;
+      const row = (data.findings || []).find((item) => item.finding_key === findingKey) || {};
+      const nameBox = document.querySelector("#inv-class-name");
+      const valueEl = document.querySelector("#inv-class-value");
+      const reasonEl = document.querySelector("#inv-class-reason");
+      const err = document.querySelector("#inv-class-error");
+      const path = (row.path || "") + (row.line ? (":" + row.line) : "");
+      if (nameBox) nameBox.textContent = (row.check || "Finding") + (path ? (" · " + path) : "");
+      const current = findingClassOf(row);
+      const manual = String(row.classification_source || "") === "manual";
+      if (valueEl) valueEl.value = manual ? current : current;
+      if (reasonEl) reasonEl.value = "";
+      state.invClassEditKey = findingKey;
+      setInvInlineError(err, "");
+      dialog.hidden = false;
+      syncInvestigateClassValidity();
+      if (valueEl) valueEl.focus();
+    }
+
+    async function saveInvestigateClassDialog() {
+      const data = state.investigate;
+      const saveBtn = document.querySelector("#inv-class-save");
+      const err = document.querySelector("#inv-class-error");
+      const valueEl = document.querySelector("#inv-class-value");
+      const reasonEl = document.querySelector("#inv-class-reason");
+      const key = state.invClassEditKey || "";
+      if (!data || !state.scan || !key) return;
+      const findingClass = valueEl ? valueEl.value : "";
+      const reason = reasonEl ? String(reasonEl.value || "").trim() : "";
+      if (reason.length < 12) {
+        setInvInlineError(err, "Write a reason of at least 12 characters.");
+        return;
+      }
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.textContent = "Saving…";
+      }
+      const response = await api("/api/security/finding-class", {
+        method: "PUT",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          scan_id: state.scan.id,
+          finding_key: key,
+          finding_class: findingClass,
+          reason: reason
+        })
+      });
+      const body = await response.json().catch(() => ({}));
+      if (saveBtn) saveBtn.textContent = "Save";
+      if (!response.ok) {
+        setInvInlineError(err, (body && body.error) || "Could not save class override.");
+        syncInvestigateClassValidity();
+        return;
+      }
+      if (body.readiness) data.readiness = body.readiness;
+      if (!data.class_overrides) data.class_overrides = {};
+      if (!data.class_override_events) data.class_override_events = {};
+      if (body.override) data.class_overrides[key] = body.override;
+      else delete data.class_overrides[key];
+      if (Array.isArray(body.events)) data.class_override_events[key] = body.events;
+      closeInvestigateClassDialog();
+      await loadInvestigate(state.scan.id);
     }
 
     function openInvestigateEditDialog() {
@@ -6117,7 +6469,8 @@
           check: item.rule || "",
           path: item.file || "",
           line: item.line,
-          message: item.message || ""
+          message: item.message || "",
+          sonar_type: item.type || ""
         });
       });
       (Array.isArray(sonar.hotspot_list) ? sonar.hotspot_list : []).forEach((item) => {
@@ -6128,7 +6481,9 @@
           check: item.rule || "",
           path: item.file || "",
           line: item.line,
-          message: item.message || ""
+          message: item.message || "",
+          sonar_type: "SECURITY_HOTSPOT",
+          security_review: true
         });
       });
       return rows;
@@ -6183,10 +6538,30 @@
 
     function reportFindings(scan) {
       const rows = (scan && scan.findings) || [];
-      if (scan && isImageScan(scan)) return rows.filter((row) => row.tool === "trivy");
-      const base = rows.filter((row) => row.tool !== "trivy");
-      if (base.some((row) => row.tool === "sonar")) return base;
-      return base.concat(expandSonarFindings(scan && scan.sonar));
+      // Project scans: trust server-enriched findings (auto + overrides). Do not
+      // rebuild Sonar rows from scan.sonar — that path skips overrides.
+      if (isProjectScan(scan)) {
+        const trusted = (scan && isImageScan(scan))
+          ? rows.filter((row) => row.tool === "trivy")
+          : rows.slice();
+        return trusted.map((row) => {
+          const copy = Object.assign({}, row || {});
+          if (CLASS_LABEL[String(copy.finding_class || "").trim().toLowerCase()]) {
+            return copy;
+          }
+          return classifyFindingRow(copy);
+        });
+      }
+      let assembled;
+      if (scan && isImageScan(scan)) {
+        assembled = rows.filter((row) => row.tool === "trivy");
+      } else {
+        const base = rows.filter((row) => row.tool !== "trivy");
+        assembled = base.some((row) => row.tool === "sonar")
+          ? base
+          : base.concat(expandSonarFindings(scan && scan.sonar));
+      }
+      return assembled.map(classifyFindingRow);
     }
 
     function alignReportTool() {
@@ -6197,12 +6572,19 @@
     function renderSummary() {
       const rows = reportFindings(state.scan);
       const tally = counts(rows, (row) => row.severity);
+      const byClass = classTally(rows);
       const scan = state.scan;
-      const projectScan = Boolean(scan && (scan.project_slug || scan.project_id));
+      const projectScan = isProjectScan(scan);
       const triageHint = (projectScan && canOpenInvestigate(scan) && state.pane !== "investigate")
         ? '<p class="hint" id="inv-fp-hint">To mark a finding as False Positive or Accepted Risk, open <button type="button" class="ghost" data-action="investigate">Investigate</button>. Members fix from Scans → Reports; leads also use Triage and Groups → Report.</p>'
         : "";
-      document.querySelector("#summary").innerHTML = triageHint + '<div class="summary">' + donut(tally) + stats(tally, "sev") + "</div>";
+      const overridesNote = classOverridesNote(scan);
+      document.querySelector("#summary").innerHTML = triageHint
+        + overridesNote
+        + '<div class="summary-stack">'
+        + '<div class="summary"><p class="summary-caption">Severity</p>' + donut(tally) + stats(tally, "sev") + "</div>"
+        + '<div class="summary"><p class="summary-caption">Class</p>' + classDonut(byClass) + classStats(byClass, "report-class") + "</div>"
+        + "</div>";
     }
 
     function openAdhocProjectDialog() {
@@ -6233,12 +6615,35 @@
         const badge = el.querySelector("em");
         if (badge) badge.textContent = String(countsByTool[tool] || 0);
       });
+      const classCounts = {security: 0, quality: 0, operational: 0};
+      findings.forEach((row) => {
+        classCounts[findingClassOf(row)] += 1;
+      });
+      const activeClass = state.reportClassFilter || "all";
+      const classBox = document.querySelector("#report-class-filters");
+      if (classBox) {
+        const buttons = [
+          ["all", "All classes", findings.length],
+          ["security", "Security", classCounts.security],
+          ["quality", "Quality", classCounts.quality],
+          ["operational", "Operational", classCounts.operational]
+        ].map((item) => {
+          return '<button type="button" data-action="report-class-filter" data-report-class="' + item[0] + '"'
+            + (activeClass === item[0] ? ' class="on"' : "") + ">" + item[1]
+            + " <em>" + item[2] + "</em></button>";
+        }).join("");
+        classBox.hidden = false;
+        classBox.innerHTML = '<div class="filter-row"><span class="filter-label">Class</span>'
+          + '<div class="seg filter-seg">' + buttons + "</div></div>";
+      }
       document.querySelector("#q").hidden = false;
     }
 
     function filteredFindings() {
       const q = state.q.trim().toLowerCase();
+      const classFilter = state.reportClassFilter || "all";
       return reportFindings(state.scan).filter((row) => {
+        if (classFilter !== "all" && findingClassOf(row) !== classFilter) return false;
         if (state.sev && bucket(row.severity) !== state.sev) return false;
         if (state.tool !== "all" && row.tool !== state.tool) return false;
         if (!q) return true;
@@ -6264,21 +6669,23 @@
         return;
       }
       if (!state.groups.length) {
-        document.querySelector("#findings").innerHTML = '<div class="empty"><strong>Nothing matches this filter</strong>Clear the severity filter or the search.</div>';
+        document.querySelector("#findings").innerHTML = '<div class="empty"><strong>Nothing matches this filter</strong>Clear the severity filter, class filter, or the search.</div>';
         return;
       }
       const body = state.groups.map((instances, index) => {
         const sample = instances[0];
         const level = bucket(sample.severity);
         const label = SEV.find((item) => item[0] === level);
+        const cls = findingClassOf(sample);
+        const classBadge = '<span class="class-badge ' + esc(cls) + '">' + esc(CLASS_LABEL[cls] || cls) + "</span>";
         const key = sample.tool + "\0" + sample.check + "\0" + level;
         const messages = [...new Set(instances.map((row) => row.message).filter(Boolean))];
         const parentMsg = messages.length === 1 ? '<div class="msg">' + esc(messages[0]) + "</div>" : "";
         const open = state.open.has(key);
         const kids = instances.map((row) => '<li><span class="mono">' + esc(row.path) + (row.line ? ":" + esc(row.line) : "") + "</span>" + (messages.length > 1 ? '<span class="msg">' + esc(row.message) + "</span>" : "") + "</li>").join("");
-        return '<tr class="group" data-action="toggle" data-i="' + index + '" tabindex="0"><td><span class="pill ' + level + '">' + label[2] + '</span></td><td><div class="check">' + esc(sample.check || "—") + "</div>" + parentMsg + '</td><td>' + esc(TOOL_LABEL[sample.tool] || sample.tool) + '</td><td class="num">' + instances.length + ' <span class="chev">' + (open ? "▾" : "▸") + '</span></td></tr>' + (open ? '<tr class="kids"><td colspan="4"><ul>' + kids + "</ul></td></tr>" : "");
+        return '<tr class="group" data-action="toggle" data-i="' + index + '" tabindex="0"><td><span class="pill ' + level + '">' + label[2] + '</span></td><td><div class="check">' + esc(sample.check || "—") + "</div>" + parentMsg + '</td><td>' + esc(TOOL_LABEL[sample.tool] || sample.tool) + '</td><td>' + classBadge + '</td><td class="num">' + instances.length + ' <span class="chev">' + (open ? "▾" : "▸") + '</span></td></tr>' + (open ? '<tr class="kids"><td colspan="5"><ul>' + kids + "</ul></td></tr>" : "");
       }).join("");
-      const head = ["severity", "Severity", "rule", "Rule", "tool", "Tool", "count", "Count"]
+      const head = ["severity", "Severity", "rule", "Rule", "tool", "Tool", "class", "Class", "count", "Count"]
         .reduce((html, label, index, list) => index % 2 ? html : html + sortHeader(label, list[index + 1]), "");
       document.querySelector("#findings").innerHTML = '<table><thead><tr>' + head + '</tr></thead><tbody>' + body + "</tbody></table>";
     }
@@ -6309,6 +6716,7 @@
       }
       if (key === "count") return instances.length;
       if (key === "tool") return TOOL_LABEL[sample.tool] || sample.tool || "";
+      if (key === "class") return findingClassOf(sample);
       return sample.check || "";
     }
 
@@ -6328,6 +6736,7 @@
         state.seenId = scan && scan.id;
         state.sev = "";
         state.tool = "all";
+        state.reportClassFilter = "all";
         state.q = "";
         state.open = new Set();
         const q = document.querySelector("#q");
@@ -6586,6 +6995,14 @@
         renderInvestigate();
         return;
       }
+      if (action === "inv-class-filter") {
+        const next = el.getAttribute("data-inv-class") || el.dataset.invClass || "";
+        if (!next) return;
+        state.invClassFilter = next;
+        state.invSelected = new Set();
+        renderInvestigate();
+        return;
+      }
       if (action === "inv-sort") {
         const key = el.dataset.key || "severity";
         if (!state.invSort) state.invSort = {key: "severity", dir: "asc"};
@@ -6617,6 +7034,12 @@
       if (action === "inv-deselect") {
         state.invSelected = new Set();
         renderInvestigate();
+        return;
+      }
+      if (action === "inv-class-edit") {
+        const key = el.getAttribute("data-key") || el.dataset.key || "";
+        if (!key) return;
+        openInvestigateClassDialog(key);
         return;
       }
       if (action === "inv-edit") {
@@ -6754,6 +7177,15 @@
         renderSummary();
         renderFindings();
       }
+      if (action === "report-class") {
+        const next = el.dataset.class || "";
+        if (!CLASS_CHART.some((item) => item[0] === next)) return;
+        state.reportClassFilter = (state.reportClassFilter || "all") === next ? "all" : next;
+        paintFilters();
+        renderSummary();
+        renderFindings();
+        return;
+      }
       if (action === "target") setTarget(el.dataset.target);
       if (action === "pick-image") {
         document.querySelector("#image-ref").value = el.dataset.ref || "";
@@ -6764,6 +7196,15 @@
         paintFilters();
         renderSonar();
         renderFindings();
+      }
+      if (action === "report-class-filter") {
+        const next = el.getAttribute("data-report-class") || el.dataset.reportClass || "";
+        if (!next) return;
+        state.reportClassFilter = next;
+        paintFilters();
+        renderSummary();
+        renderFindings();
+        return;
       }
       if (action === "sort") {
         const key = el.dataset.key;
@@ -8558,6 +8999,7 @@
         else if (!document.querySelector("#scan-reuse-dialog").hidden) acceptScanReuseOpen();
         else if (!document.querySelector("#adhoc-project-dialog").hidden) closeAdhocProjectDialog();
         else if (!document.querySelector("#inv-edit-dialog").hidden) closeInvestigateEditDialog();
+        else if (!document.querySelector("#inv-class-dialog").hidden) closeInvestigateClassDialog();
         else if (!document.querySelector("#password-dialog").hidden) closePasswordDialog();
         else if (!document.querySelector("#ci-token-dialog").hidden) closeCiTokenDialog();
         else closeProfileMenu();
@@ -8586,6 +9028,14 @@
     document.querySelector("#inv-edit-cancel").addEventListener("click", closeInvestigateEditDialog);
     document.querySelector("#inv-edit-save").addEventListener("click", () => {
       saveInvestigateEditDialog();
+    });
+    document.querySelector("#inv-class-cancel").addEventListener("click", closeInvestigateClassDialog);
+    document.querySelector("#inv-class-save").addEventListener("click", () => {
+      saveInvestigateClassDialog();
+    });
+    document.querySelector("#inv-class-reason").addEventListener("input", syncInvestigateClassValidity);
+    document.querySelector("#inv-class-dialog").addEventListener("click", (event) => {
+      if (event.target.id === "inv-class-dialog") closeInvestigateClassDialog();
     });
     document.querySelector("#idle-timeout").addEventListener("change", async (event) => {
       const select = event.target;

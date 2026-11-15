@@ -8,7 +8,6 @@ import psycopg
 from flask import Flask, Response, g, jsonify, request
 
 from security_console import db
-from security_console.authz import bypasses_project_scope
 from security_console.access import (
     can_view_scan,
     present_scan,
@@ -16,6 +15,8 @@ from security_console.access import (
     scan_project_ref,
     severity_counts,
 )
+from security_console.authz import bypasses_project_scope
+
 Reply = Response | tuple[Response, int]
 
 
@@ -93,8 +94,13 @@ def install_risk(app: Flask) -> None:
 
 
 def _call(app: Flask, action: Any) -> Reply:
+    from security_console.classify import ClassOverridesUnavailable
+
     try:
         return action()
+    except ClassOverridesUnavailable:
+        app.logger.error("class overrides unavailable")
+        return jsonify({"error": "Sign-in is unavailable."}), 503
     except psycopg.Error:
         app.logger.error("risk database unavailable")
         return jsonify({"error": "Sign-in is unavailable."}), 503
@@ -220,10 +226,16 @@ def _accept() -> Reply:
     current_id = str(body.get("current_scan_id") or "").strip()
     reason = str(body.get("reason") or "").strip()
     if not baseline_id or not current_id:
-        return jsonify({"error": "baseline_scan_id and current_scan_id are required."}), 400
+        return jsonify(
+            {"error": "baseline_scan_id and current_scan_id are required."}
+        ), 400
     if len(reason) < 12:
         return jsonify(
-            {"error": "Write a reason of at least 12 characters for the acceptance."}
+            {
+                "error": (
+                    "Write a reason of at least 12 characters for the acceptance."
+                )
+            }
         ), 400
     if len(reason) > 2000:
         return jsonify({"error": "Reason is too long."}), 400
@@ -235,7 +247,9 @@ def _accept() -> Reply:
     if baseline.get("guest") or current.get("guest"):
         return jsonify({"error": "Guest scans cannot be accepted."}), 400
     if current.get("status") != "done":
-        return jsonify({"error": "Accept risk only against a finished successful scan."}), 400
+        return jsonify(
+            {"error": "Accept risk only against a finished successful scan."}
+        ), 400
     project = scan_project_ref(current)
     if not _same_project(baseline, current):
         return jsonify({"error": "Both scans must belong to the same project."}), 400
@@ -263,6 +277,7 @@ def _accept() -> Reply:
     from security_console.investigate import (
         allowed_findings,
         gate_readiness,
+        gate_scoped_findings,
         triage_snapshot,
     )
 
@@ -273,8 +288,9 @@ def _accept() -> Reply:
         return jsonify(
             {
                 "error": (
-                    "Finish investigate triage first. Every finding must be "
-                    "False Positive or Accepted Risk."
+                    "Finish investigate triage first. Every security and "
+                    "operational finding must be False Positive, Accepted Risk, "
+                    "or Resolved."
                 ),
                 "readiness": readiness,
             }
@@ -291,7 +307,7 @@ def _accept() -> Reply:
     from security_console import audit
     from security_console.fingerprint import compute_risk_fingerprint
 
-    finding_keys = [finding_key(row) for row in findings]
+    finding_keys = [finding_key(row) for row in gate_scoped_findings(findings)]
     fingerprint = compute_risk_fingerprint(
         project_key=project,
         commit_sha=commit_sha,
@@ -342,6 +358,33 @@ def _accept() -> Reply:
     ), 201
 
 
+def _findings_for_gate_verify(
+    scan: dict[str, Any], project: str
+) -> list[dict[str, Any]] | None:
+    """All scan findings with auto class + overrides for gate scope checks.
+
+    Returns None when overrides cannot be loaded — verification must fail closed.
+    """
+
+    from security_console.access import expand_sonar_findings
+    from security_console.classify import (
+        ClassOverridesUnavailable,
+        enrich_findings,
+        load_class_overrides,
+    )
+
+    findings = list(scan.get("findings") or [])
+    if not any(str(row.get("tool") or "") == "sonar" for row in findings):
+        sonar = scan.get("sonar")
+        if isinstance(sonar, dict):
+            findings = findings + expand_sonar_findings(sonar)
+    try:
+        overrides = load_class_overrides(project)
+    except ClassOverridesUnavailable:
+        return None
+    return enrich_findings(findings, overrides=overrides)
+
+
 def _gate(app: Flask) -> Reply:
     """Return whether push is approved. CI may use GATE_TOKEN instead of a session."""
 
@@ -369,37 +412,38 @@ def _gate(app: Flask) -> Reply:
     approved = False
     if latest is not None and not latest.get("executed_at"):
         stored_fp = str(latest.get("fingerprint") or "")
-        if stored_fp:
-            from security_console.fingerprint import (
-                compute_risk_fingerprint,
-                fingerprints_match,
-            )
-
+        scan_id = str(latest.get("current_scan_id") or "").strip()
+        try:
+            scan = db.get_scan_row(scan_id) if scan_id else None
             dispositions = db.list_dispositions(project)
-            snap = latest.get("triage_snapshot") or {}
-            keys = sorted(str(k) for k in (snap.keys() if isinstance(snap, dict) else []))
-            if not keys:
-                keys = [str(row.get("finding_key") or "") for row in dispositions]
-            current_fp = compute_risk_fingerprint(
+        except psycopg.Error:
+            app.logger.error("risk gate verify load failed")
+            return jsonify({"error": "Sign-in is unavailable."}), 503
+        findings = (
+            _findings_for_gate_verify(scan, project) if scan is not None else None
+        )
+        if findings is None and scan is not None:
+            app.logger.error(
+                "class overrides unavailable for gate verify project=%s", project
+            )
+        if findings is not None and stored_fp:
+            from security_console.fingerprint import risk_acceptance_still_valid
+
+            approved = risk_acceptance_still_valid(
+                stored_fingerprint=stored_fp,
                 project_key=project,
                 commit_sha=commit or str(latest.get("commit_sha") or ""),
-                finding_keys=keys,
+                snapshot=latest.get("triage_snapshot") or {},
+                current_findings=findings,
                 dispositions=dispositions,
             )
-            approved = fingerprints_match(stored_fp, current_fp)
             if approved:
                 try:
                     db.mark_risk_acceptance_executed(int(latest["id"]))
                 except psycopg.Error:
                     app.logger.error("risk gate consume failed")
                     return jsonify({"error": "Sign-in is unavailable."}), 503
-        else:
-            # Legacy rows without fingerprint remain usable once.
-            approved = True
-            try:
-                db.mark_risk_acceptance_executed(int(latest["id"]))
-            except (psycopg.Error, TypeError, ValueError):
-                pass
+        # Legacy rows without fingerprint, or unverifiable scope: deny (fail closed).
     return jsonify(
         {
             "project_key": project,

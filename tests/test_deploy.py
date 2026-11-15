@@ -3,11 +3,19 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
+
+pytestmark = pytest.mark.skipif(
+    shutil.which("docker") is None,
+    reason="docker CLI is required to render compose config",
+)
 
 
 def _rendered(files: list[str] | None) -> dict[str, Any]:

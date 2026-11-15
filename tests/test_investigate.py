@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from security_console.investigate import (
+    allowed_findings,
     build_triage_inbox,
     gate_readiness,
+    gate_scoped_findings,
     triage_snapshot,
 )
 from security_console.risk import finding_key
@@ -18,6 +20,46 @@ def test_finding_key_matches_disposition_identity() -> None:
         "line": 10,
     }
     assert finding_key(row) == "semgrep|rule.x|app.py|10"
+
+
+def test_allowed_findings_include_finding_class() -> None:
+    user = {
+        "role": "admin",
+        "allow_semgrep": True,
+        "allow_sonar": True,
+        "capabilities": {"projects.manage_all": True},
+    }
+    scan = {
+        "findings": [
+            {
+                "tool": "semgrep",
+                "check": "rule.x",
+                "path": "app.py",
+                "line": 10,
+                "severity": "HIGH",
+                "message": "x",
+            }
+        ],
+        "sonar": {
+            "issues": [
+                {
+                    "file": "a.py",
+                    "line": 1,
+                    "rule": "python:S1",
+                    "type": "CODE_SMELL",
+                    "severity": "MINOR",
+                    "message": "smell",
+                }
+            ],
+            "hotspot_list": [],
+        },
+    }
+    rows = allowed_findings(user, scan)
+    by_tool = {row["tool"]: row for row in rows}
+    assert by_tool["semgrep"]["finding_class"] == "security"
+    assert by_tool["semgrep"]["classification_source"] == "auto"
+    assert by_tool["sonar"]["finding_class"] == "quality"
+    assert by_tool["sonar"]["sonar_type"] == "CODE_SMELL"
 
 
 def test_gate_ready_when_all_fp_or_accepted() -> None:
@@ -110,8 +152,113 @@ def test_triage_snapshot_shape() -> None:
     assert "Accepted after review" in snap[key]["reason"]
 
 
+def test_gate_ignores_undecided_quality() -> None:
+    security = {
+        "tool": "semgrep",
+        "check": "sec",
+        "path": "a.py",
+        "line": 1,
+    }
+    quality = {
+        "tool": "sonar",
+        "check": "python:S1",
+        "path": "b.py",
+        "line": 2,
+        "sonar_type": "CODE_SMELL",
+    }
+    sec_key = finding_key(security)
+    quality_key = finding_key(quality)
+    ready = gate_readiness(
+        [security, quality],
+        {
+            sec_key: {
+                "status": "false_positive",
+                "reason": "Not reachable in production path.",
+            }
+        },
+    )
+    assert ready["ready_for_gate"] is True
+    assert ready["excluded_quality"] == 1
+    assert ready["gate_finding_count"] == 1
+    assert quality_key not in {
+        item["finding_key"] for item in ready["blockers"]
+    }
+
+
+def test_gate_still_blocks_undecided_security_with_disposed_quality() -> None:
+    security = {
+        "tool": "semgrep",
+        "check": "sec",
+        "path": "a.py",
+        "line": 1,
+    }
+    quality = {
+        "tool": "sonar",
+        "check": "python:S1",
+        "path": "b.py",
+        "line": 2,
+        "sonar_type": "CODE_SMELL",
+    }
+    sec_key = finding_key(security)
+    quality_key = finding_key(quality)
+    ready = gate_readiness(
+        [security, quality],
+        {
+            quality_key: {
+                "status": "false_positive",
+                "reason": "Style only; tracked in Sonar backlog.",
+            }
+        },
+    )
+    assert ready["ready_for_gate"] is False
+    assert ready["excluded_quality"] == 1
+    assert any(item["finding_key"] == sec_key for item in ready["blockers"])
+
+
+def test_triage_snapshot_omits_quality_keys() -> None:
+    security = {
+        "tool": "semgrep",
+        "check": "sec",
+        "path": "a.py",
+        "line": 1,
+    }
+    quality = {
+        "tool": "sonar",
+        "check": "python:S1",
+        "path": "b.py",
+        "line": 2,
+        "sonar_type": "CODE_SMELL",
+    }
+    sec_key = finding_key(security)
+    quality_key = finding_key(quality)
+    snap = triage_snapshot(
+        [security, quality],
+        {
+            sec_key: {
+                "status": "accepted_risk",
+                "reason": "Accepted after review meeting.",
+            },
+            quality_key: {
+                "status": "needs_review",
+                "reason": "",
+            },
+        },
+    )
+    assert sec_key in snap
+    assert quality_key not in snap
+    assert [row["finding_class"] for row in gate_scoped_findings([security, quality])] == [
+        "security"
+    ]
+
+
 def test_inbox_lists_undecided_project_and_skips_ready() -> None:
-    admin = {"role": "admin", "id": 1, "allow_semgrep": True, "allow_trivy": True}
+    admin = {
+        "role": "admin",
+        "id": 1,
+        "allow_semgrep": True,
+        "allow_trivy": True,
+        "capabilities": {"projects.manage_all": True},
+    }
     open_finding = {
         "tool": "semgrep",
         "check": "a",
@@ -203,7 +350,12 @@ def test_inbox_includes_failed_scan_with_findings() -> None:
 
 
 def test_inbox_badge_dedupes_assigned_project() -> None:
-    admin = {"role": "admin", "id": 1, "allow_semgrep": True}
+    admin = {
+        "role": "admin",
+        "id": 1,
+        "allow_semgrep": True,
+        "capabilities": {"projects.manage_all": True},
+    }
     finding = {
         "tool": "semgrep",
         "check": "a",

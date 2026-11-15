@@ -29,6 +29,7 @@ def test_remote_scan_sends_the_job_and_not_a_docker_spec(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("SCANNER_URL", "http://scanner:8092")
+    monkeypatch.delenv("SCANNER_TOKEN_FILE", raising=False)
     monkeypatch.setenv("SCANNER_TOKEN", "scanner-token-value-24")
     captured: dict[str, Any] = {}
 

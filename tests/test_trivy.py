@@ -48,3 +48,8 @@ def test_parse_report_keeps_vuln_misconfig_and_secret() -> None:
     assert findings[0]["message"] == "Prototype issue (left-pad)"
     assert findings[1]["line"] == 4
     assert {row["tool"] for row in findings} == {"trivy"}
+    assert [row["trivy_kind"] for row in findings] == [
+        "vulnerability",
+        "misconfiguration",
+        "secret",
+    ]

@@ -18,6 +18,7 @@ def parse_report(data: dict[str, Any]) -> list[dict[str, Any]]:
                 target,
                 None,
                 _text(item.get("Title"), item.get("PkgName")),
+                "vulnerability",
             ))
         for item in result.get("Misconfigurations") or []:
             cause = item.get("CauseMetadata") or {}
@@ -27,6 +28,7 @@ def parse_report(data: dict[str, Any]) -> list[dict[str, Any]]:
                 target,
                 cause.get("StartLine"),
                 item.get("Title") or item.get("Message") or "",
+                "misconfiguration",
             ))
         for item in result.get("Secrets") or []:
             findings.append(_finding(
@@ -35,6 +37,7 @@ def parse_report(data: dict[str, Any]) -> list[dict[str, Any]]:
                 target,
                 item.get("StartLine"),
                 item.get("Title") or "",
+                "secret",
             ))
     return findings
 
@@ -45,6 +48,7 @@ def _finding(
     path: str,
     line: Any,
     message: str,
+    trivy_kind: str,
 ) -> dict[str, Any]:
     return {
         "tool": "trivy",
@@ -53,6 +57,7 @@ def _finding(
         "path": path,
         "line": line,
         "message": message,
+        "trivy_kind": trivy_kind,
     }
 
 
